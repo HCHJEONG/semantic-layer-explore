@@ -44,6 +44,7 @@ Gemini never accesses SQLite. Every question begins with `getOntology()`. After 
 - SQLite schema containing only `classes`, `properties`, `individuals`, and `relations`
 - Read and create REST endpoints with Zod validation
 - Gemini tool-calling agent with an enforced ontology-first flow
+- Per-visitor Ask AI protection: 10 requests per UTC day at the edge
 - Responsive, portfolio-ready interface
 
 ## API

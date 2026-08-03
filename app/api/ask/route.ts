@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { z } from "zod";
+import { consumeAskAllowance } from "@/lib/rate-limit";
 
 const SYSTEM_PROMPT = `You are an AI assistant that understands the Semantic Layer exposed by this application.
 Never assume a database schema. Never claim to access a database directly.
@@ -36,6 +37,11 @@ async function callTool(name: string, origin: string) {
 export async function POST(request: Request) {
   try {
     const { question } = z.object({ question: z.string().trim().min(2).max(500) }).parse(await request.json());
+    const allowance = await consumeAskAllowance(request);
+    if (!allowance.allowed) return Response.json(
+      { error: "Daily Ask AI limit reached. Please try again tomorrow." },
+      { status: 429, headers: { "retry-after": String(allowance.resetSeconds), "x-ratelimit-limit": "10", "x-ratelimit-remaining": "0" } },
+    );
     const ai = createClient();
     const model = process.env.AI_MODEL_ID || process.env.VERTEX_AI_MODEL_ID || process.env.GEMINI_MODEL_ID || "gemini-2.0-flash";
     const contents: Array<Record<string, unknown>> = [{ role: "user", parts: [{ text: question }] }];
@@ -51,7 +57,10 @@ export async function POST(request: Request) {
         },
       });
       const calls = response.functionCalls ?? [];
-      if (!calls.length) return Response.json({ answer: response.text || "I could not produce an answer from the semantic layer.", trace });
+      if (!calls.length) return Response.json(
+        { answer: response.text || "I could not produce an answer from the semantic layer.", trace, remaining: allowance.remaining },
+        { headers: { "x-ratelimit-limit": "10", "x-ratelimit-remaining": String(allowance.remaining) } },
+      );
 
       const modelContent = response.candidates?.[0]?.content;
       if (modelContent) contents.push(modelContent as unknown as Record<string, unknown>);
