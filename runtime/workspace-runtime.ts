@@ -5,6 +5,8 @@ import { SimulatorAdapter } from "@/adapters/simulator/simulator-adapter";
 import { getDb } from "@/db";
 import { devices, events, sensorReadings } from "@/db/schema";
 import { deviceCommandSchema, type DeviceCommand, type SensorReading, type SimulatorScenario } from "@/domain/physical";
+import { listEnabledRules, markRuleTriggered } from "@/lib/rules";
+import { evaluateRule } from "@/runtime/rule-engine";
 
 class WorkspaceRuntime {
   readonly adapter: SimulatorAdapter;
@@ -89,6 +91,31 @@ class WorkspaceRuntime {
       eventId: reading.eventId, type: "sensor.reading", sourceType: "sensor",
       sourceId: reading.sensorId, payload: reading, occurredAt: reading.measuredAt,
     });
+    void this.evaluateRules(reading).catch((error) => {
+      this.persistEvent({
+        eventId: crypto.randomUUID(), type: "rule.execution.failed", sourceType: "sensor",
+        sourceId: reading.sensorId, payload: { reading, error: error instanceof Error ? error.message : "Unexpected error" },
+        occurredAt: new Date().toISOString(),
+      });
+    });
+  }
+
+  private async evaluateRules(reading: SensorReading) {
+    for (const rule of listEnabledRules()) {
+      if (!evaluateRule(rule, reading).matched) continue;
+      const triggeredAt = new Date().toISOString();
+      markRuleTriggered(rule.id, triggeredAt);
+      this.persistEvent({
+        eventId: crypto.randomUUID(), type: "rule.matched", sourceType: "rule", sourceId: rule.id,
+        payload: { ruleId: rule.id, condition: rule.condition, action: rule.action, reading }, occurredAt: triggeredAt,
+      });
+      const device = this.adapter.getDevices().find((item) => item.id === rule.action.deviceId);
+      if (!device) throw new Error(`Rule ${rule.id} targets an unavailable device: ${rule.action.deviceId}`);
+      await this.executeCommand({
+        commandId: crypto.randomUUID(), deviceId: device.id, deviceType: device.type,
+        command: rule.action.command, value: rule.action.value, issuedBy: "rule-engine", issuedAt: triggeredAt,
+      });
+    }
   }
 
   private persistEvent(event: { eventId: string; type: string; sourceType: string; sourceId: string; payload: unknown; occurredAt: string }) {

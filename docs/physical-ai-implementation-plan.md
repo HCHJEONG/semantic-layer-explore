@@ -666,6 +666,8 @@ DB와 runtime이 안정된 후 SSE로 교체할 수 있다. WebSocket과 custom 
 
 ## 19. 단계별 구현 계획
 
+현재 진행 상태: Phase 0~4 완료. 다음 구현 단위는 Phase 5 Dashboard와 Timeline이다.
+
 ### Phase 0 — 기준선 고정
 
 - 기존 API integration test 추가
@@ -717,6 +719,8 @@ DB와 runtime이 안정된 후 SSE로 교체할 수 있다. WebSocket과 custom 
 - Rule CRUD API
 
 완료 조건: 수동 생성 Rule이 Simulator 이벤트에 반응해 가상 Device를 작동시킨다.
+
+구현 완료: 구조화된 단일 조건/동작 규칙, 대상·명령 검증, CRUD 및 enable/disable API, cooldown, Sensor Event 기반 실행, Rule/Device 감사 이벤트, 통합 테스트를 제공한다.
 
 ### Phase 5 — Dashboard와 Timeline
 

@@ -146,3 +146,61 @@ test("virtual device commands update state and write auditable events", async ()
   assert.ok(events.some(({ type }) => type === "sensor.reading"));
   assert.ok(events.some(({ type, sourceId }) => type === "device.command.succeeded" && sourceId === "led-01"));
 });
+
+test("rules are validated, editable, and execute device commands from sensor events", async () => {
+  const invalidResponse = await fetch(`${origin}/api/rules`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: "Invalid unit", condition: { sensorId: "temperature-01", operator: "gt", value: 30, unit: "lux" },
+      action: { deviceId: "relay-fan-01", command: "on" },
+    }),
+  });
+  assert.equal(invalidResponse.status, 400);
+
+  const createResponse = await fetch(`${origin}/api/rules`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: "Cool the workspace", description: "Turn on the fan above 30 C",
+      condition: { sensorId: "temperature-01", operator: "gt", value: 30, unit: "celsius" },
+      action: { deviceId: "relay-fan-01", command: "on" }, enabled: true, cooldownSeconds: 60,
+    }),
+  });
+  assert.equal(createResponse.status, 201);
+  const created = await createResponse.json();
+
+  const patchResponse = await fetch(`${origin}/api/rules/${created.id}`, {
+    method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "High temperature fan" }),
+  });
+  assert.equal(patchResponse.status, 200);
+  assert.equal((await patchResponse.json()).name, "High temperature fan");
+
+  const readingResponse = await fetch(`${origin}/api/simulator/sensors/temperature-01/readings`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ value: 32 }),
+  });
+  assert.equal(readingResponse.status, 201);
+
+  let state;
+  let eventLog = [];
+  const deadline = Date.now() + 3_000;
+  while (Date.now() < deadline) {
+    [state, eventLog] = await Promise.all([
+      fetch(`${origin}/api/state`).then((response) => response.json()),
+      fetch(`${origin}/api/events?limit=200`).then((response) => response.json()),
+    ]);
+    if (eventLog.some(({ type, sourceId }) => type === "rule.matched" && sourceId === created.id)) break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.equal(state.devices.find(({ id }) => id === "relay-fan-01").state.status, "on");
+  assert.equal(eventLog.filter(({ type, sourceId }) => type === "rule.matched" && sourceId === created.id).length, 1);
+  assert.ok(eventLog.some(({ type, payload }) => type === "device.command.succeeded" && payload.command.issuedBy === "rule-engine"));
+
+  const disableResponse = await fetch(`${origin}/api/rules/${created.id}/disable`, { method: "POST" });
+  assert.equal(disableResponse.status, 200);
+  assert.equal((await disableResponse.json()).enabled, false);
+
+  const deleteResponse = await fetch(`${origin}/api/rules/${created.id}`, { method: "DELETE" });
+  assert.equal(deleteResponse.status, 204);
+  assert.equal((await fetch(`${origin}/api/rules/${created.id}`)).status, 404);
+});

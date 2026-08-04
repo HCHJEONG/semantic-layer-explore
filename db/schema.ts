@@ -64,3 +64,16 @@ export const events = sqliteTable("events", {
   payloadJson: text("payload_json").notNull(),
   occurredAt: text("occurred_at").notNull(),
 });
+
+export const rules = sqliteTable("rules", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  conditionJson: text("condition_json").notNull(),
+  actionJson: text("action_json").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  cooldownSeconds: integer("cooldown_seconds").notNull().default(10),
+  lastTriggeredAt: text("last_triggered_at"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});

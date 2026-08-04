@@ -28,6 +28,16 @@ SQLite (Drizzle ORM)
 
 Gemini never accesses SQLite. Every question begins with `getOntology()`. After understanding the available classes, properties, and relationships, Gemini requests only the REST resources it needs.
 
+The Physical AI extension keeps the same boundary and adds a deterministic runtime below the API:
+
+```text
+Simulator Sensor → Sensor Event → Rule Engine → Virtual Device
+                                      ↓
+                               Auditable Event Log
+```
+
+The rule engine—not Gemini—evaluates approved rules and executes device commands. The simulator implements the same adapter boundary reserved for a future MQTT/Arduino connection.
+
 ```text
 "Where does Alice work?"
   → getOntology()
@@ -41,7 +51,7 @@ Gemini never accesses SQLite. Every question begins with `getOntology()`. After 
 
 - Three-column ontology explorer with details and live JSON
 - Relationship graph powered by React Flow
-- SQLite schema containing only `classes`, `properties`, `individuals`, and `relations`
+- Original four-table ontology model, plus isolated physical workspace tables for sensors, devices, readings, rules, and events
 - Read and create REST endpoints with Zod validation
 - Gemini tool-calling agent with an enforced ontology-first flow
 - Temporary per-process Ask AI protection: 10 requests per visitor and UTC day
@@ -50,6 +60,8 @@ Gemini never accesses SQLite. Every question begins with `getOntology()`. After 
 - Seeded Sensor simulator for temperature, light, distance, and button readings
 - Virtual LED, Servo, Buzzer, and Relay devices behind a hardware-neutral adapter
 - Persistent Sensor/Event audit trail and deterministic demo scenarios
+- Validated Rule CRUD, deterministic operator evaluation, and per-rule cooldown
+- Sensor Event → Rule match → Virtual Device execution with auditable outcomes
 - Responsive, portfolio-ready interface
 
 ## API
@@ -69,6 +81,10 @@ Gemini never accesses SQLite. Every question begins with `getOntology()`. After 
 | `GET` | `/api/devices` | Virtual device states |
 | `POST` | `/api/devices/:id/commands` | Execute a validated virtual-device command |
 | `GET` | `/api/events` | Read the physical workspace event timeline |
+| `GET`, `POST` | `/api/rules` | List or create validated automation rules |
+| `GET`, `PATCH`, `DELETE` | `/api/rules/:id` | Read, update, or delete a rule |
+| `POST` | `/api/rules/:id/enable` | Enable a rule |
+| `POST` | `/api/rules/:id/disable` | Disable a rule |
 | `GET`, `POST` | `/api/simulator/*` | Inspect and control the simulator |
 
 ## Local development
