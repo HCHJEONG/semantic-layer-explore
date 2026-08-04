@@ -17,19 +17,19 @@ GCP_KEY="/home/ubuntu/gcp-key.json"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEPLOY_ASSETS_DIR="${SCRIPT_DIR}/ai-workspace-aws"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ARCHIVE_NAME="ai-workspace-source-$(date +'%Y%m%d%H%M').tar.gz"
+ARCHIVE_PATH="$(mktemp "${TMPDIR:-/tmp}/ai-workspace-source.XXXXXX.tar.gz")"
+ARCHIVE_NAME="$(basename "${ARCHIVE_PATH}")"
 
 cleanup() {
-  rm -f "${ROOT_DIR}/${ARCHIVE_NAME}"
+  rm -f "${ARCHIVE_PATH}"
 }
 trap cleanup EXIT
 
 test -f "${LOCAL_SSH_KEY}" || { echo "Missing local SSH key: ${LOCAL_SSH_KEY}"; exit 1; }
 test -f "${DEPLOY_ASSETS_DIR}/.env" || { echo "Missing production environment file: ${DEPLOY_ASSETS_DIR}/.env"; exit 1; }
 
-cd "${ROOT_DIR}"
-tar --exclude=.git --exclude=node_modules --exclude=.next --exclude=data --exclude='*.tar*' -czf "${ARCHIVE_NAME}" .
-scp -o StrictHostKeyChecking=accept-new -i "${LOCAL_SSH_KEY}" "${ARCHIVE_NAME}" "${BASTION_HOST}:${REMOTE_DIR}/${ARCHIVE_NAME}"
+tar --exclude=.git --exclude=node_modules --exclude=.next --exclude=data -C "${ROOT_DIR}" -czf "${ARCHIVE_PATH}" .
+scp -o StrictHostKeyChecking=accept-new -i "${LOCAL_SSH_KEY}" "${ARCHIVE_PATH}" "${BASTION_HOST}:${REMOTE_DIR}/${ARCHIVE_NAME}"
 
 ssh -o StrictHostKeyChecking=accept-new -i "${LOCAL_SSH_KEY}" "${BASTION_HOST}" \
   PRIVATE_HOST="${PRIVATE_HOST}" BASTION_SSH_KEY="${BASTION_SSH_KEY}" REMOTE_DIR="${REMOTE_DIR}" \
