@@ -1,5 +1,7 @@
 import { individualInput, errorResponse } from "@/lib/validation";
-import { individuals, getIndividuals, getDb } from "@/lib/ontology";
+import { getDb } from "@/db";
+import { individuals } from "@/db/schema";
+import { getIndividuals } from "@/lib/ontology";
 
 export async function GET() { try { return Response.json(await getIndividuals()); } catch (error) { return errorResponse(error); } }
 export async function POST(request: Request) {

@@ -1,6 +1,7 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
 import { z } from "zod";
 import { consumeAskAllowance } from "@/lib/rate-limit";
+import { getGeminiClient, getGeminiModel } from "@/lib/gemini";
 
 const SYSTEM_PROMPT = `You are an AI assistant that understands the Semantic Layer exposed by this application.
 Never assume a database schema. Never claim to access a database directly.
@@ -13,16 +14,6 @@ const declarations = ["getOntology", "getClasses", "getIndividuals", "getRelatio
   description: name === "getOntology" ? "Inspect the semantic layer before any other lookup." : `Fetch ${name.slice(3).toLowerCase()} through the REST API.`,
   parameters: { type: Type.OBJECT, properties: {} },
 }));
-
-function createClient() {
-  const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-  if (apiKey) return new GoogleGenAI({ apiKey });
-  return new GoogleGenAI({
-    vertexai: true,
-    project: process.env.GOOGLE_CLOUD_PROJECT || "lawvot-382908",
-    location: process.env.GOOGLE_CLOUD_LOCATION || "us-central1",
-  });
-}
 
 async function callTool(name: string, origin: string) {
   const paths: Record<string, string> = {
@@ -42,8 +33,8 @@ export async function POST(request: Request) {
       { error: "Daily Ask AI limit reached. Please try again tomorrow." },
       { status: 429, headers: { "retry-after": String(allowance.resetSeconds), "x-ratelimit-limit": "10", "x-ratelimit-remaining": "0" } },
     );
-    const ai = createClient();
-    const model = process.env.AI_MODEL_ID || process.env.VERTEX_AI_MODEL_ID || process.env.GEMINI_MODEL_ID || "gemini-2.0-flash";
+    const ai = getGeminiClient();
+    const model = getGeminiModel();
     const contents: Array<Record<string, unknown>> = [{ role: "user", parts: [{ text: question }] }];
     const trace: string[] = [];
 
@@ -76,8 +67,8 @@ export async function POST(request: Request) {
     throw new Error("Gemini exceeded the tool-call limit");
   } catch (error) {
     const raw = error instanceof Error ? error.message : "Unable to answer";
-    const message = raw.includes("API Key must be set")
-      ? "Gemini credentials are not available in this runtime. Configure GOOGLE_API_KEY, or use the lawvot Vertex AI environment locally."
+    const message = raw.includes("credentials are unavailable")
+      ? "Gemini credentials are not available in this runtime."
       : raw;
     return Response.json({ error: message }, { status: message.includes("Invalid") ? 400 : 500 });
   }

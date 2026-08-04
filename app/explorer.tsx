@@ -12,6 +12,12 @@ type RelationItem = { id: number; subject: string; property: string; object: str
 type Ontology = { classes: ClassItem[]; properties: PropertyItem[]; individuals: IndividualItem[]; relations: RelationItem[] };
 type Selection = { kind: "Class" | "Property" | "Individual"; item: ClassItem | PropertyItem | IndividualItem };
 
+function getSemanticMeaning(selection: Selection) {
+  if ("domain" in selection.item) return `${selection.item.name} connects ${selection.item.domain} to ${selection.item.range}.`;
+  if ("class" in selection.item) return `${selection.item.name} is a concrete instance of ${selection.item.class}.`;
+  return `${selection.item.name} defines a reusable business concept.`;
+}
+
 const examples = ["Where does Alice work?", "Who works for OpenAI?", "What projects is Bob assigned to?", "Show all people."];
 
 function GraphNode({ data }: { data: { label: string; kind: string } }) {
@@ -98,7 +104,7 @@ export default function Explorer() {
               {"class" in selection.item && <label>Instance of<strong>{selection.item.class}</strong></label>}
               {"domain" in selection.item && <><label>Domain<strong>{selection.item.domain}</strong></label><label>Range<strong>{selection.item.range}</strong></label></>}
             </div>
-            <div className="meaning"><Sparkles size={16} /><div><b>Semantic meaning</b><p>{selection.kind === "Property" ? `${selection.item.name} connects ${selection.item.domain} to ${selection.item.range}.` : selection.kind === "Individual" ? `${selection.item.name} is a concrete instance of ${selection.item.class}.` : `${selection.item.name} defines a reusable business concept.`}</p></div></div>
+            <div className="meaning"><Sparkles size={16} /><div><b>Semantic meaning</b><p>{getSemanticMeaning(selection)}</p></div></div>
           </> : <div className="empty">Choose an ontology object to inspect it.</div>}
         </section>
 

@@ -1,5 +1,7 @@
 import { propertyInput, errorResponse } from "@/lib/validation";
-import { properties, getProperties, getDb } from "@/lib/ontology";
+import { getDb } from "@/db";
+import { properties } from "@/db/schema";
+import { getProperties } from "@/lib/ontology";
 
 export async function GET() { try { return Response.json(await getProperties()); } catch (error) { return errorResponse(error); } }
 export async function POST(request: Request) {

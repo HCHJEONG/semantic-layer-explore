@@ -1,5 +1,7 @@
 import { classInput, errorResponse } from "@/lib/validation";
-import { classes, getClasses, getDb } from "@/lib/ontology";
+import { getDb } from "@/db";
+import { classes } from "@/db/schema";
+import { getClasses } from "@/lib/ontology";
 
 export async function GET() { try { return Response.json(await getClasses()); } catch (error) { return errorResponse(error); } }
 export async function POST(request: Request) {

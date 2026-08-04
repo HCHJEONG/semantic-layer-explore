@@ -1,41 +1,74 @@
-import { asc, eq } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 import { getDb } from "@/db";
 import { classes, individuals, properties, relations } from "@/db/schema";
 
-export async function getClasses() {
-  return getDb().select().from(classes).orderBy(asc(classes.id));
+type ClassRow = typeof classes.$inferSelect;
+type PropertyRow = typeof properties.$inferSelect;
+type IndividualRow = typeof individuals.$inferSelect;
+type RelationRow = typeof relations.$inferSelect;
+
+function resolveProperties(rows: PropertyRow[], classRows: ClassRow[]) {
+  const classNames = new Map(classRows.map((item) => [item.id, item.name]));
+  return rows.map((item) => ({
+    ...item,
+    domain: classNames.get(item.domainClassId),
+    range: classNames.get(item.rangeClassId),
+  }));
 }
 
-export async function getProperties() {
-  const db = getDb();
-  const rows = await db.select().from(properties).orderBy(asc(properties.id));
-  const classRows = await getClasses();
-  const names = new Map(classRows.map((item) => [item.id, item.name]));
-  return rows.map((item) => ({ ...item, domain: names.get(item.domainClassId), range: names.get(item.rangeClassId) }));
+function resolveIndividuals(rows: IndividualRow[], classRows: ClassRow[]) {
+  const classNames = new Map(classRows.map((item) => [item.id, item.name]));
+  return rows.map((item) => ({ ...item, class: classNames.get(item.classId) }));
 }
 
-export async function getIndividuals() {
-  const db = getDb();
-  const rows = await db.select().from(individuals).orderBy(asc(individuals.id));
-  const classRows = await getClasses();
-  const names = new Map(classRows.map((item) => [item.id, item.name]));
-  return rows.map((item) => ({ ...item, class: names.get(item.classId) }));
-}
-
-export async function getRelations() {
-  const db = getDb();
-  const rows = await db.select().from(relations).orderBy(asc(relations.id));
-  const [individualRows, propertyRows] = await Promise.all([getIndividuals(), getProperties()]);
+function resolveRelations(rows: RelationRow[], individualRows: IndividualRow[], propertyRows: PropertyRow[]) {
   const individualNames = new Map(individualRows.map((item) => [item.id, item.name]));
   const propertyNames = new Map(propertyRows.map((item) => [item.id, item.name]));
-  return rows.map((item) => ({ ...item, subject: individualNames.get(item.subjectId), property: propertyNames.get(item.propertyId), object: individualNames.get(item.objectId) }));
+  return rows.map((item) => ({
+    ...item,
+    subject: individualNames.get(item.subjectId),
+    property: propertyNames.get(item.propertyId),
+    object: individualNames.get(item.objectId),
+  }));
 }
 
-export async function getOntology() {
-  const [classRows, propertyRows, individualRows, relationRows] = await Promise.all([
-    getClasses(), getProperties(), getIndividuals(), getRelations(),
-  ]);
-  return { classes: classRows, properties: propertyRows, individuals: individualRows, relations: relationRows };
+export function getClasses() {
+  return getDb().select().from(classes).orderBy(asc(classes.id)).all();
 }
 
-export { classes, properties, individuals, relations, eq, getDb };
+export function getProperties() {
+  const db = getDb();
+  const classRows = db.select().from(classes).orderBy(asc(classes.id)).all();
+  const propertyRows = db.select().from(properties).orderBy(asc(properties.id)).all();
+  return resolveProperties(propertyRows, classRows);
+}
+
+export function getIndividuals() {
+  const db = getDb();
+  const classRows = db.select().from(classes).orderBy(asc(classes.id)).all();
+  const individualRows = db.select().from(individuals).orderBy(asc(individuals.id)).all();
+  return resolveIndividuals(individualRows, classRows);
+}
+
+export function getRelations() {
+  const db = getDb();
+  const individualRows = db.select().from(individuals).orderBy(asc(individuals.id)).all();
+  const propertyRows = db.select().from(properties).orderBy(asc(properties.id)).all();
+  const relationRows = db.select().from(relations).orderBy(asc(relations.id)).all();
+  return resolveRelations(relationRows, individualRows, propertyRows);
+}
+
+export function getOntology() {
+  const db = getDb();
+  const classRows = db.select().from(classes).orderBy(asc(classes.id)).all();
+  const propertyRows = db.select().from(properties).orderBy(asc(properties.id)).all();
+  const individualRows = db.select().from(individuals).orderBy(asc(individuals.id)).all();
+  const relationRows = db.select().from(relations).orderBy(asc(relations.id)).all();
+
+  return {
+    classes: classRows,
+    properties: resolveProperties(propertyRows, classRows),
+    individuals: resolveIndividuals(individualRows, classRows),
+    relations: resolveRelations(relationRows, individualRows, propertyRows),
+  };
+}

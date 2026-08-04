@@ -44,7 +44,9 @@ Gemini never accesses SQLite. Every question begins with `getOntology()`. After 
 - SQLite schema containing only `classes`, `properties`, `individuals`, and `relations`
 - Read and create REST endpoints with Zod validation
 - Gemini tool-calling agent with an enforced ontology-first flow
-- Per-visitor Ask AI protection: 10 requests per UTC day at the edge
+- Temporary per-process Ask AI protection: 10 requests per visitor and UTC day
+- File-backed SQLite with automatic Drizzle migrations, WAL mode, and persistent-volume support
+- Health and readiness endpoints for local and AWS operation
 - Responsive, portfolio-ready interface
 
 ## API
@@ -57,6 +59,8 @@ Gemini never accesses SQLite. Every question begins with `getOntology()`. After 
 | `GET` | `/api/relations` | List resolved relationships |
 | `GET` | `/api/ontology` | Return the complete semantic layer |
 | `POST` | `/api/ask` | Ask Gemini an ontology-aware question |
+| `GET` | `/api/health` | Lightweight process health check |
+| `GET` | `/api/ready` | Database and runtime readiness check |
 
 ## Local development
 
@@ -71,13 +75,13 @@ Gemini follows the same environment convention as `lawvot`:
 
 ```dotenv
 GOOGLE_CLOUD_PROJECT=your-project-id
-GOOGLE_CLOUD_LOCATION=us-central1
-GEMINI_MODEL_ID=gemini-2.0-flash
+GOOGLE_CLOUD_LOCATION=global
+GEMINI_MODEL=gemini-3.5-flash-lite
 GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
-# Optional for edge deployments: GOOGLE_API_KEY=your-gemini-api-key
+DATABASE_PATH=./data/ai-workspace.sqlite
 ```
 
-Model resolution order is `AI_MODEL_ID` → `VERTEX_AI_MODEL_ID` → `GEMINI_MODEL_ID` → `gemini-2.0-flash`.
+The Gemini model has one configuration source: `GEMINI_MODEL`, with `gemini-3.5-flash-lite` as the default. This mirrors the current `sampoongaptcom` Vertex AI setup and avoids stale model fallbacks.
 
 ## Project philosophy
 
@@ -89,4 +93,4 @@ OWL import, RDF export, reasoners, Neo4j/GraphDB, Palantir-style ontology modeli
 
 ## Stack
 
-Next.js 16 · TypeScript · Tailwind CSS · shadcn-style UI primitives · SQLite/D1 · Drizzle ORM · React Flow · Zod · Google Gemini
+Next.js 16 standalone · TypeScript · Tailwind CSS · shadcn-style UI primitives · SQLite · Drizzle ORM · React Flow · Zod · Google Gemini

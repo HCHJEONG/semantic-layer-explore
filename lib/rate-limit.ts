@@ -12,7 +12,7 @@ export async function consumeAskAllowance(request: Request) {
   const client = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
   const key = `${date}:${client}`;
   let count = localCounts.get(key) ?? 0;
-  const edgeCache = (caches as unknown as { default?: Cache }).default;
+  const edgeCache = typeof caches === "undefined" ? undefined : (caches as unknown as { default?: Cache }).default;
   const cacheRequest = new Request(`https://rate-limit.internal/ask/${date}/${encodeURIComponent(client)}`);
   if (edgeCache) {
     const stored = await edgeCache.match(cacheRequest);
