@@ -666,7 +666,7 @@ DB와 runtime이 안정된 후 SSE로 교체할 수 있다. WebSocket과 custom 
 
 ## 19. 단계별 구현 계획
 
-현재 진행 상태: Phase 0~4 완료. 다음 구현 단위는 Phase 5 Dashboard와 Timeline이다.
+현재 진행 상태: Phase 0~5 완료. 다음 구현 단위는 Phase 6 Gemini Rule Compiler와 Chat이다.
 
 ### Phase 0 — 기준선 고정
 
@@ -733,6 +733,8 @@ DB와 runtime이 안정된 후 SSE로 교체할 수 있다. WebSocket과 custom 
 - responsive layout
 
 완료 조건: 브라우저 하나에서 상태 변화와 Rule 실행을 실시간에 가깝게 확인한다.
+
+구현 완료: 2초 polling 기반 Sensor/Device 상태 카드, Simulator 시나리오 컨트롤, 수동 Device 명령, 활성 Rule/최근 match 지표, 실시간 Event Timeline과 반응형 레이아웃을 제공한다.
 
 ### Phase 6 — Gemini Rule Compiler와 Chat
 

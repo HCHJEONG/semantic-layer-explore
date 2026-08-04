@@ -62,6 +62,7 @@ The rule engine—not Gemini—evaluates approved rules and executes device comm
 - Persistent Sensor/Event audit trail and deterministic demo scenarios
 - Validated Rule CRUD, deterministic operator evaluation, and per-rule cooldown
 - Sensor Event → Rule match → Virtual Device execution with auditable outcomes
+- Polling-based workspace dashboard with live sensor cards, device controls, deterministic demo scenarios, and an event timeline
 - Responsive, portfolio-ready interface
 
 ## API

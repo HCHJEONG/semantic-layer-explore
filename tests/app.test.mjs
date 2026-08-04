@@ -95,6 +95,8 @@ test("main page keeps the Semantic Layer Explorer baseline", async () => {
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /Semantic Layer Explorer/);
+  assert.match(html, /Workspace overview/);
+  assert.match(html, /Event timeline/);
   assert.match(html, /Ask AI/);
   assert.doesNotMatch(html, /Your site is taking shape/);
 });
