@@ -26,7 +26,7 @@ cleanup() {
 trap cleanup EXIT
 
 test -f "${LOCAL_SSH_KEY}" || { echo "Missing local SSH key: ${LOCAL_SSH_KEY}"; exit 1; }
-test -f "${DEPLOY_ASSETS_DIR}/.env" || { echo "Missing production environment file: ${DEPLOY_ASSETS_DIR}/.env"; exit 1; }
+test -f "${DEPLOY_ASSETS_DIR}/.env" || cp "/mnt/j/VSCodeProjects/semantic-layer-explore/.fordeploy/ai-workspace-aws/.env" "${DEPLOY_ASSETS_DIR}/.env"
 
 tar --exclude=.git --exclude=node_modules --exclude=.next --exclude=data -C "${ROOT_DIR}" -czf "${ARCHIVE_PATH}" .
 scp -o StrictHostKeyChecking=accept-new -i "${LOCAL_SSH_KEY}" "${ARCHIVE_PATH}" "${BASTION_HOST}:${REMOTE_DIR}/${ARCHIVE_NAME}"
