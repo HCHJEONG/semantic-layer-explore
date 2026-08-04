@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Type } from "@google/genai";
+import { getInternalApiUrl } from "@/lib/internal-api";
 
 export const applicationToolDeclarations = [
   { name: "getOntology", description: "Inspect the semantic layer before using operational data.", parameters: { type: Type.OBJECT, properties: {} } },
@@ -26,10 +27,10 @@ export function getToolDeclaration(name: string) {
   return declaration;
 }
 
-export async function callApplicationTool(name: string, origin: string) {
+export async function callApplicationTool(name: string) {
   const path = toolPaths[name];
   if (!path) throw new Error(`Unsupported tool: ${name}`);
-  const response = await fetch(new URL(path, origin), { cache: "no-store" });
+  const response = await fetch(getInternalApiUrl(path), { cache: "no-store" });
   if (!response.ok) throw new Error(`${name} failed with ${response.status}`);
   return response.json();
 }

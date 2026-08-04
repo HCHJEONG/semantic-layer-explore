@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       for (const call of calls) {
         if (!call.name) throw new Error("Gemini requested an unnamed tool.");
         trace.push(call.name);
-        parts.push({ functionResponse: { name: call.name, response: { result: await callApplicationTool(call.name, request.url) } } });
+        parts.push({ functionResponse: { name: call.name, response: { result: await callApplicationTool(call.name) } } });
       }
       contents.push({ role: "user", parts });
     }

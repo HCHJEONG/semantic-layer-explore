@@ -2,6 +2,7 @@ import { Type } from "@google/genai";
 import { z } from "zod";
 import { consumeAskAllowance } from "@/lib/rate-limit";
 import { getGeminiClient, getGeminiModel } from "@/lib/gemini";
+import { getInternalApiUrl } from "@/lib/internal-api";
 
 const SYSTEM_PROMPT = `You are an AI assistant that understands the Semantic Layer exposed by this application.
 Never assume a database schema. Never claim to access a database directly.
@@ -15,12 +16,12 @@ const declarations = ["getOntology", "getClasses", "getIndividuals", "getRelatio
   parameters: { type: Type.OBJECT, properties: {} },
 }));
 
-async function callTool(name: string, origin: string) {
+async function callTool(name: string) {
   const paths: Record<string, string> = {
     getOntology: "/api/ontology", getClasses: "/api/classes",
     getIndividuals: "/api/individuals", getRelations: "/api/relations",
   };
-  const response = await fetch(new URL(paths[name], origin));
+  const response = await fetch(getInternalApiUrl(paths[name]), { cache: "no-store" });
   if (!response.ok) throw new Error(`${name} failed`);
   return response.json();
 }
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
       for (const call of calls) {
         if (!call.name || !declarations.some((item) => item.name === call.name)) throw new Error("Unsupported tool request");
         trace.push(call.name);
-        const result = await callTool(call.name, request.url);
+        const result = await callTool(call.name);
         parts.push({ functionResponse: { name: call.name, response: { result } } });
       }
       contents.push({ role: "user", parts });

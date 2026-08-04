@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       const modelContent = result.candidates?.[0]?.content;
       if (modelContent) contents.push(modelContent as unknown as Record<string, unknown>);
       trace.push(call.name);
-      contents.push({ role: "user", parts: [{ functionResponse: { name: call.name, response: { result: await callApplicationTool(call.name, request.url) } } }] });
+      contents.push({ role: "user", parts: [{ functionResponse: { name: call.name, response: { result: await callApplicationTool(call.name) } } }] });
     }
 
     const result = await ai.models.generateContent({
