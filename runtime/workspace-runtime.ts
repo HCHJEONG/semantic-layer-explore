@@ -7,10 +7,13 @@ import { devices, events, sensorReadings } from "@/db/schema";
 import { deviceCommandSchema, type DeviceCommand, type SensorReading, type SimulatorScenario } from "@/domain/physical";
 import { listEnabledRules, markRuleTriggered } from "@/lib/rules";
 import { evaluateRule } from "@/runtime/rule-engine";
+import { startRetentionScheduler } from "@/runtime/retention";
 
 class WorkspaceRuntime {
   readonly adapter: SimulatorAdapter;
   private initialized = false;
+  private pendingRuleReadings = new Map<string, SensorReading>();
+  private processingRuleReadings = false;
 
   constructor() {
     const adapterName = process.env.PHYSICAL_ADAPTER?.trim() || "simulator";
@@ -23,6 +26,7 @@ class WorkspaceRuntime {
   start() {
     if (!this.initialized) {
       this.adapter.subscribeSensors((reading) => this.persistReading(reading));
+      startRetentionScheduler();
       this.initialized = true;
     }
     this.adapter.start();
@@ -91,13 +95,41 @@ class WorkspaceRuntime {
       eventId: reading.eventId, type: "sensor.reading", sourceType: "sensor",
       sourceId: reading.sensorId, payload: reading, occurredAt: reading.measuredAt,
     });
-    void this.evaluateRules(reading).catch((error) => {
+    this.enqueueRuleEvaluation(reading);
+  }
+
+  private enqueueRuleEvaluation(reading: SensorReading) {
+    // Control rules operate on the latest known state. Replacing a pending value
+    // bounds the queue to one reading per sensor when command execution is slow.
+    this.pendingRuleReadings.set(reading.sensorId, reading);
+    void this.drainRuleEvaluations();
+  }
+
+  private async drainRuleEvaluations() {
+    if (this.processingRuleReadings) return;
+    this.processingRuleReadings = true;
+    try {
+      while (this.pendingRuleReadings.size > 0) {
+        const reading = this.pendingRuleReadings.values().next().value as SensorReading;
+        this.pendingRuleReadings.delete(reading.sensorId);
+        try {
+          await this.evaluateRules(reading);
+        } catch (error) {
+          this.persistRuleFailure(reading, error);
+        }
+      }
+    } finally {
+      this.processingRuleReadings = false;
+      if (this.pendingRuleReadings.size > 0) void this.drainRuleEvaluations();
+    }
+  }
+
+  private persistRuleFailure(reading: SensorReading, error: unknown) {
       this.persistEvent({
         eventId: crypto.randomUUID(), type: "rule.execution.failed", sourceType: "sensor",
         sourceId: reading.sensorId, payload: { reading, error: error instanceof Error ? error.message : "Unexpected error" },
         occurredAt: new Date().toISOString(),
       });
-    });
   }
 
   private async evaluateRules(reading: SensorReading) {

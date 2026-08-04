@@ -60,6 +60,7 @@ The rule engine—not Gemini—evaluates approved rules and executes device comm
 - Seeded Sensor simulator for temperature, light, distance, and button readings
 - Virtual LED, Servo, Buzzer, and Relay devices behind a hardware-neutral adapter
 - Persistent Sensor/Event audit trail and deterministic demo scenarios
+- Bounded latest-state rule evaluation, cached active rules, and batched data retention cleanup
 - Validated Rule CRUD, deterministic operator evaluation, and per-rule cooldown
 - Sensor Event → Rule match → Virtual Device execution with auditable outcomes
 - Polling-based workspace dashboard with live sensor cards, device controls, deterministic demo scenarios, and an event timeline
@@ -110,9 +111,15 @@ GOOGLE_CLOUD_LOCATION=global
 GEMINI_MODEL=gemini-3.5-flash-lite
 GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
 DATABASE_PATH=./data/ai-workspace.sqlite
+READING_RETENTION_DAYS=7
+AUDIT_EVENT_RETENTION_DAYS=30
+RETENTION_CLEANUP_INTERVAL_MS=3600000
+RETENTION_BATCH_SIZE=5000
 ```
 
 The Google Cloud project is read from the service account JSON's `project_id`; `GOOGLE_CLOUD_PROJECT` remains an optional override. The Gemini model has one configuration source: `GEMINI_MODEL`, with `gemini-3.5-flash-lite` as the default.
+
+The runtime retains high-volume sensor readings and matching `sensor.reading` events for 7 days, while lower-volume audit events are retained for 30 days. Cleanup runs at startup and hourly in bounded batches so it does not monopolize SQLite. Deleted pages are reused by SQLite; the scheduler intentionally does not run `VACUUM`, which could block live traffic. Rule evaluation is serialized and keeps at most the newest pending reading per sensor, preventing an unbounded async backlog when device execution is slow.
 
 ## Project philosophy
 

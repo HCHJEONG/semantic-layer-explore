@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const classes = sqliteTable("classes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -54,7 +54,7 @@ export const sensorReadings = sqliteTable("sensor_readings", {
   valueJson: text("value_json").notNull(),
   measuredAt: text("measured_at").notNull(),
   source: text("source").notNull(),
-});
+}, (table) => [index("idx_sensor_readings_measured_at").on(table.measuredAt)]);
 
 export const events = sqliteTable("events", {
   id: integer("id").primaryKey({ autoIncrement: true }),

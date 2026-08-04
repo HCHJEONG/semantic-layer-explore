@@ -64,6 +64,12 @@ test("health and readiness endpoints describe the runtime", async () => {
   assert.equal(ready.status, "ready");
   assert.equal(ready.database.status, "ready");
   assert.equal(ready.physicalAdapter, "simulator");
+  assert.deepEqual(ready.retention, {
+    readingDays: 7,
+    auditEventDays: 30,
+    cleanupIntervalMs: 3_600_000,
+    batchSize: 5_000,
+  });
   assert.equal(ready.gemini.model, "gemini-3.5-flash-lite");
 });
 

@@ -7,6 +7,11 @@ import { ruleActionSchema, ruleConditionSchema, ruleInputSchema, type RuleInput,
 import { InputValidationError } from "@/lib/validation";
 
 type RuleRow = typeof rules.$inferSelect;
+let enabledRuleCache: RuleRecord[] | null = null;
+
+function invalidateEnabledRuleCache() {
+  enabledRuleCache = null;
+}
 
 function toRuleRecord(row: RuleRow): RuleRecord {
   return {
@@ -33,7 +38,8 @@ export function getRule(id: string) {
 }
 
 export function listEnabledRules() {
-  return getDb().select().from(rules).where(eq(rules.enabled, true)).all().map(toRuleRecord);
+  enabledRuleCache ??= getDb().select().from(rules).where(eq(rules.enabled, true)).all().map(toRuleRecord);
+  return enabledRuleCache;
 }
 
 export function validateRuleTargets(input: RuleInput) {
@@ -63,6 +69,7 @@ export function createRule(value: unknown) {
     enabled: input.enabled, cooldownSeconds: input.cooldownSeconds,
     createdAt: now, updatedAt: now,
   }).returning().get();
+  invalidateEnabledRuleCache();
   return toRuleRecord(row);
 }
 
@@ -76,18 +83,27 @@ export function updateRule(id: string, patch: Partial<RuleInput>) {
     conditionJson: JSON.stringify(input.condition), actionJson: JSON.stringify(input.action),
     enabled: input.enabled, cooldownSeconds: input.cooldownSeconds, updatedAt: new Date().toISOString(),
   }).where(eq(rules.id, id)).returning().get();
+  invalidateEnabledRuleCache();
   return row ? toRuleRecord(row) : null;
 }
 
 export function setRuleEnabled(id: string, enabled: boolean) {
   const row = getDb().update(rules).set({ enabled, updatedAt: new Date().toISOString() }).where(eq(rules.id, id)).returning().get();
+  invalidateEnabledRuleCache();
   return row ? toRuleRecord(row) : null;
 }
 
 export function markRuleTriggered(id: string, triggeredAt: string) {
   getDb().update(rules).set({ lastTriggeredAt: triggeredAt, updatedAt: triggeredAt }).where(eq(rules.id, id)).run();
+  const cachedRule = enabledRuleCache?.find((rule) => rule.id === id);
+  if (cachedRule) {
+    cachedRule.lastTriggeredAt = triggeredAt;
+    cachedRule.updatedAt = triggeredAt;
+  }
 }
 
 export function deleteRule(id: string) {
-  return getDb().delete(rules).where(eq(rules.id, id)).run().changes > 0;
+  const deleted = getDb().delete(rules).where(eq(rules.id, id)).run().changes > 0;
+  if (deleted) invalidateEnabledRuleCache();
+  return deleted;
 }
