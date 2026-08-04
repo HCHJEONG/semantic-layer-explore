@@ -27,3 +27,40 @@ export const relations = sqliteTable("relations", {
   propertyId: integer("property_id").notNull().references(() => properties.id),
   objectId: integer("object_id").notNull().references(() => individuals.id),
 });
+
+export const sensors = sqliteTable("sensors", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  unit: text("unit").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(),
+});
+
+export const devices = sqliteTable("devices", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  stateJson: text("state_json").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const sensorReadings = sqliteTable("sensor_readings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  eventId: text("event_id").notNull().unique(),
+  sensorId: text("sensor_id").notNull().references(() => sensors.id),
+  valueJson: text("value_json").notNull(),
+  measuredAt: text("measured_at").notNull(),
+  source: text("source").notNull(),
+});
+
+export const events = sqliteTable("events", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  eventId: text("event_id").notNull().unique(),
+  type: text("type").notNull(),
+  sourceType: text("source_type").notNull(),
+  sourceId: text("source_id").notNull(),
+  payloadJson: text("payload_json").notNull(),
+  occurredAt: text("occurred_at").notNull(),
+});

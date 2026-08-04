@@ -98,3 +98,51 @@ test("main page keeps the Semantic Layer Explorer baseline", async () => {
   assert.match(html, /Ask AI/);
   assert.doesNotMatch(html, /Your site is taking shape/);
 });
+
+test("simulator exposes four sensors and four virtual devices", async () => {
+  const response = await fetch(`${origin}/api/state`);
+  assert.equal(response.status, 200);
+  const state = await response.json();
+  assert.equal(state.mode, "simulator");
+  assert.equal(state.connection.state, "connected");
+  assert.deepEqual(state.sensors.map(({ type }) => type), ["temperature", "light", "distance", "button"]);
+  assert.deepEqual(state.devices.map(({ type }) => type), ["led", "servo", "buzzer", "relay"]);
+  assert.equal(state.readings.length, 4);
+});
+
+test("scenario and manual readings use the same sensor event contract", async () => {
+  const scenarioResponse = await fetch(`${origin}/api/simulator/scenarios/high-temperature`, { method: "POST" });
+  assert.equal(scenarioResponse.status, 200);
+  const state = await scenarioResponse.json();
+  const temperature = state.readings.find(({ sensorId }) => sensorId === "temperature-01");
+  assert.equal(temperature.value, 31.5);
+  assert.equal(temperature.source, "simulator");
+
+  const manualResponse = await fetch(`${origin}/api/simulator/sensors/light-01/readings`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ value: 42 }),
+  });
+  assert.equal(manualResponse.status, 201);
+  const reading = await manualResponse.json();
+  assert.equal(reading.sensorId, "light-01");
+  assert.equal(reading.value, 42);
+});
+
+test("virtual device commands update state and write auditable events", async () => {
+  const commandResponse = await fetch(`${origin}/api/devices/led-01/commands`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ command: "on" }),
+  });
+  assert.equal(commandResponse.status, 200);
+  const commandResult = await commandResponse.json();
+  assert.equal(commandResult.success, true);
+  assert.equal(commandResult.state.status, "on");
+
+  const eventsResponse = await fetch(`${origin}/api/events?limit=100`);
+  assert.equal(eventsResponse.status, 200);
+  const events = await eventsResponse.json();
+  assert.ok(events.some(({ type }) => type === "sensor.reading"));
+  assert.ok(events.some(({ type, sourceId }) => type === "device.command.succeeded" && sourceId === "led-01"));
+});

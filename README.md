@@ -47,6 +47,9 @@ Gemini never accesses SQLite. Every question begins with `getOntology()`. After 
 - Temporary per-process Ask AI protection: 10 requests per visitor and UTC day
 - File-backed SQLite with automatic Drizzle migrations, WAL mode, and persistent-volume support
 - Health and readiness endpoints for local and AWS operation
+- Seeded Sensor simulator for temperature, light, distance, and button readings
+- Virtual LED, Servo, Buzzer, and Relay devices behind a hardware-neutral adapter
+- Persistent Sensor/Event audit trail and deterministic demo scenarios
 - Responsive, portfolio-ready interface
 
 ## API
@@ -61,6 +64,12 @@ Gemini never accesses SQLite. Every question begins with `getOntology()`. After 
 | `POST` | `/api/ask` | Ask Gemini an ontology-aware question |
 | `GET` | `/api/health` | Lightweight process health check |
 | `GET` | `/api/ready` | Database and runtime readiness check |
+| `GET` | `/api/state` | Current simulated workspace snapshot |
+| `GET` | `/api/sensors` | Sensors with latest readings |
+| `GET` | `/api/devices` | Virtual device states |
+| `POST` | `/api/devices/:id/commands` | Execute a validated virtual-device command |
+| `GET` | `/api/events` | Read the physical workspace event timeline |
+| `GET`, `POST` | `/api/simulator/*` | Inspect and control the simulator |
 
 ## Local development
 

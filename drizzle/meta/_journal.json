@@ -8,6 +8,13 @@
       "when": 1785732961335,
       "tag": "0000_cold_bucky",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785813956483,
+      "tag": "0001_fat_korvac",
+      "breakpoints": true
     }
   ]
 }
