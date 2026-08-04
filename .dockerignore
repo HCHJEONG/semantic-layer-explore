@@ -1,0 +1,24 @@
+node_modules
+.next
+.vinext
+dist
+.wrangler
+.git
+
+# Local development values stay out of production images.
+# .fordeploy/ai-workspace-aws/.env.production remains in the build context.
+/.env.local
+/.env.development
+/.env.development.local
+
+gcp.json
+gcp-key.json
+**/gcp.json
+**/gcp-key.json
+*.pem
+*.key
+*.p12
+
+*.tar
+*.tar.gz
+npm-debug.log*

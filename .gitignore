@@ -28,8 +28,23 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# environment files: real values stay local; examples are tracked
+.env
+.env.*
+!.env.example
+.fordeploy/**/.env
+.fordeploy/**/.env.*
+!.fordeploy/**/.env.example
+
+# credentials and deployment artifacts
+gcp.json
+gcp-key.json
+**/gcp.json
+**/gcp-key.json
+*.key
+*.p12
+*.tar
+*.tar.gz
 
 # vercel
 .vercel
