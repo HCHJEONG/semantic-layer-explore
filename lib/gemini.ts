@@ -24,6 +24,14 @@ function encode(value: unknown) {
   return Buffer.from(JSON.stringify(value)).toString("base64url");
 }
 
+async function fetchGeminiResource(stage: "OAuth token" | "Vertex generateContent", input: string, init: RequestInit) {
+  try {
+    return await fetch(input, init);
+  } catch (error) {
+    throw new Error(`${stage} request failed.`, { cause: error });
+  }
+}
+
 async function getAccessToken(credentials: ServiceAccountCredentials) {
   if (accessToken && accessToken.expiresAt > Date.now() + 60_000) return accessToken.value;
   if (!credentials.client_email || !credentials.private_key || !credentials.token_uri) {
@@ -38,7 +46,7 @@ async function getAccessToken(credentials: ServiceAccountCredentials) {
     exp: issuedAt + 3600,
   })}`;
   const assertion = `${unsigned}.${crypto.sign("RSA-SHA256", Buffer.from(unsigned), credentials.private_key).toString("base64url")}`;
-  const response = await fetch(credentials.token_uri, {
+  const response = await fetchGeminiResource("OAuth token", credentials.token_uri, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
@@ -82,7 +90,7 @@ export function getGeminiClient() {
         if (typeof requestConfig.systemInstruction === "string") {
           requestConfig.systemInstruction = { parts: [{ text: requestConfig.systemInstruction }] };
         }
-        const response = await fetch(endpoint, {
+        const response = await fetchGeminiResource("Vertex generateContent", endpoint, {
           method: "POST",
           headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
           body: JSON.stringify({ contents: input.contents, ...requestConfig }),
