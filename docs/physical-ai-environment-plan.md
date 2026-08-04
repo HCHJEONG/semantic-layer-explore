@@ -69,3 +69,22 @@ This plan establishes the development and AWS deployment boundary before the Sem
 - The production environment must derive the project from the mounted service account JSON and resolve the same Gemini model and Vertex AI settings as `sampoongaptcom`.
 - Existing Semantic Layer APIs must have regression coverage before the runtime conversion begins.
 - The new container name, image name, port, environment path, and data volume must not overlap with `sampoongaptcom`.
+
+## Manual deployment commands
+
+Run the application deployment locally from a Bash environment that can read the existing SSH key:
+
+```bash
+cd /mnt/j/VSCodeProjects/semantic-layer-explore
+LOCAL_SSH_KEY="$HOME/.ssh/penvotkeypair1.pem" ./.fordeploy/ai-workspace-aws/deploy.sh
+```
+
+The script transfers source through the Bastion, builds on the private EC2 instance, and only replaces the `ai-physical-workspace` container. It does not stop or remove `sampoongaptcom` containers or images.
+
+After the container is ready, paste the following file into AWS CloudShell or upload and run it:
+
+```bash
+bash .fordeploy/ai-workspace-aws/aws-cloudshell-setup.sh
+```
+
+The CloudShell script is idempotent. It creates or reuses the port `3010` Target Group, limits EC2 ingress to the internet-facing ALB security group, installs the exact-host HTTPS Listener rule, and UPSERTs the Route 53 alias.

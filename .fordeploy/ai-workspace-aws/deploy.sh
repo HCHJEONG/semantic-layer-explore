@@ -8,8 +8,7 @@ HOST_PORT="3010"
 CONTAINER_PORT="3000"
 BASTION_HOST="${BASTION_HOST:-ubuntu@43.202.136.180}"
 PRIVATE_HOST="${PRIVATE_HOST:-ubuntu@172.31.76.194}"
-WINDOWS_SSH_KEY="${WINDOWS_SSH_KEY:-/mnt/c/Users/hcjeo/.ssh/penvotkeypair1.pem}"
-LOCAL_SSH_KEY="${LOCAL_SSH_KEY:-/tmp/ai-workspace-deploy-key.pem}"
+LOCAL_SSH_KEY="${LOCAL_SSH_KEY:-$HOME/.ssh/penvotkeypair1.pem}"
 BASTION_SSH_KEY="${BASTION_SSH_KEY:-/home/ubuntu/.ssh/penvotkeypair1.pem}"
 REMOTE_DIR="/home/ubuntu"
 DATA_DIR="/home/ubuntu/ai-workspace-data"
@@ -20,13 +19,12 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 ARCHIVE_NAME="ai-workspace-source-$(date +'%Y%m%d%H%M').tar.gz"
 
 cleanup() {
-  rm -f "${ROOT_DIR}/${ARCHIVE_NAME}" "${LOCAL_SSH_KEY}"
+  rm -f "${ROOT_DIR}/${ARCHIVE_NAME}"
 }
 trap cleanup EXIT
 
-test -f "${WINDOWS_SSH_KEY}" || { echo "Missing Windows SSH key: ${WINDOWS_SSH_KEY}"; exit 1; }
+test -f "${LOCAL_SSH_KEY}" || { echo "Missing local SSH key: ${LOCAL_SSH_KEY}"; exit 1; }
 test -f "${SCRIPT_DIR}/.env.production" || { echo "Missing production environment file"; exit 1; }
-install -m 600 "${WINDOWS_SSH_KEY}" "${LOCAL_SSH_KEY}"
 
 cd "${ROOT_DIR}"
 tar --exclude=.git --exclude=node_modules --exclude=.next --exclude=data --exclude='*.tar*' -czf "${ARCHIVE_NAME}" .
