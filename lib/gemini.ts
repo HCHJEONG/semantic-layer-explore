@@ -4,35 +4,41 @@ import { GoogleGenAI } from "@google/genai";
 import fs from "node:fs";
 import path from "node:path";
 
+type ServiceAccountCredentials = Record<string, unknown> & { project_id?: string };
+
 let client: GoogleGenAI | null = null;
 
 export function getGeminiModel() {
   return process.env.GEMINI_MODEL?.trim() || "gemini-3.5-flash-lite";
 }
 
-export function getGeminiClient() {
-  if (client) return client;
-
-  const project = process.env.GOOGLE_CLOUD_PROJECT;
-  const location = process.env.GOOGLE_CLOUD_LOCATION?.trim() || "global";
+function loadCredentials() {
   const configuredPath = process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim();
   const credentialsPath = configuredPath
     ? path.isAbsolute(configuredPath) ? configuredPath : path.resolve(/* turbopackIgnore: true */ process.cwd(), configuredPath)
     : undefined;
+  if (!credentialsPath || !fs.existsSync(credentialsPath)) return undefined;
+  return JSON.parse(fs.readFileSync(credentialsPath, "utf8")) as ServiceAccountCredentials;
+}
 
-  let credentials: Record<string, unknown> | undefined;
-  if (credentialsPath && fs.existsSync(credentialsPath)) {
-    credentials = JSON.parse(fs.readFileSync(credentialsPath, "utf8")) as Record<string, unknown>;
-  }
+export function getGeminiConfiguration() {
+  const credentials = loadCredentials();
+  const project = process.env.GOOGLE_CLOUD_PROJECT?.trim() || credentials?.project_id?.trim();
+  const location = process.env.GOOGLE_CLOUD_LOCATION?.trim() || "global";
+  return { configured: Boolean(project && credentials), credentials, project, location, model: getGeminiModel() };
+}
 
-  if (!project) throw new Error("GOOGLE_CLOUD_PROJECT is required for Gemini.");
-  if (!credentials) throw new Error("Google Cloud credentials are unavailable.");
+export function getGeminiClient() {
+  if (client) return client;
+  const config = getGeminiConfiguration();
+  if (!config.credentials) throw new Error("Google Cloud credentials are unavailable.");
+  if (!config.project) throw new Error("The Google Cloud project is missing from the service account credentials.");
 
   client = new GoogleGenAI({
     vertexai: true,
-    project,
-    location,
-    googleAuthOptions: { credentials },
+    project: config.project,
+    location: config.location,
+    googleAuthOptions: { credentials: config.credentials },
   });
   return client;
 }

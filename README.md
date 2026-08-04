@@ -74,14 +74,13 @@ npm run dev
 Gemini follows the same environment convention as `lawvot`:
 
 ```dotenv
-GOOGLE_CLOUD_PROJECT=your-project-id
 GOOGLE_CLOUD_LOCATION=global
 GEMINI_MODEL=gemini-3.5-flash-lite
 GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
 DATABASE_PATH=./data/ai-workspace.sqlite
 ```
 
-The Gemini model has one configuration source: `GEMINI_MODEL`, with `gemini-3.5-flash-lite` as the default. This mirrors the current `sampoongaptcom` Vertex AI setup and avoids stale model fallbacks.
+The Google Cloud project is read from the service account JSON's `project_id`; `GOOGLE_CLOUD_PROJECT` remains an optional override. The Gemini model has one configuration source: `GEMINI_MODEL`, with `gemini-3.5-flash-lite` as the default.
 
 ## Project philosophy
 
