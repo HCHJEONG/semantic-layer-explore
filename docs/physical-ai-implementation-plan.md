@@ -666,7 +666,7 @@ DB와 runtime이 안정된 후 SSE로 교체할 수 있다. WebSocket과 custom 
 
 ## 19. 단계별 구현 계획
 
-현재 진행 상태: Phase 0~5 완료. 다음 구현 단위는 Phase 6 Gemini Rule Compiler와 Chat이다.
+현재 진행 상태: Phase 0~6 완료. 다음 구현 단위는 Phase 7 Ontology 확장이다.
 
 ### Phase 0 — 기준선 고정
 
@@ -747,6 +747,8 @@ DB와 runtime이 안정된 후 SSE로 교체할 수 있다. WebSocket과 custom 
 - 하루 요청 제한 재구현
 
 완료 조건: 자연어 Rule 생성 데모와 현재 상태 질의 데모가 모두 성공한다.
+
+구현 완료: ontology → sensors → devices 순서의 강제 Tool Calling, 구조화 응답 및 서버 재검증, JSON 미리보기/사용자 승인 저장, Rule 관리 UI, ontology-first 상태·이벤트 분석 Chat, 두 기능이 공유하는 일일 AI 요청 제한을 제공한다.
 
 ### Phase 7 — Ontology 확장
 

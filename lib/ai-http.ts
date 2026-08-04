@@ -1,6 +1,8 @@
 import "server-only";
 
+import { z } from "zod";
 import { consumeAskAllowance } from "@/lib/rate-limit";
+import { InputValidationError } from "@/lib/validation";
 
 export async function enforceAiAllowance(request: Request) {
   const allowance = await consumeAskAllowance(request);
@@ -19,6 +21,8 @@ export function aiResponseHeaders(remaining: number) {
 }
 
 export function aiErrorResponse(error: unknown) {
+  if (error instanceof z.ZodError) return Response.json({ error: "Invalid input", details: error.flatten() }, { status: 400 });
+  if (error instanceof InputValidationError) return Response.json({ error: error.message }, { status: 400 });
   const raw = error instanceof Error ? error.message : "Unable to complete the AI request";
   const message = raw.includes("credentials are unavailable") ? "Gemini credentials are not available in this runtime." : raw;
   return Response.json({ error: message }, { status: 500 });

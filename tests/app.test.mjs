@@ -97,8 +97,18 @@ test("main page keeps the Semantic Layer Explorer baseline", async () => {
   assert.match(html, /Semantic Layer Explorer/);
   assert.match(html, /Workspace overview/);
   assert.match(html, /Event timeline/);
+  assert.match(html, /Rules/);
   assert.match(html, /Ask AI/);
   assert.doesNotMatch(html, /Your site is taking shape/);
+});
+
+test("Physical AI endpoints reject invalid requests before invoking Gemini", async () => {
+  const [chatResponse, proposalResponse] = await Promise.all([
+    fetch(`${origin}/api/ai/chat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question: "" }) }),
+    fetch(`${origin}/api/ai/rules/propose`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ instruction: "x" }) }),
+  ]);
+  assert.equal(chatResponse.status, 400);
+  assert.equal(proposalResponse.status, 400);
 });
 
 test("simulator exposes four sensors and four virtual devices", async () => {

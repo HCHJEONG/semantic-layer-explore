@@ -63,6 +63,8 @@ The rule engine—not Gemini—evaluates approved rules and executes device comm
 - Validated Rule CRUD, deterministic operator evaluation, and per-rule cooldown
 - Sensor Event → Rule match → Virtual Device execution with auditable outcomes
 - Polling-based workspace dashboard with live sensor cards, device controls, deterministic demo scenarios, and an event timeline
+- Gemini Rule Compiler with ontology/sensor/device tool calls, validated JSON preview, and an explicit human approval gate
+- Physical Workspace Chat grounded in current state, approved rules, and recent events
 - Responsive, portfolio-ready interface
 
 ## API
@@ -87,6 +89,8 @@ The rule engine—not Gemini—evaluates approved rules and executes device comm
 | `POST` | `/api/rules/:id/enable` | Enable a rule |
 | `POST` | `/api/rules/:id/disable` | Disable a rule |
 | `GET`, `POST` | `/api/simulator/*` | Inspect and control the simulator |
+| `POST` | `/api/ai/rules/propose` | Propose—but never save—a validated rule with Gemini |
+| `POST` | `/api/ai/chat` | Explain workspace state and events through ontology-first tools |
 
 ## Local development
 
