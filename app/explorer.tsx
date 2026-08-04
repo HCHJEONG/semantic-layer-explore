@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import "@xyflow/react/dist/style.css";
 import { AskAi } from "@/components/ai/ask-ai";
 import { WorkspaceDashboard } from "@/components/dashboard/workspace-dashboard";
+import { RuleStudio } from "@/components/rules/rule-studio";
 import { JsonViewer } from "@/components/ontology/json-viewer";
 import { ObjectDetail } from "@/components/ontology/object-detail";
 import { OntologyGraph } from "@/components/ontology/ontology-graph";
@@ -35,7 +36,7 @@ export default function Explorer() {
   }
 
   return <AppShell tab={tab} onTabChange={setTab}>
-    {tab === "dashboard" ? <WorkspaceDashboard /> : tab === "explorer" ? <>
+    {tab === "dashboard" ? <WorkspaceDashboard /> : tab === "rules" ? <RuleStudio /> : tab === "explorer" ? <>
       <section className="workspace">
         <OntologyTree ontology={ontology} selection={selection} loading={!ontology && !error} onSelect={selectOntologyItem} />
         <ObjectDetail selection={selection} />
