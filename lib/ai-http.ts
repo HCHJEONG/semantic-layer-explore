@@ -21,6 +21,7 @@ export function aiResponseHeaders(remaining: number) {
 }
 
 export function aiErrorResponse(error: unknown) {
+  console.error("AI request failed", error);
   if (error instanceof z.ZodError) return Response.json({ error: "Invalid input", details: error.flatten() }, { status: 400 });
   if (error instanceof InputValidationError) return Response.json({ error: error.message }, { status: 400 });
   const raw = error instanceof Error ? error.message : "Unable to complete the AI request";

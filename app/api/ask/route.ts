@@ -66,6 +66,7 @@ export async function POST(request: Request) {
     }
     throw new Error("Gemini exceeded the tool-call limit");
   } catch (error) {
+    console.error("Ontology AI request failed", error);
     const raw = error instanceof Error ? error.message : "Unable to answer";
     const message = raw.includes("credentials are unavailable")
       ? "Gemini credentials are not available in this runtime."
