@@ -6,7 +6,7 @@ dist
 .git
 
 # Local development values stay out of production images.
-# .fordeploy/ai-workspace-aws/.env.production remains in the build context.
+# .fordeploy/ai-workspace-aws/.env remains in the build context.
 /.env.local
 /.env.development
 /.env.development.local

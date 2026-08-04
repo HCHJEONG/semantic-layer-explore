@@ -15,7 +15,8 @@ DATA_DIR="/home/ubuntu/ai-workspace-data"
 GCP_KEY="/home/ubuntu/gcp-key.json"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+DEPLOY_ASSETS_DIR="${SCRIPT_DIR}/ai-workspace-aws"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ARCHIVE_NAME="ai-workspace-source-$(date +'%Y%m%d%H%M').tar.gz"
 
 cleanup() {
@@ -24,7 +25,7 @@ cleanup() {
 trap cleanup EXIT
 
 test -f "${LOCAL_SSH_KEY}" || { echo "Missing local SSH key: ${LOCAL_SSH_KEY}"; exit 1; }
-test -f "${SCRIPT_DIR}/.env.production" || { echo "Missing production environment file"; exit 1; }
+test -f "${DEPLOY_ASSETS_DIR}/.env" || { echo "Missing production environment file: ${DEPLOY_ASSETS_DIR}/.env"; exit 1; }
 
 cd "${ROOT_DIR}"
 tar --exclude=.git --exclude=node_modules --exclude=.next --exclude=data --exclude='*.tar*' -czf "${ARCHIVE_NAME}" .

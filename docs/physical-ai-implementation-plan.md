@@ -99,7 +99,7 @@ Gemini는 자연어를 검증 가능한 Rule 후보로 변환한다.
 - Vertex AI location: `global`
 - EC2 GCP 인증파일: `/home/ubuntu/gcp-key.json`
 - Container 인증파일: `/app/gcp-key.json:ro`
-- 실제 배포 환경파일: `.fordeploy/ai-workspace-aws/.env.production`
+- 실제 배포 환경파일: `.fordeploy/ai-workspace-aws/.env`
 
 환경과 배포 준비에 대한 세부 결정은 `docs/physical-ai-environment-plan.md`를 따른다.
 
@@ -197,11 +197,10 @@ ai/
   rule-compiler.ts
 
 .fordeploy/
+  deploy.sh
   ai-workspace-aws/
     Dockerfile
-    deploy.sh
-    .env.example
-    .env.production
+    .env
 ```
 
 초기 리팩터링에서 모노레포로 전환하지 않는다. 실제 Gateway 또는 Arduino 코드가 추가되는 시점에 `apps/`, `services/`, `firmware/` 모노레포 전환을 재검토한다.
@@ -764,7 +763,7 @@ DB와 runtime이 안정된 후 SSE로 교체할 수 있다. WebSocket과 custom 
 ### Phase 8 — Docker와 AWS 배포
 
 - production Dockerfile
-- `.env.production` 이미지 포함 방식 적용
+- `.fordeploy/ai-workspace-aws/.env`를 이미지의 `.env.production`으로 포함
 - EC2 GCP key read-only mount
 - SQLite volume mount
 - sampoongaptcom 방식의 Bastion → private EC2 배포 스크립트

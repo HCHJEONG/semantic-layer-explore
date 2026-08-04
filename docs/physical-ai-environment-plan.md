@@ -19,8 +19,8 @@ This plan establishes the development and AWS deployment boundary before the Sem
 ## Environment-file policy
 
 - `.env.local` contains local development values and is excluded from Git and production Docker images.
-- `.fordeploy/ai-workspace-aws/.env.production` contains the temporary production configuration. It is excluded from Git but intentionally included in the Docker build context.
-- `.env.example` and `.fordeploy/ai-workspace-aws/.env.example` contain no secrets and are tracked.
+- `.fordeploy/ai-workspace-aws/.env` contains the temporary production configuration. It is excluded from Git but intentionally included in the Docker build context.
+- The root `.env.example` contains no secrets and remains tracked as the configuration reference.
 - `gcp-key.json` is excluded from both Git and the Docker build context. The existing EC2 file is mounted read-only at runtime.
 
 ## Implementation sequence
@@ -42,7 +42,7 @@ This plan establishes the development and AWS deployment boundary before the Sem
 ### Phase 3 — AWS container environment
 
 1. Add a multi-stage Node 22 Dockerfile matching the `sampoongaptcom` standalone pattern.
-2. Copy only `.fordeploy/ai-workspace-aws/.env.production` into the temporary production image as explicitly selected for the initial operation period.
+2. Copy only `.fordeploy/ai-workspace-aws/.env` into the image as `.env.production`, as explicitly selected for the initial operation period.
 3. Mount `/home/ubuntu/gcp-key.json` and the AI Workspace data directory at runtime.
 4. Run the container as a non-root user with `--restart unless-stopped`.
 5. Map private EC2 port `3010` to container port `3000`.
@@ -76,7 +76,7 @@ Run the application deployment locally from a Bash environment that can read the
 
 ```bash
 cd /mnt/j/VSCodeProjects/semantic-layer-explore
-LOCAL_SSH_KEY="$HOME/.ssh/penvotkeypair1.pem" ./.fordeploy/ai-workspace-aws/deploy.sh
+LOCAL_SSH_KEY="$HOME/.ssh/penvotkeypair1.pem" ./.fordeploy/deploy.sh
 ```
 
 The script transfers source through the Bastion, builds on the private EC2 instance, and only replaces the `ai-physical-workspace` container. It does not stop or remove `sampoongaptcom` containers or images.

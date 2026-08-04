@@ -8,7 +8,7 @@ FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-COPY .fordeploy/ai-workspace-aws/.env.production ./.env.production
+COPY .fordeploy/ai-workspace-aws/.env ./.env.production
 RUN npm rebuild better-sqlite3 && npm run build
 
 FROM node:22-bookworm-slim AS runner
