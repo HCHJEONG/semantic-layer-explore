@@ -36,15 +36,11 @@ echo "[3/5] HTTPS Listener rule"
 RULES_JSON=$(aws elbv2 describe-rules --listener-arn "${LISTENER_ARN}" --output json)
 AI_RULE_ARN=$(jq -r --arg host "${HOSTNAME}" '.Rules[] | select(any(.Conditions[]?.Values[]?; . == $host)) | .RuleArn' <<<"${RULES_JSON}" | head -n 1)
 if [[ -z "${AI_RULE_ARN}" ]]; then
-  PRIORITY_ONE_ARN=$(jq -r '.Rules[] | select(.Priority == "1") | .RuleArn' <<<"${RULES_JSON}")
-  if [[ -n "${PRIORITY_ONE_ARN}" ]]; then
-    USED_PRIORITIES=$(jq -r '.Rules[].Priority' <<<"${RULES_JSON}")
-    FALLBACK_PRIORITY=""
-    for candidate in $(seq 50 99); do
-      if ! grep -qx "${candidate}" <<<"${USED_PRIORITIES}"; then FALLBACK_PRIORITY="${candidate}"; break; fi
-    done
-    [[ -n "${FALLBACK_PRIORITY}" ]] || { echo "No free fallback listener priority"; exit 1; }
-    aws elbv2 set-rule-priorities --rule-priorities "RuleArn=${PRIORITY_ONE_ARN},Priority=${FALLBACK_PRIORITY}" >/dev/null
+  if jq -e '.Rules[] | select(.Priority == "1")' >/dev/null <<<"${RULES_JSON}"; then
+    mapfile -t SHIFTED_PRIORITIES < <(jq -r '.Rules[] | select(.Priority != "default") | "RuleArn=\(.RuleArn),Priority=\((.Priority|tonumber)+1)"' <<<"${RULES_JSON}")
+    HIGHEST_PRIORITY=$(jq -r '[.Rules[].Priority | select(. != "default") | tonumber] | max' <<<"${RULES_JSON}")
+    (( HIGHEST_PRIORITY < 50000 )) || { echo "Cannot shift Listener priorities above 50000"; exit 1; }
+    aws elbv2 set-rule-priorities --rule-priorities "${SHIFTED_PRIORITIES[@]}" >/dev/null
   fi
   AI_RULE_ARN=$(aws elbv2 create-rule --listener-arn "${LISTENER_ARN}" --priority 1 \
     --conditions "Field=host-header,HostHeaderConfig={Values=[${HOSTNAME}]}" \
