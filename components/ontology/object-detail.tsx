@@ -15,6 +15,7 @@ export function ObjectDetail({ selection }: { selection: OntologySelection | nul
       <p className="description">{selection.item.description}</p>
       <div className="field-grid"><label>Identifier<strong>{selection.item.id}</strong></label><label>Semantic type<strong>{selection.kind}</strong></label>
         {"class" in selection.item && <label>Instance of<strong>{selection.item.class}</strong></label>}
+        {"externalId" in selection.item && selection.item.externalId && <label>Runtime binding<strong>{selection.item.externalId}</strong></label>}
         {"domain" in selection.item && <><label>Domain<strong>{selection.item.domain}</strong></label><label>Range<strong>{selection.item.range}</strong></label></>}
       </div>
       <div className="meaning"><Sparkles size={16} /><div><b>Semantic meaning</b><p>{getSemanticMeaning(selection)}</p></div></div>

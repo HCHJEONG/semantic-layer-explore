@@ -666,7 +666,7 @@ DB와 runtime이 안정된 후 SSE로 교체할 수 있다. WebSocket과 custom 
 
 ## 19. 단계별 구현 계획
 
-현재 진행 상태: Phase 0~6 완료. 다음 구현 단위는 Phase 7 Ontology 확장이다.
+현재 진행 상태: Phase 0~7 완료. 다음 구현 단위는 Phase 8 Docker와 AWS 배포이다.
 
 ### Phase 0 — 기준선 고정
 
@@ -758,6 +758,8 @@ DB와 runtime이 안정된 후 SSE로 교체할 수 있다. WebSocket과 custom 
 - Sensor → Event → Rule → Device 관계 표시
 
 완료 조건: Semantic Layer와 실제 runtime state가 어떻게 연결되는지 UI와 README에서 설명된다.
+
+구현 완료: Sensor/Event/Rule/Device/Room Class와 핵심 Property/Individual/Relation seed, operational ID 바인딩, Sensor → Event → Rule → Device 관계, class topology 기반 React Flow 자동 배치를 제공한다. 기존 Person/Company/Project 데이터와 API 응답 구조는 유지한다.
 
 ### Phase 8 — Docker와 AWS 배포
 

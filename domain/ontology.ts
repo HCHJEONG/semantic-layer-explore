@@ -1,6 +1,6 @@
 export type ClassItem = { id: number; name: string; description: string };
 export type PropertyItem = { id: number; name: string; description: string; domain: string; range: string };
-export type IndividualItem = { id: number; name: string; description: string; class: string };
+export type IndividualItem = { id: number; name: string; description: string; class: string; externalId: string | null };
 export type RelationItem = { id: number; subject: string; property: string; object: string };
 
 export type Ontology = {

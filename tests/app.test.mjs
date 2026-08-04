@@ -72,22 +72,36 @@ test("ontology API preserves the original semantic-layer contract", async () => 
   assert.equal(response.status, 200);
   const ontology = await response.json();
 
-  assert.deepEqual(ontology.classes.map(({ name }) => name), ["Person", "Company", "Project"]);
-  assert.deepEqual(ontology.properties.map(({ name, domain, range }) => ({ name, domain, range })), [
+  assert.deepEqual(ontology.classes.slice(0, 3).map(({ name }) => name), ["Person", "Company", "Project"]);
+  assert.deepEqual(ontology.properties.slice(0, 2).map(({ name, domain, range }) => ({ name, domain, range })), [
     { name: "worksFor", domain: "Person", range: "Company" },
     { name: "assignedTo", domain: "Person", range: "Project" },
   ]);
-  assert.deepEqual(ontology.individuals.map(({ name, class: className }) => ({ name, class: className })), [
+  assert.deepEqual(ontology.individuals.slice(0, 4).map(({ name, class: className }) => ({ name, class: className })), [
     { name: "Alice", class: "Person" },
     { name: "Bob", class: "Person" },
     { name: "OpenAI", class: "Company" },
     { name: "Semantic Explorer", class: "Project" },
   ]);
-  assert.deepEqual(ontology.relations.map(({ subject, property, object }) => ({ subject, property, object })), [
+  assert.deepEqual(ontology.relations.slice(0, 3).map(({ subject, property, object }) => ({ subject, property, object })), [
     { subject: "Alice", property: "worksFor", object: "OpenAI" },
     { subject: "Bob", property: "worksFor", object: "OpenAI" },
     { subject: "Bob", property: "assignedTo", object: "Semantic Explorer" },
   ]);
+  assert.deepEqual(ontology.classes.slice(3).map(({ name }) => name), ["Sensor", "Event", "Rule", "Device", "Room"]);
+  assert.deepEqual(
+    ontology.properties.filter(({ name }) => ["emits", "evaluatedBy", "triggers"].includes(name)).map(({ name, domain, range }) => ({ name, domain, range })),
+    [
+      { name: "emits", domain: "Sensor", range: "Event" },
+      { name: "evaluatedBy", domain: "Event", range: "Rule" },
+      { name: "triggers", domain: "Rule", range: "Device" },
+    ],
+  );
+  assert.equal(ontology.individuals.find(({ name }) => name === "TemperatureSensor01").externalId, "temperature-01");
+  assert.equal(ontology.individuals.find(({ name }) => name === "FanRelay01").externalId, "relay-fan-01");
+  assert.ok(ontology.relations.some(({ subject, property, object }) => subject === "TemperatureSensor01" && property === "emits" && object === "SensorReadingEvent"));
+  assert.ok(ontology.relations.some(({ subject, property, object }) => subject === "SensorReadingEvent" && property === "evaluatedBy" && object === "WorkspaceAutomationRule"));
+  assert.ok(ontology.relations.some(({ subject, property, object }) => subject === "WorkspaceAutomationRule" && property === "triggers" && object === "FanRelay01"));
 });
 
 test("main page keeps the Semantic Layer Explorer baseline", async () => {

@@ -1,0 +1,2 @@
+.graph{height:460px}.flow{height:390px}.graph-node small{display:block;margin-top:4px;color:#9a8da1;font:8px var(--font-mono)}.graph-head .legend{max-width:720px;justify-content:flex-end;flex-wrap:wrap;row-gap:5px}
+@media(max-width:900px){.graph-head .legend{max-width:420px}}

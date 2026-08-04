@@ -19,6 +19,7 @@ export const individuals = sqliteTable("individuals", {
   name: text("name").notNull().unique(),
   classId: integer("class_id").notNull().references(() => classes.id),
   description: text("description").notNull(),
+  externalId: text("external_id").unique(),
 });
 
 export const relations = sqliteTable("relations", {

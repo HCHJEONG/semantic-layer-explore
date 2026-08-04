@@ -65,6 +65,8 @@ The rule engine—not Gemini—evaluates approved rules and executes device comm
 - Polling-based workspace dashboard with live sensor cards, device controls, deterministic demo scenarios, and an event timeline
 - Gemini Rule Compiler with ontology/sensor/device tool calls, validated JSON preview, and an explicit human approval gate
 - Physical Workspace Chat grounded in current state, approved rules, and recent events
+- Extended physical ontology showing `Sensor → Event → Rule → Device`, with runtime IDs bound to semantic Individuals
+- Data-driven React Flow layout for both the original business demo and Physical Workspace relationships
 - Responsive, portfolio-ready interface
 
 ## API
