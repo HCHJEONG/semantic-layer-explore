@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { cn } from "@/lib/utils";
 
-const sans = Geist({ variable: "--font-sans", subsets: ["latin"] });
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 const mono = Geist_Mono({ variable: "--font-mono", subsets: ["latin"] });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -29,5 +30,5 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body className={`${sans.variable} ${mono.variable}`}>{children}</body></html>;
+  return <html lang="en" className={cn("font-sans", geist.variable)}><body className={`${geist.variable} ${mono.variable}`}>{children}</body></html>;
 }

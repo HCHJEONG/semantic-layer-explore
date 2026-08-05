@@ -1,5 +1,8 @@
 import { Box, CircleDot, Search, UserRound } from "lucide-react";
 import type { Ontology, OntologyItem, OntologyKind, OntologySelection } from "@/domain/ontology";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function OntologyTree({ ontology, selection, loading, onSelect }: {
   ontology: Ontology | null;
@@ -13,12 +16,17 @@ export function OntologyTree({ ontology, selection, loading, onSelect }: {
     { title: "Individuals", icon: UserRound, kind: "Individual" as const, items: ontology.individuals },
   ] : [];
 
-  return <aside className="sidebar panel">
-    <div className="panel-title"><div><span>ONTOLOGY</span><h2>Explorer</h2></div><Search size={17} /></div>
-    {loading && <div className="loading-lines">Loading semantic layer…</div>}
-    {sections.map((section) => <div className="tree-section" key={section.title}>
-      <h3><section.icon size={14} /> {section.title}<b>{section.items.length}</b></h3>
-      {section.items.map((item) => <button key={item.id} className={selection?.kind === section.kind && selection.item.id === item.id ? "selected" : ""} onClick={() => onSelect(section.kind, item)}><span className={`dot ${section.kind.toLowerCase()}`} />{item.name}</button>)}
-    </div>)}
-  </aside>;
+  return <Card className="sidebar">
+    <CardHeader className="panel-title">
+      <div><span>ONTOLOGY</span><CardTitle>Explorer</CardTitle></div>
+      <Search size={17} />
+    </CardHeader>
+    <CardContent className="p-4">
+      {loading && <div className="flex flex-col gap-2">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-8 w-full" />)}</div>}
+      {sections.map((section) => <div className="tree-section" key={section.title}>
+        <h3><section.icon size={14} /> {section.title}<Badge variant="secondary">{section.items.length}</Badge></h3>
+        {section.items.map((item) => <button key={item.id} className={selection?.kind === section.kind && selection.item.id === item.id ? "selected" : ""} onClick={() => onSelect(section.kind, item)}><span className={`dot ${section.kind.toLowerCase()}`} />{item.name}</button>)}
+      </div>)}
+    </CardContent>
+  </Card>;
 }

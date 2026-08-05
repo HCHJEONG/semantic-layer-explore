@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowRight, Check, Clock, Code2, Power, Sparkles, Trash2 } from "lucide-react";
 import type { RuleInput, RuleRecord } from "@/domain/rule";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 
 const examples = ["온도가 30도를 넘으면 팬을 켜.", "조도가 100 lux보다 낮으면 LED를 켜.", "버튼을 누르면 부저를 울려."];
 
@@ -66,22 +69,28 @@ export function RuleStudio() {
   return <section className="rules-page">
     <div className="rules-intro"><div><span className="eyebrow">GEMINI RULE COMPILER</span><h1>Describe an automation.</h1><p>Gemini maps natural language to known sensors and devices. Review the validated JSON before anything is saved.</p></div><div className="approval-boundary"><Sparkles /><span>AI proposes<strong>You approve</strong></span></div></div>
     <div className="rules-layout">
-      <div className="rule-composer panel">
-        <label htmlFor="instruction">Natural-language instruction</label>
-        <textarea id="instruction" value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="온도가 30도를 넘으면 팬을 켜." />
-        <div className="examples">{examples.map((example) => <button key={example} onClick={() => setInstruction(example)}>{example}</button>)}</div>
-        <button className="propose-button" onClick={() => void propose()} disabled={Boolean(busy)}><Sparkles />{busy === "propose" ? "Inspecting ontology…" : "Generate rule proposal"}</button>
-        {trace.length > 0 && <div className="trace rule-trace">{trace.map((step, index) => <span key={step}>{step}{index < trace.length - 1 && <ArrowRight />}</span>)}</div>}
-        {remaining !== null && <small className="remaining">{remaining} AI requests remaining today</small>}
-      </div>
-      <div className="proposal-panel panel">
-        <div className="dashboard-title"><div><span className="eyebrow">APPROVAL GATE</span><h2>Validated proposal</h2></div><Code2 /></div>
-        {proposal ? <><pre>{JSON.stringify(proposal, null, 2)}</pre><div className="proposal-actions"><button onClick={() => setProposal(null)}>Discard</button><button className="approve" disabled={Boolean(busy)} onClick={() => void approve()}><Check />Approve & save</button></div></> : <div className="proposal-empty"><Code2 /><strong>No proposal yet</strong><span>Generated JSON will appear here for review.</span></div>}
-      </div>
+      <Card className="rule-composer">
+        <CardContent className="p-6">
+          <Label htmlFor="instruction">Natural-language instruction</Label>
+          <textarea id="instruction" value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="온도가 30도를 넘으면 팬을 켜." />
+          <div className="examples">{examples.map((example) => <Button key={example} variant="outline" size="sm" onClick={() => setInstruction(example)}>{example}</Button>)}</div>
+          <Button className="propose-button" onClick={() => void propose()} disabled={Boolean(busy)}><Sparkles />{busy === "propose" ? "Inspecting ontology…" : "Generate rule proposal"}</Button>
+          {trace.length > 0 && <div className="trace rule-trace">{trace.map((step, index) => <span key={step}>{step}{index < trace.length - 1 && <ArrowRight />}</span>)}</div>}
+          {remaining !== null && <small className="remaining">{remaining} AI requests remaining today</small>}
+        </CardContent>
+      </Card>
+      <Card className="proposal-panel">
+        <CardHeader className="dashboard-title"><div><span className="eyebrow">APPROVAL GATE</span><CardTitle>Validated proposal</CardTitle></div><Code2 /></CardHeader>
+        <CardContent className="p-5">
+          {proposal ? <><pre>{JSON.stringify(proposal, null, 2)}</pre><div className="proposal-actions"><Button variant="ghost" onClick={() => setProposal(null)}>Discard</Button><Button className="approve" disabled={Boolean(busy)} onClick={() => void approve()}><Check />Approve & save</Button></div></> : <div className="proposal-empty"><Code2 /><strong>No proposal yet</strong><span>Generated JSON will appear here for review.</span></div>}
+        </CardContent>
+      </Card>
     </div>
-    <section className="panel rule-list-panel"><div className="dashboard-title"><div><span className="eyebrow">DETERMINISTIC RUNTIME</span><h2>Approved rules</h2></div><strong className="rule-count">{rules.length} rules</strong></div>
-      <div className="rule-list">{rules.length ? rules.map((rule) => <article key={rule.id} className={rule.enabled ? "enabled" : ""}><div className="rule-power"><Power /></div><div><strong>{rule.name}</strong><span>{conditionText(rule)} <ArrowRight /> {rule.action.deviceId} · {rule.action.command}</span><small><Clock /> {rule.cooldownSeconds}s cooldown · {rule.lastTriggeredAt ? `last matched ${new Date(rule.lastTriggeredAt).toLocaleString()}` : "never matched"}</small></div><div className="rule-actions"><button disabled={busy === rule.id} onClick={() => void mutateRule(rule, "toggle")}>{rule.enabled ? "Disable" : "Enable"}</button><button aria-label={`Delete ${rule.name}`} disabled={busy === rule.id} onClick={() => void mutateRule(rule, "delete")}><Trash2 /></button></div></article>) : <div className="empty">No approved rules. Generate and approve the first automation above.</div>}</div>
-    </section>
+    <Card className="rule-list-panel"><CardHeader className="dashboard-title"><div><span className="eyebrow">DETERMINISTIC RUNTIME</span><CardTitle>Approved rules</CardTitle></div><strong className="rule-count">{rules.length} rules</strong></CardHeader>
+      <CardContent className="p-5">
+        <div className="rule-list">{rules.length ? rules.map((rule) => <article key={rule.id} className={rule.enabled ? "enabled" : ""}><div className="rule-power"><Power /></div><div><strong>{rule.name}</strong><span>{conditionText(rule)} <ArrowRight /> {rule.action.deviceId} · {rule.action.command}</span><small><Clock /> {rule.cooldownSeconds}s cooldown · {rule.lastTriggeredAt ? `last matched ${new Date(rule.lastTriggeredAt).toLocaleString()}` : "never matched"}</small></div><div className="rule-actions"><Button variant="outline" size="sm" disabled={busy === rule.id} onClick={() => void mutateRule(rule, "toggle")}>{rule.enabled ? "Disable" : "Enable"}</Button><Button variant="ghost" size="icon" aria-label={`Delete ${rule.name}`} disabled={busy === rule.id} onClick={() => void mutateRule(rule, "delete")}><Trash2 /></Button></div></article>) : <div className="empty">No approved rules. Generate and approve the first automation above.</div>}</div>
+      </CardContent>
+    </Card>
     {error && <div className="error toast">{error}</div>}
   </section>;
 }

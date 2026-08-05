@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Activity, BellRing, Fan, Gauge, Lightbulb, Play, Radio, RefreshCw, Ruler, Thermometer, ToggleLeft, Zap } from "lucide-react";
 import type { DeviceState, DeviceType, SensorReading, SensorType, SimulatorScenario } from "@/domain/physical";
 import type { RuleRecord } from "@/domain/rule";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type WorkspaceState = {
   mode: "simulator";
@@ -110,41 +112,41 @@ export function WorkspaceDashboard() {
     </div>
 
     <div className="dashboard-metrics">
-      <div className="metric panel"><Radio /><span>Adapter<strong>{state?.connection.adapter ?? "—"}</strong></span></div>
-      <div className="metric panel"><Activity /><span>Sensors<strong>{state?.readings.length ?? 0} / {state?.sensors.length ?? 4} live</strong></span></div>
-      <div className="metric panel"><Zap /><span>Active rules<strong>{rules.filter((rule) => rule.enabled).length}</strong></span></div>
-      <div className="metric panel"><RefreshCw /><span>Rule matches<strong>{matchedEvents.length} recent</strong></span></div>
+      <Card className="metric"><Radio /><span>Adapter<strong>{state?.connection.adapter ?? "—"}</strong></span></Card>
+      <Card className="metric"><Activity /><span>Sensors<strong>{state?.readings.length ?? 0} / {state?.sensors.length ?? 4} live</strong></span></Card>
+      <Card className="metric"><Zap /><span>Active rules<strong>{rules.filter((rule) => rule.enabled).length}</strong></span></Card>
+      <Card className="metric"><RefreshCw /><span>Rule matches<strong>{matchedEvents.length} recent</strong></span></Card>
     </div>
 
     <div className="dashboard-grid">
       <div className="dashboard-main">
-        <section className="panel dashboard-panel">
-          <div className="dashboard-title"><div><span className="eyebrow">LIVE TELEMETRY</span><h2>Sensors</h2></div><small>Updates every 2 seconds</small></div>
-          <div className="sensor-grid">{state?.sensors.map((sensor) => {
+        <Card className="dashboard-panel">
+          <CardHeader className="dashboard-title"><div><span className="eyebrow">LIVE TELEMETRY</span><CardTitle>Sensors</CardTitle></div><small>Updates every 2 seconds</small></CardHeader>
+          <CardContent className="p-4"><div className="sensor-grid">{state?.sensors.map((sensor) => {
             const Icon = sensorIcons[sensor.type];
             const reading = state.readings.find((item) => item.sensorId === sensor.id);
             return <article className={`sensor-card ${sensor.type}`} key={sensor.id}><div className="card-icon"><Icon /></div><div><span>{sensor.name}</span><strong>{readingLabel(reading)}</strong><small>{reading ? new Date(reading.measuredAt).toLocaleTimeString() : "Waiting for data"}</small></div></article>;
-          }) ?? <div className="loading-lines">Connecting to sensors…</div>}</div>
-        </section>
+          }) ?? <div className="loading-lines">Connecting to sensors…</div>}</div></CardContent>
+        </Card>
 
-        <section className="panel dashboard-panel">
-          <div className="dashboard-title"><div><span className="eyebrow">ACTUATORS</span><h2>Virtual devices</h2></div><small>Manual commands are audited</small></div>
-          <div className="device-grid">{state?.devices.map((device) => {
+        <Card className="dashboard-panel">
+          <CardHeader className="dashboard-title"><div><span className="eyebrow">ACTUATORS</span><CardTitle>Virtual devices</CardTitle></div><small>Manual commands are audited</small></CardHeader>
+          <CardContent className="p-4"><div className="device-grid">{state?.devices.map((device) => {
             const Icon = deviceIcons[device.type];
-            return <button key={device.id} className={`device-card ${device.state.status}`} disabled={busy === device.id || device.type === "servo"} onClick={() => void toggleDevice(device)}><Icon /><span>{device.name}<small>{device.type}</small></span><strong>{device.type === "servo" ? `${device.state.angle ?? 90}°` : device.state.status}</strong></button>;
-          })}</div>
-        </section>
+            return <Button key={device.id} variant="outline" className={`device-card ${device.state.status}`} disabled={busy === device.id || device.type === "servo"} onClick={() => void toggleDevice(device)}><Icon /><span>{device.name}<small>{device.type}</small></span><strong>{device.type === "servo" ? `${device.state.angle ?? 90}°` : device.state.status}</strong></Button>;
+          })}</div></CardContent>
+        </Card>
 
-        <section className="panel dashboard-panel">
-          <div className="dashboard-title"><div><span className="eyebrow">DEMO CONTROLS</span><h2>Simulator scenarios</h2></div><small>{state?.simulator.running ? `Running · ${state.simulator.intervalMs} ms` : "Stopped"}</small></div>
-          <div className="scenario-row">{scenarios.map((scenario) => <button key={scenario.id} className={state?.simulator.scenario === scenario.id ? "active" : ""} disabled={Boolean(busy)} onClick={() => void runScenario(scenario.id)}><Play />{scenario.label}</button>)}</div>
-        </section>
+        <Card className="dashboard-panel">
+          <CardHeader className="dashboard-title"><div><span className="eyebrow">DEMO CONTROLS</span><CardTitle>Simulator scenarios</CardTitle></div><small>{state?.simulator.running ? `Running · ${state.simulator.intervalMs} ms` : "Stopped"}</small></CardHeader>
+          <CardContent className="p-4"><div className="scenario-row">{scenarios.map((scenario) => <Button key={scenario.id} variant={state?.simulator.scenario === scenario.id ? "secondary" : "outline"} disabled={Boolean(busy)} onClick={() => void runScenario(scenario.id)}><Play />{scenario.label}</Button>)}</div></CardContent>
+        </Card>
       </div>
 
-      <aside className="panel timeline-panel">
-        <div className="dashboard-title"><div><span className="eyebrow">AUDIT TRAIL</span><h2>Event timeline</h2></div><span className="live-label"><i />LIVE</span></div>
-        <div className="timeline">{events.length ? events.map((event) => <article key={event.eventId} className={event.type === "rule.matched" ? "matched" : ""}><time>{new Date(event.occurredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time><i /><div><strong>{eventDescription(event, rules)}</strong><span>{event.type}</span></div></article>) : <div className="empty">Events will appear as the simulator runs.</div>}</div>
-      </aside>
+      <Card className="timeline-panel">
+        <CardHeader className="dashboard-title"><div><span className="eyebrow">AUDIT TRAIL</span><CardTitle>Event timeline</CardTitle></div><span className="live-label"><i />LIVE</span></CardHeader>
+        <CardContent className="p-5"><div className="timeline">{events.length ? events.map((event) => <article key={event.eventId} className={event.type === "rule.matched" ? "matched" : ""}><time>{new Date(event.occurredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time><i /><div><strong>{eventDescription(event, rules)}</strong><span>{event.type}</span></div></article>) : <div className="empty">Events will appear as the simulator runs.</div>}</div></CardContent>
+      </Card>
     </div>
     {error && <div className="error toast">{error}</div>}
   </section>;
