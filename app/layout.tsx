@@ -14,6 +14,14 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "Semantic Layer Explorer",
     description: "A minimal Ontology → Database → API → AI demo.",
+    robots: {
+      index: false,
+      follow: false,
+      noarchive: true,
+      nosnippet: true,
+      noimageindex: true,
+      googleBot: { index: false, follow: false, noarchive: true, nosnippet: true, noimageindex: true },
+    },
     icons: { icon: "/favicon.svg" },
     openGraph: { title: "Semantic Layer Explorer", description: "A minimal Ontology → Database → API → AI demo.", images: [{ url: `${origin}/og.png`, width: 1792, height: 921 }] },
     twitter: { card: "summary_large_image", title: "Semantic Layer Explorer", description: "A minimal Ontology → Database → API → AI demo.", images: [`${origin}/og.png`] },

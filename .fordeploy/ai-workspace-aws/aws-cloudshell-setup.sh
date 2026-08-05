@@ -10,7 +10,7 @@ ALB_SG="sg-0f5c0f92460020c68"
 ALB_ARN="arn:aws:elasticloadbalancing:ap-northeast-2:767397926940:loadbalancer/app/penvot-internet-facing-1/b2f39551179d8e8b"
 LISTENER_ARN="arn:aws:elasticloadbalancing:ap-northeast-2:767397926940:listener/app/penvot-internet-facing-1/b2f39551179d8e8b/44fa4d83b9cb53ba"
 HOSTED_ZONE_ID="Z0744879U9IEPS407YFW"
-HOSTNAME="ai-workspace.sampoongapt.com"
+HOSTNAME="ai.sampoongapt.com"
 TARGET_GROUP_NAME="ai-workspace-3010"
 
 echo "[1/5] Target Group"

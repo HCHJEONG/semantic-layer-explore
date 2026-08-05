@@ -4,7 +4,7 @@ This plan establishes the development and AWS deployment boundary before the Sem
 
 ## Fixed decisions
 
-- Public URL: `https://ai-workspace.sampoongapt.com`
+- Public URL: `https://ai.sampoongapt.com`
 - Runtime: Next.js on the existing private AWS EC2 instance
 - Container mapping: private EC2 `3010` → container `3000`
 - Ingress: existing internet-facing ALB with a host-header rule
@@ -51,7 +51,7 @@ This plan establishes the development and AWS deployment boundary before the Sem
 
 1. Create an AI Workspace target group on port `3010`.
 2. Use `/api/health` as the health-check path.
-3. Add the `ai-workspace.sampoongapt.com` host-header rule to the existing HTTPS 443 listener.
+3. Add the `ai.sampoongapt.com` host-header rule to the existing HTTPS 443 listener.
 4. Point the DNS record to the existing ALB.
 5. Allow private EC2 port `3010` only from the ALB security group.
 

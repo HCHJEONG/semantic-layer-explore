@@ -86,9 +86,9 @@ Gemini는 자연어를 검증 가능한 Rule 후보로 변환한다.
 
 ## 5. 확정된 환경 및 배포 결정
 
-- 공개 주소: `https://ai-workspace.sampoongapt.com`
+- 공개 주소: `https://ai.sampoongapt.com`
 - Ingress: 기존 internet-facing ALB의 HTTPS 443 Listener
-- Routing: `Host = ai-workspace.sampoongapt.com`
+- Routing: `Host = ai.sampoongapt.com`
 - Target Group: private EC2 `3010`
 - Container: 내부 `3000`, 호스트 매핑 `3010:3000`
 - Database: `/app/data/ai-workspace.sqlite`
@@ -769,7 +769,7 @@ DB와 runtime이 안정된 후 SSE로 교체할 수 있다. WebSocket과 custom 
 - sampoongaptcom 방식의 Bastion → private EC2 배포 스크립트
 - container/image cleanup 범위 격리
 - ALB target group/health check 준비
-- `ai-workspace.sampoongapt.com` 배포
+- `ai.sampoongapt.com` 배포
 
 완료 조건: 공개 URL에서 Simulator, Rule, Timeline, Ontology, Ask AI가 동작한다.
 
@@ -918,7 +918,7 @@ Gemini 장애가 ALB health check 실패로 이어지지 않게 한다.
 - Simulator와 MQTT가 동일한 Adapter 계약을 사용한다.
 - 기존 Semantic Layer 핵심 API의 회귀 테스트가 통과한다.
 - Docker 재시작 후 SQLite 데이터가 유지된다.
-- `https://ai-workspace.sampoongapt.com`에서 전체 데모가 동작한다.
+- `https://ai.sampoongapt.com`에서 전체 데모가 동작한다.
 - README만으로 철학, 아키텍처, 안전 경계, 데모 흐름을 이해할 수 있다.
 
 ## 25. 첫 구현 단위
