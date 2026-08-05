@@ -1,11 +1,11 @@
 import { asc } from "drizzle-orm";
 import { getDb } from "@/db";
-import { classes, individuals, properties, relations } from "@/db/schema";
+import { semanticClasses, semanticIndividuals, semanticProperties, semanticRelations } from "@/db/schema";
 
-type ClassRow = typeof classes.$inferSelect;
-type PropertyRow = typeof properties.$inferSelect;
-type IndividualRow = typeof individuals.$inferSelect;
-type RelationRow = typeof relations.$inferSelect;
+type ClassRow = typeof semanticClasses.$inferSelect;
+type PropertyRow = typeof semanticProperties.$inferSelect;
+type IndividualRow = typeof semanticIndividuals.$inferSelect;
+type RelationRow = typeof semanticRelations.$inferSelect;
 
 function resolveProperties(rows: PropertyRow[], classRows: ClassRow[]) {
   const classNames = new Map(classRows.map((item) => [item.id, item.name]));
@@ -33,37 +33,37 @@ function resolveRelations(rows: RelationRow[], individualRows: IndividualRow[], 
 }
 
 export function getClasses() {
-  return getDb().select().from(classes).orderBy(asc(classes.id)).all();
+  return getDb().select().from(semanticClasses).orderBy(asc(semanticClasses.id)).all();
 }
 
 export function getProperties() {
   const db = getDb();
-  const classRows = db.select().from(classes).orderBy(asc(classes.id)).all();
-  const propertyRows = db.select().from(properties).orderBy(asc(properties.id)).all();
+  const classRows = db.select().from(semanticClasses).orderBy(asc(semanticClasses.id)).all();
+  const propertyRows = db.select().from(semanticProperties).orderBy(asc(semanticProperties.id)).all();
   return resolveProperties(propertyRows, classRows);
 }
 
 export function getIndividuals() {
   const db = getDb();
-  const classRows = db.select().from(classes).orderBy(asc(classes.id)).all();
-  const individualRows = db.select().from(individuals).orderBy(asc(individuals.id)).all();
+  const classRows = db.select().from(semanticClasses).orderBy(asc(semanticClasses.id)).all();
+  const individualRows = db.select().from(semanticIndividuals).orderBy(asc(semanticIndividuals.id)).all();
   return resolveIndividuals(individualRows, classRows);
 }
 
 export function getRelations() {
   const db = getDb();
-  const individualRows = db.select().from(individuals).orderBy(asc(individuals.id)).all();
-  const propertyRows = db.select().from(properties).orderBy(asc(properties.id)).all();
-  const relationRows = db.select().from(relations).orderBy(asc(relations.id)).all();
+  const individualRows = db.select().from(semanticIndividuals).orderBy(asc(semanticIndividuals.id)).all();
+  const propertyRows = db.select().from(semanticProperties).orderBy(asc(semanticProperties.id)).all();
+  const relationRows = db.select().from(semanticRelations).orderBy(asc(semanticRelations.id)).all();
   return resolveRelations(relationRows, individualRows, propertyRows);
 }
 
 export function getOntology() {
   const db = getDb();
-  const classRows = db.select().from(classes).orderBy(asc(classes.id)).all();
-  const propertyRows = db.select().from(properties).orderBy(asc(properties.id)).all();
-  const individualRows = db.select().from(individuals).orderBy(asc(individuals.id)).all();
-  const relationRows = db.select().from(relations).orderBy(asc(relations.id)).all();
+  const classRows = db.select().from(semanticClasses).orderBy(asc(semanticClasses.id)).all();
+  const propertyRows = db.select().from(semanticProperties).orderBy(asc(semanticProperties.id)).all();
+  const individualRows = db.select().from(semanticIndividuals).orderBy(asc(semanticIndividuals.id)).all();
+  const relationRows = db.select().from(semanticRelations).orderBy(asc(semanticRelations.id)).all();
 
   return {
     classes: classRows,

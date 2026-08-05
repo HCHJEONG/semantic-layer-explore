@@ -38,6 +38,8 @@ Simulator Sensor → Sensor Event → Rule Engine → Virtual Device
 
 The rule engine—not Gemini—evaluates approved rules and executes device commands. The simulator implements the same adapter boundary reserved for a future MQTT/Arduino connection.
 
+The demo keeps deployment simple by using one SQLite file, but the schema separates the semantic metadata store from operational state. Ontology records live in `semantic_classes`, `semantic_properties`, `semantic_individuals`, and `semantic_relations`; runtime state lives in `sensors`, `devices`, `sensor_readings`, `events`, and `rules`.
+
 ```text
 "Where does Alice work?"
   → getOntology()
@@ -51,7 +53,7 @@ The rule engine—not Gemini—evaluates approved rules and executes device comm
 
 - Three-column ontology explorer with details and live JSON
 - Relationship graph powered by React Flow
-- Original four-table ontology model, plus isolated physical workspace tables for sensors, devices, readings, rules, and events
+- Namespaced semantic metadata tables, plus isolated physical workspace tables for sensors, devices, readings, rules, and events
 - Read and create REST endpoints with Zod validation
 - Gemini tool-calling agent with an enforced ontology-first flow
 - Temporary per-process Ask AI protection: 10 requests per visitor and UTC day
