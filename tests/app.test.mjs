@@ -115,7 +115,7 @@ test("main page keeps the BestAiCom Semantic Workspace baseline", async () => {
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /BestAiCom Semantic/);
-  assert.match(html, /Operational workspace overview/);
+  assert.match(html, /Operational Workspace Overview/);
   assert.match(html, /Event timeline/);
   assert.match(html, /Automation/);
   assert.match(html, /Ops Copilot/);

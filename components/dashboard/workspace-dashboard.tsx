@@ -107,7 +107,7 @@ export function WorkspaceDashboard() {
 
   return <section className="dashboard-page">
     <div className="dashboard-hero">
-      <div><span className="eyebrow">BESTAICOM OPERATIONS LAYER</span><h1>Operational workspace overview</h1><p>BestAiCom connects field signals, business meaning, and approved automation through one inspectable control layer.</p></div>
+      <div><span className="eyebrow">BESTAICOM OPERATIONS LAYER</span><h1>Operational Workspace Overview</h1><p>BestAiCom connects field signals, business meaning, and approved automation through one inspectable control layer.</p></div>
       <div className="runtime-pill"><i className={state?.connection.state === "connected" ? "online" : ""} /><span>{state?.mode ?? "loading"}</span><strong>{state?.connection.state ?? "connecting"}</strong></div>
     </div>
 
@@ -138,7 +138,7 @@ export function WorkspaceDashboard() {
         </Card>
 
         <Card className="dashboard-panel">
-          <CardHeader className="dashboard-title"><div><span className="eyebrow">OPERATIONS CONTROLS</span><CardTitle>Scenario controls</CardTitle></div><small>{state?.simulator.running ? `Running · ${state.simulator.intervalMs} ms` : "Stopped"}</small></CardHeader>
+          <CardHeader className="dashboard-title"><div><span className="eyebrow">SIMULATOR PRESETS</span><CardTitle>Scenario Controls</CardTitle></div><small>{state?.simulator.running ? `Running · ${state.simulator.intervalMs} ms` : "Stopped"}</small></CardHeader>
           <CardContent className="p-4"><div className="scenario-row">{scenarios.map((scenario) => <Button key={scenario.id} variant={state?.simulator.scenario === scenario.id ? "secondary" : "outline"} disabled={Boolean(busy)} onClick={() => void runScenario(scenario.id)}><Play />{scenario.label}</Button>)}</div></CardContent>
         </Card>
       </div>

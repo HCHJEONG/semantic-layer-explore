@@ -18,13 +18,30 @@ const responseSchema = {
     name: { type: Type.STRING }, description: { type: Type.STRING }, enabled: { type: Type.BOOLEAN }, cooldownSeconds: { type: Type.INTEGER },
     condition: { type: Type.OBJECT, required: ["sensorId", "operator", "value", "unit"], properties: {
       sensorId: { type: Type.STRING }, operator: { type: Type.STRING, enum: ["gt", "gte", "lt", "lte", "eq"] },
-      value: { anyOf: [{ type: Type.NUMBER }, { type: Type.BOOLEAN }] }, unit: { type: Type.STRING, enum: ["celsius", "lux", "centimeter", "boolean"] },
+      value: { type: Type.STRING }, unit: { type: Type.STRING, enum: ["celsius", "lux", "centimeter", "boolean"] },
     } },
     action: { type: Type.OBJECT, required: ["deviceId", "command"], properties: {
       deviceId: { type: Type.STRING }, command: { type: Type.STRING, enum: ["on", "off", "set-angle", "beep"] }, value: { type: Type.NUMBER },
     } },
   },
 };
+
+function normalizeProposal(value: unknown) {
+  if (!value || typeof value !== "object") return value;
+  const proposal = structuredClone(value) as { condition?: { value?: unknown; unit?: unknown }; action?: { value?: unknown } };
+  if (proposal.condition) {
+    const conditionValue = proposal.condition.value;
+    if (proposal.condition.unit === "boolean" && typeof conditionValue === "string") {
+      proposal.condition.value = ["true", "pressed", "on", "1", "yes"].includes(conditionValue.trim().toLowerCase());
+    } else if (typeof conditionValue === "string" && conditionValue.trim() !== "") {
+      proposal.condition.value = Number(conditionValue);
+    }
+  }
+  if (proposal.action && typeof proposal.action.value === "string" && proposal.action.value.trim() !== "") {
+    proposal.action.value = Number(proposal.action.value);
+  }
+  return proposal;
+}
 
 export async function POST(request: Request) {
   try {
@@ -55,7 +72,7 @@ export async function POST(request: Request) {
       model: getGeminiModel(), contents: contents as never,
       config: { systemInstruction: SYSTEM_PROMPT, responseMimeType: "application/json", responseSchema },
     });
-    const proposal = ruleInputSchema.parse(JSON.parse(result.text || "{}"));
+    const proposal = ruleInputSchema.parse(normalizeProposal(JSON.parse(result.text || "{}")));
     validateRuleTargets(proposal);
     return Response.json({ proposal, trace, remaining: allowance.remaining }, { headers: aiResponseHeaders(allowance.remaining) });
   } catch (error) { return aiErrorResponse(error); }

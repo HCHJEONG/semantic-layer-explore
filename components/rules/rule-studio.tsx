@@ -80,7 +80,7 @@ export function RuleStudio() {
         </CardContent>
       </Card>
       <Card className="proposal-panel">
-        <CardHeader className="dashboard-title"><div><span className="eyebrow">APPROVAL GATE</span><CardTitle>Validated proposal</CardTitle></div><Code2 /></CardHeader>
+        <CardHeader className="dashboard-title"><div><span className="eyebrow">APPROVAL GATE</span><CardTitle>Validated Proposal</CardTitle></div><Code2 /></CardHeader>
         <CardContent className="p-5">
           {proposal ? <><pre>{JSON.stringify(proposal, null, 2)}</pre><div className="proposal-actions"><Button variant="ghost" onClick={() => setProposal(null)}>Discard</Button><Button className="approve" disabled={Boolean(busy)} onClick={() => void approve()}><Check />Approve & save</Button></div></> : <div className="proposal-empty"><Code2 /><strong>No proposal yet</strong><span>Generated JSON will appear here for review.</span></div>}
         </CardContent>
