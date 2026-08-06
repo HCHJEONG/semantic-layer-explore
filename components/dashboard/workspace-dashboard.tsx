@@ -53,6 +53,12 @@ function eventDescription(event: WorkspaceEvent, rules: RuleRecord[]) {
   return event.type.replaceAll(".", " ");
 }
 
+function deviceStateLabel(device: WorkspaceState["devices"][number]) {
+  if (device.type === "servo") return `${device.state.angle ?? 90}°`;
+  if (device.type === "buzzer") return "Beep";
+  return device.state.status;
+}
+
 export function WorkspaceDashboard() {
   const [state, setState] = useState<WorkspaceState | null>(null);
   const [events, setEvents] = useState<WorkspaceEvent[]>([]);
@@ -93,7 +99,7 @@ export function WorkspaceDashboard() {
     if (device.type === "servo") return;
     setBusy(device.id);
     try {
-      const command = device.state.status === "on" ? "off" : device.type === "buzzer" ? "beep" : "on";
+      const command = device.type === "buzzer" ? "beep" : device.state.status === "on" ? "off" : "on";
       const response = await fetch(`/api/devices/${device.id}/commands`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ command }),
       });
@@ -130,10 +136,10 @@ export function WorkspaceDashboard() {
         </Card>
 
         <Card className="dashboard-panel">
-          <CardHeader className="dashboard-title"><div><span className="eyebrow">ACTUATORS</span><CardTitle>Virtual devices</CardTitle></div><small>Manual commands are audited</small></CardHeader>
+          <CardHeader className="dashboard-title"><div><span className="eyebrow">ACTUATORS</span><CardTitle>Virtual Devices</CardTitle></div><small>Manual commands are audited</small></CardHeader>
           <CardContent className="p-4"><div className="device-grid">{state?.devices.map((device) => {
             const Icon = deviceIcons[device.type];
-            return <Button key={device.id} variant="outline" className={`device-card ${device.state.status}`} disabled={busy === device.id || device.type === "servo"} onClick={() => void toggleDevice(device)}><Icon /><span>{device.name}<small>{device.type}</small></span><strong>{device.type === "servo" ? `${device.state.angle ?? 90}°` : device.state.status}</strong></Button>;
+            return <Button key={device.id} variant="outline" className={`device-card ${device.state.status}`} disabled={busy === device.id || device.type === "servo"} onClick={() => void toggleDevice(device)}><Icon /><span>{device.name}<small>{device.type}</small></span><strong>{deviceStateLabel(device)}</strong></Button>;
           })}</div></CardContent>
         </Card>
 
@@ -144,7 +150,7 @@ export function WorkspaceDashboard() {
       </div>
 
       <Card className="timeline-panel">
-        <CardHeader className="dashboard-title"><div><span className="eyebrow">AUDIT TRAIL</span><CardTitle>Event timeline</CardTitle></div><span className="live-label"><i />LIVE</span></CardHeader>
+        <CardHeader className="dashboard-title"><div><span className="eyebrow">AUDIT TRAIL</span><CardTitle>Event Timeline</CardTitle></div><span className="live-label"><i />LIVE</span></CardHeader>
         <CardContent className="p-5"><div className="timeline">{events.length ? events.map((event) => <article key={event.eventId} className={event.type === "rule.matched" ? "matched" : ""}><time>{new Date(event.occurredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time><i /><div><strong>{eventDescription(event, rules)}</strong><span>{event.type}</span></div></article>) : <div className="empty">Events will appear as the simulator runs.</div>}</div></CardContent>
       </Card>
     </div>

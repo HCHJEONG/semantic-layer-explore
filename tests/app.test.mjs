@@ -116,7 +116,7 @@ test("main page keeps the BestAiCom Semantic Workspace baseline", async () => {
   const html = await response.text();
   assert.match(html, /BestAiCom Semantic/);
   assert.match(html, /Operational Workspace Overview/);
-  assert.match(html, /Event timeline/);
+  assert.match(html, /Event Timeline/);
   assert.match(html, /Automation/);
   assert.match(html, /Ops Copilot/);
   assert.doesNotMatch(html, /Your site is taking shape/);
@@ -162,21 +162,32 @@ test("scenario and manual readings use the same sensor event contract", async ()
 });
 
 test("virtual device commands update state and write auditable events", async () => {
-  const commandResponse = await fetch(`${origin}/api/devices/led-01/commands`, {
+  const ledCommandResponse = await fetch(`${origin}/api/devices/led-01/commands`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ command: "on" }),
   });
-  assert.equal(commandResponse.status, 200);
-  const commandResult = await commandResponse.json();
-  assert.equal(commandResult.success, true);
-  assert.equal(commandResult.state.status, "on");
+  assert.equal(ledCommandResponse.status, 200);
+  const ledCommandResult = await ledCommandResponse.json();
+  assert.equal(ledCommandResult.success, true);
+  assert.equal(ledCommandResult.state.status, "on");
+
+  const buzzerCommandResponse = await fetch(`${origin}/api/devices/buzzer-01/commands`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ command: "beep" }),
+  });
+  assert.equal(buzzerCommandResponse.status, 200);
+  const buzzerCommandResult = await buzzerCommandResponse.json();
+  assert.equal(buzzerCommandResult.success, true);
+  assert.equal(buzzerCommandResult.state.status, "off");
 
   const eventsResponse = await fetch(`${origin}/api/events?limit=100`);
   assert.equal(eventsResponse.status, 200);
   const events = await eventsResponse.json();
   assert.ok(events.some(({ type }) => type === "sensor.reading"));
   assert.ok(events.some(({ type, sourceId }) => type === "device.command.succeeded" && sourceId === "led-01"));
+  assert.ok(events.some(({ type, sourceId, payload }) => type === "device.command.succeeded" && sourceId === "buzzer-01" && payload.command.command === "beep"));
 });
 
 test("rules are validated, editable, and execute device commands from sensor events", async () => {

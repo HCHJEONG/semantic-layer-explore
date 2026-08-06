@@ -140,7 +140,7 @@ export class SimulatorAdapter implements PhysicalWorkspaceAdapter {
       this.deviceStates.set(device.id, { status: "on", angle: command.value, lastCommandAt: command.issuedAt });
     } else if (command.command === "beep") {
       if (device.type !== "buzzer") return { success: false, deviceId: command.deviceId, state: this.deviceStates.get(command.deviceId) ?? { status: "off" }, error: "Only a buzzer can beep." };
-      this.deviceStates.set(device.id, { status: "on", lastCommandAt: command.issuedAt });
+      this.deviceStates.set(device.id, { status: "off", lastCommandAt: command.issuedAt });
     } else {
       this.deviceStates.set(device.id, { ...(this.deviceStates.get(device.id) ?? {}), status: command.command, lastCommandAt: command.issuedAt });
     }

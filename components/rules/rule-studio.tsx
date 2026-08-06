@@ -74,7 +74,7 @@ export function RuleStudio() {
           <Label htmlFor="instruction">Natural-language instruction</Label>
           <textarea id="instruction" value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="온도가 30도를 넘으면 팬을 켜." />
           <div className="examples">{examples.map((example) => <Button key={example} variant="outline" size="sm" onClick={() => setInstruction(example)}>{example}</Button>)}</div>
-          <Button className="propose-button" onClick={() => void propose()} disabled={Boolean(busy)}><Sparkles />{busy === "propose" ? "Reading semantic map…" : "Generate rule proposal"}</Button>
+          <Button className="propose-button" onClick={() => void propose()} disabled={Boolean(busy)}><Sparkles />{busy === "propose" ? "Reading semantic map…" : "Generate Rule Proposal"}</Button>
           {trace.length > 0 && <div className="trace rule-trace">{trace.map((step, index) => <span key={step}>{step}{index < trace.length - 1 && <ArrowRight />}</span>)}</div>}
           {remaining !== null && <small className="remaining">{remaining} AI requests remaining today</small>}
         </CardContent>
@@ -86,7 +86,7 @@ export function RuleStudio() {
         </CardContent>
       </Card>
     </div>
-    <Card className="rule-list-panel"><CardHeader className="dashboard-title"><div><span className="eyebrow">DETERMINISTIC RUNTIME</span><CardTitle>Approved rules</CardTitle></div><strong className="rule-count">{rules.length} rules</strong></CardHeader>
+    <Card className="rule-list-panel"><CardHeader className="dashboard-title"><div><span className="eyebrow">DETERMINISTIC RUNTIME</span><CardTitle>Approved Rules</CardTitle></div><strong className="rule-count">{rules.length} rules</strong></CardHeader>
       <CardContent className="p-5">
         <div className="rule-list">{rules.length ? rules.map((rule) => <article key={rule.id} className={rule.enabled ? "enabled" : ""}><div className="rule-power"><Power /></div><div><strong>{rule.name}</strong><span>{conditionText(rule)} <ArrowRight /> {rule.action.deviceId} · {rule.action.command}</span><small><Clock /> {rule.cooldownSeconds}s cooldown · {rule.lastTriggeredAt ? `last matched ${new Date(rule.lastTriggeredAt).toLocaleString()}` : "never matched"}</small></div><div className="rule-actions"><Button variant="outline" size="sm" disabled={busy === rule.id} onClick={() => void mutateRule(rule, "toggle")}>{rule.enabled ? "Disable" : "Enable"}</Button><Button variant="ghost" size="icon" aria-label={`Delete ${rule.name}`} disabled={busy === rule.id} onClick={() => void mutateRule(rule, "delete")}><Trash2 /></Button></div></article>) : <div className="empty">No approved rules. Generate and approve the first automation above.</div>}</div>
       </CardContent>
