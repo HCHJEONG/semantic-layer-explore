@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { ArrowRight, Bot, Braces, Database, Network, Send, Sparkles } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -48,7 +49,7 @@ export function AskAi() {
     {(answer || loading) && <Card className="answer-card">
       <CardContent className="p-6">
         <div className="answer-label"><Sparkles size={15} /> ANSWER {remaining !== null && <b>{remaining} questions left today</b>}</div>
-        {loading ? <div className="thinking"><Skeleton className="h-4 w-24" /><i /><i /><i /> Reading the ontology</div> : <p>{answer}</p>}
+        {loading ? <div className="thinking"><Skeleton className="h-4 w-24" /><i /><i /><i /> Reading the ontology</div> : <div className="answer-markdown"><ReactMarkdown>{answer}</ReactMarkdown></div>}
         {trace.length > 0 && <div className="trace">{trace.map((step, index) => <span key={`${step}-${index}`}>{step}{index < trace.length - 1 && <ArrowRight size={12} />}</span>)}</div>}
       </CardContent>
     </Card>}
