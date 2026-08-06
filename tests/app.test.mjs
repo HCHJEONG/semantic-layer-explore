@@ -86,12 +86,12 @@ test("ontology API preserves the original semantic-layer contract", async () => 
   assert.deepEqual(ontology.individuals.slice(0, 4).map(({ name, class: className }) => ({ name, class: className })), [
     { name: "Alice", class: "Person" },
     { name: "Bob", class: "Person" },
-    { name: "OpenAI", class: "Company" },
+    { name: "Enhans", class: "Company" },
     { name: "Semantic Explorer", class: "Project" },
   ]);
   assert.deepEqual(ontology.relations.slice(0, 3).map(({ subject, property, object }) => ({ subject, property, object })), [
-    { subject: "Alice", property: "worksFor", object: "OpenAI" },
-    { subject: "Bob", property: "worksFor", object: "OpenAI" },
+    { subject: "Alice", property: "worksFor", object: "Enhans" },
+    { subject: "Bob", property: "worksFor", object: "Enhans" },
     { subject: "Bob", property: "assignedTo", object: "Semantic Explorer" },
   ]);
   assert.deepEqual(ontology.classes.slice(3).map(({ name }) => name), ["Sensor", "Event", "Rule", "Device", "Room"]);
@@ -110,15 +110,15 @@ test("ontology API preserves the original semantic-layer contract", async () => 
   assert.ok(ontology.relations.some(({ subject, property, object }) => subject === "WorkspaceAutomationRule" && property === "triggers" && object === "FanRelay01"));
 });
 
-test("main page keeps the Semantic Layer Explorer baseline", async () => {
+test("main page keeps the Enhans Semantic Workspace baseline", async () => {
   const response = await fetch(origin);
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /Semantic Layer Explorer/);
-  assert.match(html, /Workspace overview/);
+  assert.match(html, /Enhans Semantic/);
+  assert.match(html, /Operational workspace overview/);
   assert.match(html, /Event timeline/);
-  assert.match(html, /Rules/);
-  assert.match(html, /Ask AI/);
+  assert.match(html, /Automation/);
+  assert.match(html, /Ops Copilot/);
   assert.doesNotMatch(html, /Your site is taking shape/);
 });
 

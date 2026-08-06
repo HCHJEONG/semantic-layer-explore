@@ -37,7 +37,7 @@ export function RuleStudio() {
     try {
       const response = await fetch("/api/ai/rules/propose", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ instruction }) });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Gemini could not propose a rule.");
+      if (!response.ok) throw new Error(result.error || "Enhans AI could not propose a rule.");
       setProposal(result.proposal); setTrace(result.trace ?? []); setRemaining(result.remaining ?? null);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to propose a rule."); }
     finally { setBusy(""); }
@@ -67,14 +67,14 @@ export function RuleStudio() {
   }
 
   return <section className="rules-page">
-    <div className="rules-intro"><div><span className="eyebrow">GEMINI RULE COMPILER</span><h1>Describe an automation.</h1><p>Gemini maps natural language to known sensors and devices. Review the validated JSON before anything is saved.</p></div><div className="approval-boundary"><Sparkles /><span>AI proposes<strong>You approve</strong></span></div></div>
+    <div className="rules-intro"><div><span className="eyebrow">ENHANS AUTOMATION STUDIO</span><h1>Describe an operational rule.</h1><p>Enhans AI maps natural language to verified signals, assets, and approved actions before anything runs.</p></div><div className="approval-boundary"><Sparkles /><span>Enhans suggests<strong>Operator approves</strong></span></div></div>
     <div className="rules-layout">
       <Card className="rule-composer">
         <CardContent className="p-6">
           <Label htmlFor="instruction">Natural-language instruction</Label>
           <textarea id="instruction" value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="온도가 30도를 넘으면 팬을 켜." />
           <div className="examples">{examples.map((example) => <Button key={example} variant="outline" size="sm" onClick={() => setInstruction(example)}>{example}</Button>)}</div>
-          <Button className="propose-button" onClick={() => void propose()} disabled={Boolean(busy)}><Sparkles />{busy === "propose" ? "Inspecting ontology…" : "Generate rule proposal"}</Button>
+          <Button className="propose-button" onClick={() => void propose()} disabled={Boolean(busy)}><Sparkles />{busy === "propose" ? "Reading semantic map…" : "Generate rule proposal"}</Button>
           {trace.length > 0 && <div className="trace rule-trace">{trace.map((step, index) => <span key={step}>{step}{index < trace.length - 1 && <ArrowRight />}</span>)}</div>}
           {remaining !== null && <small className="remaining">{remaining} AI requests remaining today</small>}
         </CardContent>

@@ -1,6 +1,6 @@
 # Physical AI Environment and Deployment Plan
 
-This plan establishes the development and AWS deployment boundary before the Semantic Layer Explorer is changed into AI Physical Workspace.
+This plan establishes the development and AWS deployment boundary before Enhans Semantic Workspace is changed into AI Physical Workspace.
 
 ## Fixed decisions
 

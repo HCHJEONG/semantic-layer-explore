@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const examples = ["현재 상태 알려줘.", "팬이 왜 켜졌어?", "최근 실행된 규칙은?", "Which devices are currently on?"];
+const examples = ["현재 운영 상태 요약해줘.", "어떤 자동화가 방금 실행됐어?", "주의해야 할 센서 변화가 있어?", "Which assets need attention right now?"];
 
 export function AskAi() {
   const [question, setQuestion] = useState(examples[0]);
@@ -25,7 +25,7 @@ export function AskAi() {
     try {
       const response = await fetch("/api/ai/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question }) });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Gemini could not answer.");
+      if (!response.ok) throw new Error(result.error || "Enhans AI could not answer.");
       setAnswer(result.answer); setTrace(result.trace || []); setRemaining(result.remaining ?? null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to answer");
@@ -35,13 +35,13 @@ export function AskAi() {
   }, [question, loading]);
 
   return <section className="ai-page">
-    <div className="ai-intro"><div className="ai-orb"><Bot size={28} /></div><div className="eyebrow">PHYSICAL WORKSPACE ANALYST</div><h1>Ask what is happening.</h1><p>Gemini inspects the ontology first, then uses current state, approved rules, and auditable events. It never touches SQLite or hardware directly.</p></div>
+    <div className="ai-intro"><div className="ai-orb"><Bot size={28} /></div><div className="eyebrow">ENHANS OPS ANALYST</div><h1>Ask what changed, why it happened, and what is active.</h1><p>Enhans AI reads the semantic map first, then explains current state, approved rules, and recent events using auditable application data.</p></div>
     <Card className="ask-card">
       <CardContent className="p-6">
         <Label htmlFor="question">Your question</Label>
         <div className="ask-row">
           <Input id="question" value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => event.key === "Enter" && ask()} placeholder="Ask about sensors, devices, rules, or recent events…" />
-          <Button onClick={ask} disabled={loading}>{loading ? "Thinking…" : <><span>Ask</span><Send size={16} /></>}</Button>
+          <Button onClick={ask} disabled={loading}>{loading ? "Analyzing…" : <><span>Ask Enhans AI</span><Send size={16} /></>}</Button>
         </div>
         <div className="examples">{examples.map((example) => <Button key={example} variant="outline" size="sm" onClick={() => setQuestion(example)}>{example}</Button>)}</div>
       </CardContent>
@@ -49,11 +49,11 @@ export function AskAi() {
     {(answer || loading) && <Card className="answer-card">
       <CardContent className="p-6">
         <div className="answer-label"><Sparkles size={15} /> ANSWER {remaining !== null && <b>{remaining} questions left today</b>}</div>
-        {loading ? <div className="thinking"><Skeleton className="h-4 w-24" /><i /><i /><i /> Reading the ontology</div> : <div className="answer-markdown"><ReactMarkdown>{answer}</ReactMarkdown></div>}
+        {loading ? <div className="thinking"><Skeleton className="h-4 w-24" /><i /><i /><i /> Reading the semantic map</div> : <div className="answer-markdown"><ReactMarkdown>{answer}</ReactMarkdown></div>}
         {trace.length > 0 && <div className="trace">{trace.map((step, index) => <span key={`${step}-${index}`}>{step}{index < trace.length - 1 && <ArrowRight size={12} />}</span>)}</div>}
       </CardContent>
     </Card>}
     {error && <div className="error">{error}</div>}
-    <div className="pipeline"><span><Bot />Gemini</span><ArrowRight/><span><Network />Semantic Layer</span><ArrowRight/><span><Braces />REST API</span><ArrowRight/><span><Database />SQLite</span></div>
+    <div className="pipeline"><span><Bot />Enhans AI</span><ArrowRight/><span><Network />Semantic Map</span><ArrowRight/><span><Braces />Application APIs</span><ArrowRight/><span><Database />Operational Store</span></div>
   </section>;
 }

@@ -18,7 +18,7 @@ export function OntologyTree({ ontology, selection, loading, onSelect }: {
 
   return <Card className="sidebar">
     <CardHeader className="panel-title">
-      <div><span>ONTOLOGY</span><CardTitle>Explorer</CardTitle></div>
+      <div><span>ONTOLOGY</span><CardTitle>Semantic Map</CardTitle></div>
       <Search size={17} />
     </CardHeader>
     <CardContent className="p-4">

@@ -53,9 +53,9 @@ INSERT INTO `properties` (`name`, `domain_class_id`, `range_class_id`, `descript
   ('assignedTo', 1, 3, 'Connects a person to a project they are assigned to.');
 --> statement-breakpoint
 INSERT INTO `individuals` (`name`, `class_id`, `description`) VALUES
-  ('Alice', 1, 'A person who works for OpenAI.'),
-  ('Bob', 1, 'A person working for OpenAI and assigned to Semantic Explorer.'),
-  ('OpenAI', 2, 'The company that employs Alice and Bob.'),
+  ('Alice', 1, 'A person who works for Enhans.'),
+  ('Bob', 1, 'A person working for Enhans and assigned to Semantic Explorer.'),
+  ('Enhans', 2, 'The company that employs Alice and Bob.'),
   ('Semantic Explorer', 3, 'A project that demonstrates a minimal semantic layer.');
 --> statement-breakpoint
 INSERT INTO `relations` (`subject_id`, `property_id`, `object_id`) VALUES

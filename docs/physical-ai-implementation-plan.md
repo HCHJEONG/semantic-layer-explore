@@ -2,7 +2,7 @@
 
 ## 1. 문서 목적
 
-이 문서는 기존 **Semantic Layer Explorer**를 **AI Physical Workspace**로 개선·확장하기 위한 실행 계획이다.
+이 문서는 기존 **Enhans Semantic Workspace**를 **AI Physical Workspace**로 개선·확장하기 위한 실행 계획이다.
 
 목표는 현재 구현된 `Ontology → REST API → Gemini → UI` 흐름을 보존하면서 다음 흐름으로 확장하는 것이다.
 
@@ -596,7 +596,7 @@ Dashboard | Ontology | Rules | Ask AI
 - 우측 JSON Viewer
 - React Flow Graph
 
-고정된 Alice/Bob/OpenAI 위치와 타입은 제거하고 데이터 기반 노드 배치로 전환한다.
+고정된 Alice/Bob/Enhans 위치와 타입은 제거하고 데이터 기반 노드 배치로 전환한다.
 
 ### Rules
 
