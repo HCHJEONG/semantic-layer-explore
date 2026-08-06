@@ -43,6 +43,13 @@
       "when": 1785999600000,
       "tag": "0005_semantic_store_boundary",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1786005600000,
+      "tag": "0006_enhans_portfolio_examples",
+      "breakpoints": true
     }
   ]
 }

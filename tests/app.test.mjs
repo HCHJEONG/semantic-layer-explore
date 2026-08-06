@@ -84,15 +84,15 @@ test("ontology API preserves the original semantic-layer contract", async () => 
     { name: "assignedTo", domain: "Person", range: "Project" },
   ]);
   assert.deepEqual(ontology.individuals.slice(0, 4).map(({ name, class: className }) => ({ name, class: className })), [
-    { name: "Alice", class: "Person" },
-    { name: "Bob", class: "Person" },
+    { name: "InspectionTeam", class: "Person" },
+    { name: "OpsEngineer", class: "Person" },
     { name: "Enhans", class: "Company" },
-    { name: "Semantic Explorer", class: "Project" },
+    { name: "Enhans Smart Workspace", class: "Project" },
   ]);
   assert.deepEqual(ontology.relations.slice(0, 3).map(({ subject, property, object }) => ({ subject, property, object })), [
-    { subject: "Alice", property: "worksFor", object: "Enhans" },
-    { subject: "Bob", property: "worksFor", object: "Enhans" },
-    { subject: "Bob", property: "assignedTo", object: "Semantic Explorer" },
+    { subject: "InspectionTeam", property: "worksFor", object: "Enhans" },
+    { subject: "OpsEngineer", property: "worksFor", object: "Enhans" },
+    { subject: "OpsEngineer", property: "assignedTo", object: "Enhans Smart Workspace" },
   ]);
   assert.deepEqual(ontology.classes.slice(3).map(({ name }) => name), ["Sensor", "Event", "Rule", "Device", "Room"]);
   assert.deepEqual(

@@ -596,7 +596,7 @@ Dashboard | Ontology | Rules | Ask AI
 - 우측 JSON Viewer
 - React Flow Graph
 
-고정된 Alice/Bob/Enhans 위치와 타입은 제거하고 데이터 기반 노드 배치로 전환한다.
+고정된 InspectionTeam/OpsEngineer/Enhans 위치와 타입은 제거하고 데이터 기반 노드 배치로 전환한다.
 
 ### Rules
 
