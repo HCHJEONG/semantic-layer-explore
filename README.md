@@ -1,16 +1,16 @@
-# Enhans Semantic Workspace
+# BestAiCom Semantic Workspace
 
 [한국어 README 보기](./READMEKor.md)
 
 > A Minimal Ontology → Database → API → AI Demo
 
-Enhans Semantic Workspace is a deliberately small portfolio project that demonstrates how shared business meaning can sit between an LLM, REST APIs, and operational data. It borrows only three approachable ideas from Protégé—**Class**, **Property**, and **Individual**—and keeps the implementation compact enough to understand in one sitting.
+BestAiCom Semantic Workspace is a deliberately small portfolio project that demonstrates how shared business meaning can sit between an LLM, REST APIs, and operational data. It borrows only three approachable ideas from Protégé—**Class**, **Property**, and **Individual**—and keeps the implementation compact enough to understand in one sitting.
 
 ## Why
 
 An LLM does not inherently understand what a table, ERP field, or CRM relationship means to a business. Database schemas describe storage; they do not reliably communicate business semantics.
 
-A semantic layer provides that missing contract. It tells an AI that `InspectionTeam` is a `Person`, that `assignedTo` connects an operator to a workspace project, and that `Enhans` is a concrete `Company`. This project implements the smallest useful version of that idea.
+A semantic layer provides that missing contract. It tells an AI that `InspectionTeam` is a `Person`, that `assignedTo` connects an operator to a workspace project, and that `BestAiCom` is a concrete `Company`. This project implements the smallest useful version of that idea.
 
 ## Architecture
 
@@ -48,7 +48,7 @@ The demo keeps deployment simple by using one SQLite file, but the schema separa
   → recognizes Person —worksFor→ Company
   → getIndividuals()
   → getRelations()
-  → "OpsEngineer is assigned to Enhans Smart Workspace."
+  → "OpsEngineer is assigned to BestAiCom Smart Workspace."
 ```
 
 ## Features

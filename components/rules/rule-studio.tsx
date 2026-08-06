@@ -37,7 +37,7 @@ export function RuleStudio() {
     try {
       const response = await fetch("/api/ai/rules/propose", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ instruction }) });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Enhans AI could not propose a rule.");
+      if (!response.ok) throw new Error(result.error || "BestAiCom AI could not propose a rule.");
       setProposal(result.proposal); setTrace(result.trace ?? []); setRemaining(result.remaining ?? null);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to propose a rule."); }
     finally { setBusy(""); }
@@ -67,7 +67,7 @@ export function RuleStudio() {
   }
 
   return <section className="rules-page">
-    <div className="rules-intro"><div><span className="eyebrow">ENHANS AUTOMATION STUDIO</span><h1>Describe an operational rule.</h1><p>Enhans AI maps natural language to verified signals, assets, and approved actions before anything runs.</p></div><div className="approval-boundary"><Sparkles /><span>Enhans suggests<strong>Operator approves</strong></span></div></div>
+    <div className="rules-intro"><div><span className="eyebrow">BESTAICOM AUTOMATION STUDIO</span><h1>Describe an operational rule.</h1><p>BestAiCom AI maps natural language to verified signals, assets, and approved actions before anything runs.</p></div><div className="approval-boundary"><Sparkles /><span>BestAiCom suggests<strong>Operator approves</strong></span></div></div>
     <div className="rules-layout">
       <Card className="rule-composer">
         <CardContent className="p-6">

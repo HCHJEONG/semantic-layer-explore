@@ -1,6 +1,6 @@
-# Enhans Semantic Workspace (한국어)
+# BestAiCom Semantic Workspace (한국어)
 
-Enhans 회사를 위한 운영 인텔리전스 포트폴리오입니다. Semantic Map 기반 지식 그래프, 실시간 센서/기기 제어, Enhans AI를 활용한 자연어 질의, 승인 기반 자동화를 통합한 풀스택 애플리케이션입니다.
+BestAiCom 회사를 위한 운영 인텔리전스 포트폴리오입니다. Semantic Map 기반 지식 그래프, 실시간 센서/기기 제어, BestAiCom AI를 활용한 자연어 질의, 승인 기반 자동화를 통합한 풀스택 애플리케이션입니다.
 
 ---
 
@@ -64,7 +64,7 @@ app/            → 페이지 라우팅 (Next.js App Router)
 
 #### C. Ops Copilot (자연어 질의)
 
-- **Enhans AI Function Calling** — 6개 도구를 사용한 단계적 데이터 수집
+- **BestAiCom AI Function Calling** — 6개 도구를 사용한 단계적 데이터 수집
 - **도구 목록**:
   1. `getOntology` — 온톨로지 스키마 조회
   2. `getCurrentState` — 전체 워크스페이스 상태
@@ -78,7 +78,7 @@ app/            → 페이지 라우팅 (Next.js App Router)
 #### D. Automation Studio (자동화 규칙 생성)
 
 - **자연어 → 규칙 변환**: "온도가 30도를 넘으면 팬을 켜" → 구조화된 규칙 JSON
-- **Enhans AI 6단계 Tool Calling**: Semantic Map → 센서 → 기기 → 규칙 확인
+- **BestAiCom AI 6단계 Tool Calling**: Semantic Map → 센서 → 기기 → 규칙 확인
 - **인간 in the loop**: AI 제안 → 사용자 검토/승인 → DB 저장
 - **자동 실행**: 승인된 규칙은 `rule-engine.ts`가 실시간 평가 (Gemini 의존 없음)
 
@@ -92,7 +92,7 @@ app/            → 페이지 라우팅 (Next.js App Router)
 | **번들러** | Turbopack / Vinext | 개발/빌드 최적화 |
 | **UI 라이브러리** | shadcn/ui + Radix UI | 접근성 높은 UI 컴포넌트 |
 | **스타일링** | Tailwind CSS v4 | 유틸리티 퍼스트 CSS |
-| **AI/LLM** | Google Gemini 기반 Enhans AI | 자연어 처리, Function Calling |
+| **AI/LLM** | Google Gemini 기반 BestAiCom AI | 자연어 처리, Function Calling |
 | **데이터베이스** | SQLite + Drizzle ORM | 로컬 관계형 데이터베이스 |
 | **검증** | Zod | 런타임 입력 검증 |
 | **폰트** | Geist (Vercel) | 본문/코드 폰트 |
@@ -102,10 +102,10 @@ app/            → 페이지 라우팅 (Next.js App Router)
 
 ### 5. 자동 제어 vs Ops Copilot
 
-| 구분 | 자동 제어 (Rule Engine) | Ops Copilot (Enhans AI) |
+| 구분 | 자동 제어 (Rule Engine) | Ops Copilot (BestAiCom AI) |
 |---|---|---|
 | **트리거** | 센서 이벤트 발생 | 사용자 질문 입력 |
-| **처리 방식** | `rule-engine.ts` (로컬 평가) | Enhans AI Function Calling (6단계) |
+| **처리 방식** | `rule-engine.ts` (로컬 평가) | BestAiCom AI Function Calling (6단계) |
 | **속도** | ~10-50ms | ~2-5초 |
 | **비용** | 무료 (로컬) | Gemini API 호출 비용 |
 | **신뢰성** | 항상 동작 (오프라인 가능) | API 의존 |
@@ -136,7 +136,7 @@ Docker 빌드 (.fordeploy/ai-workspace-aws/Dockerfile)
   ↓
 컨테이너 실행 (포트 3010:3000)
   - /app/data 볼륨 마운트 (SQLite DB)
-  - gcp-key.json 마운트 (Enhans AI / Gemini 인증)
+  - gcp-key.json 마운트 (BestAiCom AI / Gemini 인증)
 ```
 
 **특징:**
@@ -198,7 +198,7 @@ npm run db:generate
 #### B. 2단계 파이프라인 (규칙 생성 → 실행)
 
 ```
-1단계: 자연어 → 규칙 JSON (Enhans AI, 6단계 tool calling)
+1단계: 자연어 → 규칙 JSON (BestAiCom AI, 6단계 tool calling)
   ↓ (사용자 검토/승인)
 2단계: 규칙 JSON → 자동 실행 (rule-engine.ts, 로컬)
 ```
@@ -206,7 +206,7 @@ npm run db:generate
 **장점:**
 - 인간 in the loop (안전성)
 - 실시간 성능 (로컬 규칙 엔진)
-- 오프라인 동작 (Enhans AI API 의존 없음)
+- 오프라인 동작 (BestAiCom AI API 의존 없음)
 
 #### C. 도메인 계층 활용
 
@@ -220,7 +220,7 @@ npm run db:generate
 
 1. **DDD + 어댑터 패턴** — 도메인/런타임/어댑터 계층 분리
 2. **온톨로지 기반 AI** — 단순 API 호출이 아닌 의미론적 지식 그래프 활용
-3. **2단계 파이프라인** — 생성(Enhans AI)과 실행(로컬) 분리로 안전성과 성능 확보
+3. **2단계 파이프라인** — 생성(BestAiCom AI)과 실행(로컬) 분리로 안전성과 성능 확보
 4. **입력 측 통제** — LangChain Harness와 대비되는 설계 선택
 5. **실시간 규칙 엔진** — LLM 의존 없이 로컬에서 자동 제어
 

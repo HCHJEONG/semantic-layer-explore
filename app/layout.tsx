@@ -13,8 +13,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const protocol = requestHeaders.get("x-forwarded-proto") || (host.startsWith("localhost") ? "http" : "https");
   const origin = `${protocol}://${host}`;
   return {
-    title: "Enhans Semantic Workspace",
-    description: "An Enhans operations intelligence workspace for semantic maps, application APIs, and approved AI automation.",
+    title: "BestAiCom Semantic Workspace",
+    description: "A BestAiCom operations intelligence workspace for semantic maps, application APIs, and approved AI automation.",
     robots: {
       index: false,
       follow: false,
@@ -24,8 +24,8 @@ export async function generateMetadata(): Promise<Metadata> {
       googleBot: { index: false, follow: false, noarchive: true, nosnippet: true, noimageindex: true },
     },
     icons: { icon: "/favicon.svg" },
-    openGraph: { title: "Enhans Semantic Workspace", description: "An Enhans operations intelligence workspace for semantic maps, application APIs, and approved AI automation.", images: [{ url: `${origin}/og.png`, width: 1792, height: 921 }] },
-    twitter: { card: "summary_large_image", title: "Enhans Semantic Workspace", description: "An Enhans operations intelligence workspace for semantic maps, application APIs, and approved AI automation.", images: [`${origin}/og.png`] },
+    openGraph: { title: "BestAiCom Semantic Workspace", description: "A BestAiCom operations intelligence workspace for semantic maps, application APIs, and approved AI automation.", images: [{ url: `${origin}/og.png`, width: 1792, height: 921 }] },
+    twitter: { card: "summary_large_image", title: "BestAiCom Semantic Workspace", description: "A BestAiCom operations intelligence workspace for semantic maps, application APIs, and approved AI automation.", images: [`${origin}/og.png`] },
   };
 }
 

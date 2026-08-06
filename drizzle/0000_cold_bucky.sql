@@ -53,10 +53,10 @@ INSERT INTO `properties` (`name`, `domain_class_id`, `range_class_id`, `descript
   ('assignedTo', 1, 3, 'Connects a person to a project they are assigned to.');
 --> statement-breakpoint
 INSERT INTO `individuals` (`name`, `class_id`, `description`) VALUES
-  ('InspectionTeam', 1, 'An operations team responsible for monitoring the Enhans smart workspace.'),
+  ('InspectionTeam', 1, 'An operations team responsible for monitoring the BestAiCom smart workspace.'),
   ('OpsEngineer', 1, 'An engineer assigned to automation review and workspace operations.'),
-  ('Enhans', 2, 'The company operating the semantic workspace portfolio.'),
-  ('Enhans Smart Workspace', 3, 'A project that demonstrates semantic operations intelligence.');
+  ('BestAiCom', 2, 'The company operating the semantic workspace portfolio.'),
+  ('BestAiCom Smart Workspace', 3, 'A project that demonstrates semantic operations intelligence.');
 --> statement-breakpoint
 INSERT INTO `relations` (`subject_id`, `property_id`, `object_id`) VALUES
   (1, 1, 3),

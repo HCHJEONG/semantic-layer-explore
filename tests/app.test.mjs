@@ -86,13 +86,13 @@ test("ontology API preserves the original semantic-layer contract", async () => 
   assert.deepEqual(ontology.individuals.slice(0, 4).map(({ name, class: className }) => ({ name, class: className })), [
     { name: "InspectionTeam", class: "Person" },
     { name: "OpsEngineer", class: "Person" },
-    { name: "Enhans", class: "Company" },
-    { name: "Enhans Smart Workspace", class: "Project" },
+    { name: "BestAiCom", class: "Company" },
+    { name: "BestAiCom Smart Workspace", class: "Project" },
   ]);
   assert.deepEqual(ontology.relations.slice(0, 3).map(({ subject, property, object }) => ({ subject, property, object })), [
-    { subject: "InspectionTeam", property: "worksFor", object: "Enhans" },
-    { subject: "OpsEngineer", property: "worksFor", object: "Enhans" },
-    { subject: "OpsEngineer", property: "assignedTo", object: "Enhans Smart Workspace" },
+    { subject: "InspectionTeam", property: "worksFor", object: "BestAiCom" },
+    { subject: "OpsEngineer", property: "worksFor", object: "BestAiCom" },
+    { subject: "OpsEngineer", property: "assignedTo", object: "BestAiCom Smart Workspace" },
   ]);
   assert.deepEqual(ontology.classes.slice(3).map(({ name }) => name), ["Sensor", "Event", "Rule", "Device", "Room"]);
   assert.deepEqual(
@@ -110,11 +110,11 @@ test("ontology API preserves the original semantic-layer contract", async () => 
   assert.ok(ontology.relations.some(({ subject, property, object }) => subject === "WorkspaceAutomationRule" && property === "triggers" && object === "FanRelay01"));
 });
 
-test("main page keeps the Enhans Semantic Workspace baseline", async () => {
+test("main page keeps the BestAiCom Semantic Workspace baseline", async () => {
   const response = await fetch(origin);
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /Enhans Semantic/);
+  assert.match(html, /BestAiCom Semantic/);
   assert.match(html, /Operational workspace overview/);
   assert.match(html, /Event timeline/);
   assert.match(html, /Automation/);

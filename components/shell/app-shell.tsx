@@ -14,7 +14,7 @@ const tabs: Array<{ id: AppTab; label: string; icon: typeof Braces }> = [
 export function AppShell({ tab, onTabChange, children }: { tab: AppTab; onTabChange: (tab: AppTab) => void; children: ReactNode }) {
   return <main>
     <header className="topbar">
-      <div className="brand"><div className="brandmark"><Network size={18} /></div><div><strong>Enhans Semantic</strong><span>Workspace</span></div></div>
+      <div className="brand"><div className="brandmark"><Network size={18} /></div><div><strong>BestAiCom Semantic</strong><span>Workspace</span></div></div>
       <nav aria-label="Primary navigation">
         {tabs.map((item) => {
           const Icon = item.icon;

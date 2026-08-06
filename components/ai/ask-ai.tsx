@@ -25,7 +25,7 @@ export function AskAi() {
     try {
       const response = await fetch("/api/ai/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question }) });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Enhans AI could not answer.");
+      if (!response.ok) throw new Error(result.error || "BestAiCom AI could not answer.");
       setAnswer(result.answer); setTrace(result.trace || []); setRemaining(result.remaining ?? null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to answer");
@@ -35,13 +35,13 @@ export function AskAi() {
   }, [question, loading]);
 
   return <section className="ai-page">
-    <div className="ai-intro"><div className="ai-orb"><Bot size={28} /></div><div className="eyebrow">ENHANS OPS ANALYST</div><h1>Ask what changed, why it happened, and what is active.</h1><p>Enhans AI reads the semantic map first, then explains current state, approved rules, and recent events using auditable application data.</p></div>
+    <div className="ai-intro"><div className="ai-orb"><Bot size={28} /></div><div className="eyebrow">BESTAICOM OPS ANALYST</div><h1>Ask what changed, why it happened, and what is active.</h1><p>BestAiCom AI reads the semantic map first, then explains current state, approved rules, and recent events using auditable application data.</p></div>
     <Card className="ask-card">
       <CardContent className="p-6">
         <Label htmlFor="question">Your question</Label>
         <div className="ask-row">
           <Input id="question" value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => event.key === "Enter" && ask()} placeholder="Ask about sensors, devices, rules, or recent events…" />
-          <Button onClick={ask} disabled={loading}>{loading ? "Analyzing…" : <><span>Ask Enhans AI</span><Send size={16} /></>}</Button>
+          <Button onClick={ask} disabled={loading}>{loading ? "Analyzing…" : <><span>Ask BestAiCom AI</span><Send size={16} /></>}</Button>
         </div>
         <div className="examples">{examples.map((example) => <Button key={example} variant="outline" size="sm" onClick={() => setQuestion(example)}>{example}</Button>)}</div>
       </CardContent>
@@ -54,6 +54,6 @@ export function AskAi() {
       </CardContent>
     </Card>}
     {error && <div className="error">{error}</div>}
-    <div className="pipeline"><span><Bot />Enhans AI</span><ArrowRight/><span><Network />Semantic Map</span><ArrowRight/><span><Braces />Application APIs</span><ArrowRight/><span><Database />Operational Store</span></div>
+    <div className="pipeline"><span><Bot />BestAiCom AI</span><ArrowRight/><span><Network />Semantic Map</span><ArrowRight/><span><Braces />Application APIs</span><ArrowRight/><span><Database />Operational Store</span></div>
   </section>;
 }

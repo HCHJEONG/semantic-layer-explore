@@ -107,7 +107,7 @@ export function WorkspaceDashboard() {
 
   return <section className="dashboard-page">
     <div className="dashboard-hero">
-      <div><span className="eyebrow">ENHANS OPERATIONS LAYER</span><h1>Operational workspace overview</h1><p>Enhans connects field signals, business meaning, and approved automation through one inspectable control layer.</p></div>
+      <div><span className="eyebrow">BESTAICOM OPERATIONS LAYER</span><h1>Operational workspace overview</h1><p>BestAiCom connects field signals, business meaning, and approved automation through one inspectable control layer.</p></div>
       <div className="runtime-pill"><i className={state?.connection.state === "connected" ? "online" : ""} /><span>{state?.mode ?? "loading"}</span><strong>{state?.connection.state ?? "connecting"}</strong></div>
     </div>
 
