@@ -90,6 +90,7 @@ export function WorkspaceDashboard() {
     try {
       const response = await fetch(`/api/simulator/scenarios/${scenario}`, { method: "POST" });
       if (!response.ok) throw new Error("Could not run the simulator scenario.");
+      setState(await response.json());
       await refresh();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Scenario failed."); }
     finally { setBusy(""); }

@@ -150,6 +150,12 @@ test("scenario and manual readings use the same sensor event contract", async ()
   assert.equal(temperature.value, 31.5);
   assert.equal(temperature.source, "simulator");
 
+  const buttonScenarioResponse = await fetch(`${origin}/api/simulator/scenarios/button-pressed`, { method: "POST" });
+  assert.equal(buttonScenarioResponse.status, 200);
+  const buttonScenarioState = await buttonScenarioResponse.json();
+  assert.equal(buttonScenarioState.readings.find(({ sensorId }) => sensorId === "button-01").value, true);
+  assert.equal(buttonScenarioState.simulator.scenario, "normal");
+
   const manualResponse = await fetch(`${origin}/api/simulator/sensors/light-01/readings`, {
     method: "POST",
     headers: { "content-type": "application/json" },
