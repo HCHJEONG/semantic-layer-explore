@@ -61,6 +61,32 @@ for attempt in {1..30}; do
   if [ "${attempt}" -eq 30 ]; then sudo docker logs --tail 200 "${CONTAINER_NAME}"; exit 1; fi
   sleep 2
 done
+
+# Remove only stale artifacts belonging to this application. The exact running
+# container and the image it references are preserved; other repositories such
+# as sampoongaptcom are never selected.
+CURRENT_CONTAINER_ID="$(sudo docker inspect --format '{{.Id}}' "${CONTAINER_NAME}")"
+CURRENT_IMAGE_ID="$(sudo docker inspect --format '{{.Image}}' "${CONTAINER_NAME}")"
+
+while IFS=$'\t' read -r candidate_id candidate_image; do
+  [ -n "${candidate_id}" ] || continue
+  [ "${candidate_id}" != "${CURRENT_CONTAINER_ID}" ] || continue
+  case "${candidate_image}" in
+    "${IMAGE_REPOSITORY}:"*) sudo docker rm -f "${candidate_id}" ;;
+  esac
+done < <(sudo docker ps -a --no-trunc \
+  --filter status=created --filter status=exited --filter status=dead \
+  --format '{{.ID}}\t{{.Image}}')
+
+while IFS=$'\t' read -r candidate_repository candidate_tag; do
+  [ "${candidate_repository}" = "${IMAGE_REPOSITORY}" ] || continue
+  [ "${candidate_tag}" != "<none>" ] || continue
+  candidate_ref="${candidate_repository}:${candidate_tag}"
+  candidate_image_id="$(sudo docker image inspect --format '{{.Id}}' "${candidate_ref}")"
+  [ "${candidate_image_id}" != "${CURRENT_IMAGE_ID}" ] || continue
+  sudo docker image rm "${candidate_ref}" || true
+done < <(sudo docker image ls --format '{{.Repository}}\t{{.Tag}}')
+
 sudo docker ps --filter "name=^/${CONTAINER_NAME}$" --format 'container={{.Names}} image={{.Image}} status={{.Status}} ports={{.Ports}}'
 sudo rm -f "${REMOTE_DIR}/${ARCHIVE_NAME}"
 PRIVATE
