@@ -4,7 +4,7 @@ This plan establishes the development and AWS deployment boundary before BestAiC
 
 ## Fixed decisions
 
-- Public URL: `https://ai.sampoongapt.com`
+- Public URL: `https://physicalai.penvot.com`
 - Runtime: Next.js on the existing private AWS EC2 instance
 - Container mapping: private EC2 `3010` → container `3000`
 - Ingress: existing internet-facing ALB with a host-header rule
@@ -27,7 +27,7 @@ This plan establishes the development and AWS deployment boundary before BestAiC
 
 ### Phase 1 — Runtime conversion
 
-1. Preserve the current Semantic Layer behavior while replacing the Sites/vinext-specific runtime with the standard Next.js standalone runtime used by `sampoongaptcom`.
+1. Preserve the current Semantic Layer behavior while replacing the Sites/vinext-specific runtime with the standard Next.js standalone runtime used by the existing production app.
 2. Configure `output: "standalone"`.
 3. Move from D1 to file-backed SQLite while preserving Drizzle and migrations.
 4. Add an environment parser that validates all server variables at startup.
@@ -36,12 +36,12 @@ This plan establishes the development and AWS deployment boundary before BestAiC
 
 1. Add a persistent local `data/` directory ignored by Git.
 2. Load `.env.local` through Next.js.
-3. Verify the existing lawvot GCP credential file with the shared Vertex AI client pattern from `sampoongaptcom`.
+3. Verify the existing lawvot GCP credential file with the shared Vertex AI client pattern from the existing production app.
 4. Add health endpoints for the app, database, Gemini configuration, and active physical adapter.
 
 ### Phase 3 — AWS container environment
 
-1. Add a multi-stage Node 22 Dockerfile matching the `sampoongaptcom` standalone pattern.
+1. Add a multi-stage Node 22 Dockerfile matching the existing standalone production pattern.
 2. Copy only `.fordeploy/ai-workspace-aws/.env` into the image as `.env.production`, as explicitly selected for the initial operation period.
 3. Mount `/home/ubuntu/gcp-key.json` and the AI Workspace data directory at runtime.
 4. Run the container as a non-root user with `--restart unless-stopped`.
@@ -51,7 +51,7 @@ This plan establishes the development and AWS deployment boundary before BestAiC
 
 1. Create an AI Workspace target group on port `3010`.
 2. Use `/api/health` as the health-check path.
-3. Add the `ai.sampoongapt.com` host-header rule to the existing HTTPS 443 listener.
+3. Add the `physicalai.penvot.com` host-header rule to the existing HTTPS 443 listener.
 4. Point the DNS record to the existing ALB.
 5. Allow private EC2 port `3010` only from the ALB security group.
 
@@ -66,9 +66,9 @@ This plan establishes the development and AWS deployment boundary before BestAiC
 
 - Actual environment files must remain ignored by Git.
 - Credential files must remain outside the Docker image.
-- The production environment must derive the project from the mounted service account JSON and resolve the same Gemini model and Vertex AI settings as `sampoongaptcom`.
+- The production environment must derive the project from the mounted service account JSON and resolve the same Gemini model and Vertex AI settings as the existing production app.
 - Existing Semantic Layer APIs must have regression coverage before the runtime conversion begins.
-- The new container name, image name, port, environment path, and data volume must not overlap with `sampoongaptcom`.
+- The new container name, image name, port, environment path, and data volume must not overlap with existing production services.
 
 ## Manual deployment commands
 
@@ -79,7 +79,7 @@ cd /mnt/j/VSCodeProjects/semantic-layer-explore
 LOCAL_SSH_KEY="$HOME/.ssh/penvotkeypair1.pem" ./.fordeploy/deploy.sh
 ```
 
-The script transfers source through the Bastion, builds on the private EC2 instance, and only replaces the `ai-physical-workspace` container. It does not stop or remove `sampoongaptcom` containers or images.
+The script transfers source through the Bastion, builds on the private EC2 instance, and only replaces the `ai-physical-workspace` container. It does not stop or remove other production containers or images.
 
 After the container is ready, paste the following file into AWS CloudShell or upload and run it:
 
