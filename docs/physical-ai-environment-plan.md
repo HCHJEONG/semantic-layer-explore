@@ -11,6 +11,7 @@ This plan establishes the development and AWS deployment boundary before BestAiC
 - Initial physical adapter: `simulator`
 - Future physical adapter: `mqtt`
 - Database file in production: `/app/data/ai-workspace.sqlite`
+- Sensor reading retention in production: 1 day (`READING_RETENTION_DAYS=1`)
 - Gemini model: `gemini-3.5-flash-lite`
 - Vertex AI location: `global`
 - EC2 credential source: `/home/ubuntu/gcp-key.json`
