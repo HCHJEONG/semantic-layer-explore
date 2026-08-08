@@ -53,6 +53,12 @@ function eventDescription(event: WorkspaceEvent, rules: RuleRecord[]) {
   return event.type.replaceAll(".", " ");
 }
 
+function deviceStateLabel(device: WorkspaceState["devices"][number]) {
+  if (device.type === "servo") return `${device.state.angle ?? 90}°`;
+  if (device.type === "buzzer") return "Beep";
+  return device.state.status;
+}
+
 export function WorkspaceDashboard() {
   const [state, setState] = useState<WorkspaceState | null>(null);
   const [events, setEvents] = useState<WorkspaceEvent[]>([]);
@@ -84,6 +90,7 @@ export function WorkspaceDashboard() {
     try {
       const response = await fetch(`/api/simulator/scenarios/${scenario}`, { method: "POST" });
       if (!response.ok) throw new Error("Could not run the simulator scenario.");
+      setState(await response.json());
       await refresh();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Scenario failed."); }
     finally { setBusy(""); }
@@ -93,7 +100,7 @@ export function WorkspaceDashboard() {
     if (device.type === "servo") return;
     setBusy(device.id);
     try {
-      const command = device.state.status === "on" ? "off" : device.type === "buzzer" ? "beep" : "on";
+      const command = device.type === "buzzer" ? "beep" : device.state.status === "on" ? "off" : "on";
       const response = await fetch(`/api/devices/${device.id}/commands`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ command }),
       });
@@ -107,7 +114,7 @@ export function WorkspaceDashboard() {
 
   return <section className="dashboard-page">
     <div className="dashboard-hero">
-      <div><span className="eyebrow">PHYSICAL AI RUNTIME</span><h1>Workspace overview</h1><p>Live simulator telemetry, deterministic rules, and virtual devices behind one hardware-neutral interface.</p></div>
+      <div><span className="eyebrow">BESTAICOM OPERATIONS LAYER</span><h1>Operational Workspace Overview</h1><p>BestAiCom connects field signals, business meaning, and approved automation through one inspectable control layer.</p></div>
       <div className="runtime-pill"><i className={state?.connection.state === "connected" ? "online" : ""} /><span>{state?.mode ?? "loading"}</span><strong>{state?.connection.state ?? "connecting"}</strong></div>
     </div>
 
@@ -130,21 +137,21 @@ export function WorkspaceDashboard() {
         </Card>
 
         <Card className="dashboard-panel">
-          <CardHeader className="dashboard-title"><div><span className="eyebrow">ACTUATORS</span><CardTitle>Virtual devices</CardTitle></div><small>Manual commands are audited</small></CardHeader>
+          <CardHeader className="dashboard-title"><div><span className="eyebrow">ACTUATORS</span><CardTitle>Virtual Devices</CardTitle></div><small>Manual commands are audited</small></CardHeader>
           <CardContent className="p-4"><div className="device-grid">{state?.devices.map((device) => {
             const Icon = deviceIcons[device.type];
-            return <Button key={device.id} variant="outline" className={`device-card ${device.state.status}`} disabled={busy === device.id || device.type === "servo"} onClick={() => void toggleDevice(device)}><Icon /><span>{device.name}<small>{device.type}</small></span><strong>{device.type === "servo" ? `${device.state.angle ?? 90}°` : device.state.status}</strong></Button>;
+            return <Button key={device.id} variant="outline" className={`device-card ${device.state.status}`} disabled={busy === device.id || device.type === "servo"} onClick={() => void toggleDevice(device)}><Icon /><span>{device.name}<small>{device.type}</small></span><strong>{deviceStateLabel(device)}</strong></Button>;
           })}</div></CardContent>
         </Card>
 
         <Card className="dashboard-panel">
-          <CardHeader className="dashboard-title"><div><span className="eyebrow">DEMO CONTROLS</span><CardTitle>Simulator scenarios</CardTitle></div><small>{state?.simulator.running ? `Running · ${state.simulator.intervalMs} ms` : "Stopped"}</small></CardHeader>
+          <CardHeader className="dashboard-title"><div><span className="eyebrow">SIMULATOR PRESETS</span><CardTitle>Scenario Controls</CardTitle></div><small>{state?.simulator.running ? `Running · ${state.simulator.intervalMs} ms` : "Stopped"}</small></CardHeader>
           <CardContent className="p-4"><div className="scenario-row">{scenarios.map((scenario) => <Button key={scenario.id} variant={state?.simulator.scenario === scenario.id ? "secondary" : "outline"} disabled={Boolean(busy)} onClick={() => void runScenario(scenario.id)}><Play />{scenario.label}</Button>)}</div></CardContent>
         </Card>
       </div>
 
       <Card className="timeline-panel">
-        <CardHeader className="dashboard-title"><div><span className="eyebrow">AUDIT TRAIL</span><CardTitle>Event timeline</CardTitle></div><span className="live-label"><i />LIVE</span></CardHeader>
+        <CardHeader className="dashboard-title"><div><span className="eyebrow">AUDIT TRAIL</span><CardTitle>Event Timeline</CardTitle></div><span className="live-label"><i />LIVE</span></CardHeader>
         <CardContent className="p-5"><div className="timeline">{events.length ? events.map((event) => <article key={event.eventId} className={event.type === "rule.matched" ? "matched" : ""}><time>{new Date(event.occurredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time><i /><div><strong>{eventDescription(event, rules)}</strong><span>{event.type}</span></div></article>) : <div className="empty">Events will appear as the simulator runs.</div>}</div></CardContent>
       </Card>
     </div>

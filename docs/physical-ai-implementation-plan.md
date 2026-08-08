@@ -2,7 +2,7 @@
 
 ## 1. 문서 목적
 
-이 문서는 기존 **Semantic Layer Explorer**를 **AI Physical Workspace**로 개선·확장하기 위한 실행 계획이다.
+이 문서는 기존 **BestAiCom Semantic Workspace**를 **AI Physical Workspace**로 개선·확장하기 위한 실행 계획이다.
 
 목표는 현재 구현된 `Ontology → REST API → Gemini → UI` 흐름을 보존하면서 다음 흐름으로 확장하는 것이다.
 
@@ -86,9 +86,9 @@ Gemini는 자연어를 검증 가능한 Rule 후보로 변환한다.
 
 ## 5. 확정된 환경 및 배포 결정
 
-- 공개 주소: `https://ai.sampoongapt.com`
+- 공개 주소: `https://physicalai.penvot.com`
 - Ingress: 기존 internet-facing ALB의 HTTPS 443 Listener
-- Routing: `Host = ai.sampoongapt.com`
+- Routing: `Host = physicalai.penvot.com`
 - Target Group: private EC2 `3010`
 - Container: 내부 `3000`, 호스트 매핑 `3010:3000`
 - Database: `/app/data/ai-workspace.sqlite`
@@ -559,7 +559,7 @@ Tools:
 
 ### 모델 및 인증
 
-`sampoongaptcom`과 동일한 기준을 사용한다.
+기존 production 서비스와 동일한 기준을 사용한다.
 
 ```text
 GEMINI_MODEL=gemini-3.5-flash-lite
@@ -596,7 +596,7 @@ Dashboard | Ontology | Rules | Ask AI
 - 우측 JSON Viewer
 - React Flow Graph
 
-고정된 Alice/Bob/OpenAI 위치와 타입은 제거하고 데이터 기반 노드 배치로 전환한다.
+고정된 InspectionTeam/OpsEngineer/BestAiCom 위치와 타입은 제거하고 데이터 기반 노드 배치로 전환한다.
 
 ### Rules
 
@@ -656,7 +656,7 @@ DB와 runtime이 안정된 후 SSE로 교체할 수 있다. WebSocket과 custom 
 - D1 client → file-backed SQLite client
 - 단일 `app/explorer.tsx` → 역할별 components/routes
 - 고정 demo graph → 데이터 기반 graph
-- 기존 Gemini client → `sampoongaptcom` Vertex AI 패턴
+- 기존 Gemini client → shared Vertex AI production pattern
 - edge cache rate limit → AWS 환경에 맞는 server-side rate limit
 
 ### 마이그레이션 원칙
@@ -766,10 +766,10 @@ DB와 runtime이 안정된 후 SSE로 교체할 수 있다. WebSocket과 custom 
 - `.fordeploy/ai-workspace-aws/.env`를 이미지의 `.env.production`으로 포함
 - EC2 GCP key read-only mount
 - SQLite volume mount
-- sampoongaptcom 방식의 Bastion → private EC2 배포 스크립트
+- existing Bastion → private EC2 deployment pattern
 - container/image cleanup 범위 격리
 - ALB target group/health check 준비
-- `ai.sampoongapt.com` 배포
+- `physicalai.penvot.com` 배포
 
 완료 조건: 공개 URL에서 Simulator, Rule, Timeline, Ontology, Ask AI가 동작한다.
 
@@ -899,7 +899,7 @@ Gemini 장애가 ALB health check 실패로 이어지지 않게 한다.
 | Simulator에 코드가 결합 | Adapter 계약과 공통 Event 사용 |
 | SQLite lock | WAL, busy timeout, 짧은 transaction |
 | 배포 후 DB 유실 | `/app/data` volume과 backup |
-| 기존 sampoongapt 컨테이너 영향 | 독립 image/container/port/path 사용 |
+| 기존 production 컨테이너 영향 | 독립 image/container/port/path 사용 |
 | Gemini 모델 노후화 | `GEMINI_MODEL` 환경변수 단일화 |
 | 인증파일 이미지 포함 | EC2 파일 read-only mount |
 | 면접 중 조건 미발생 | 시나리오와 수동 센서값 주입 |
@@ -918,7 +918,7 @@ Gemini 장애가 ALB health check 실패로 이어지지 않게 한다.
 - Simulator와 MQTT가 동일한 Adapter 계약을 사용한다.
 - 기존 Semantic Layer 핵심 API의 회귀 테스트가 통과한다.
 - Docker 재시작 후 SQLite 데이터가 유지된다.
-- `https://ai.sampoongapt.com`에서 전체 데모가 동작한다.
+- `https://physicalai.penvot.com`에서 전체 데모가 동작한다.
 - README만으로 철학, 아키텍처, 안전 경계, 데모 흐름을 이해할 수 있다.
 
 ## 25. 첫 구현 단위

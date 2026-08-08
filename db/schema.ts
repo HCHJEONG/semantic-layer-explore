@@ -1,32 +1,32 @@
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-export const classes = sqliteTable("classes", {
+export const semanticClasses = sqliteTable("semantic_classes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull().unique(),
   description: text("description").notNull(),
 });
 
-export const properties = sqliteTable("properties", {
+export const semanticProperties = sqliteTable("semantic_properties", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull().unique(),
-  domainClassId: integer("domain_class_id").notNull().references(() => classes.id),
-  rangeClassId: integer("range_class_id").notNull().references(() => classes.id),
+  domainClassId: integer("domain_class_id").notNull().references(() => semanticClasses.id),
+  rangeClassId: integer("range_class_id").notNull().references(() => semanticClasses.id),
   description: text("description").notNull(),
 });
 
-export const individuals = sqliteTable("individuals", {
+export const semanticIndividuals = sqliteTable("semantic_individuals", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull().unique(),
-  classId: integer("class_id").notNull().references(() => classes.id),
+  classId: integer("class_id").notNull().references(() => semanticClasses.id),
   description: text("description").notNull(),
   externalId: text("external_id").unique(),
 });
 
-export const relations = sqliteTable("relations", {
+export const semanticRelations = sqliteTable("semantic_relations", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  subjectId: integer("subject_id").notNull().references(() => individuals.id),
-  propertyId: integer("property_id").notNull().references(() => properties.id),
-  objectId: integer("object_id").notNull().references(() => individuals.id),
+  subjectId: integer("subject_id").notNull().references(() => semanticIndividuals.id),
+  propertyId: integer("property_id").notNull().references(() => semanticProperties.id),
+  objectId: integer("object_id").notNull().references(() => semanticIndividuals.id),
 });
 
 export const sensors = sqliteTable("sensors", {

@@ -84,15 +84,15 @@ test("ontology API preserves the original semantic-layer contract", async () => 
     { name: "assignedTo", domain: "Person", range: "Project" },
   ]);
   assert.deepEqual(ontology.individuals.slice(0, 4).map(({ name, class: className }) => ({ name, class: className })), [
-    { name: "Alice", class: "Person" },
-    { name: "Bob", class: "Person" },
-    { name: "OpenAI", class: "Company" },
-    { name: "Semantic Explorer", class: "Project" },
+    { name: "InspectionTeam", class: "Person" },
+    { name: "OpsEngineer", class: "Person" },
+    { name: "BestAiCom", class: "Company" },
+    { name: "BestAiCom Smart Workspace", class: "Project" },
   ]);
   assert.deepEqual(ontology.relations.slice(0, 3).map(({ subject, property, object }) => ({ subject, property, object })), [
-    { subject: "Alice", property: "worksFor", object: "OpenAI" },
-    { subject: "Bob", property: "worksFor", object: "OpenAI" },
-    { subject: "Bob", property: "assignedTo", object: "Semantic Explorer" },
+    { subject: "InspectionTeam", property: "worksFor", object: "BestAiCom" },
+    { subject: "OpsEngineer", property: "worksFor", object: "BestAiCom" },
+    { subject: "OpsEngineer", property: "assignedTo", object: "BestAiCom Smart Workspace" },
   ]);
   assert.deepEqual(ontology.classes.slice(3).map(({ name }) => name), ["Sensor", "Event", "Rule", "Device", "Room"]);
   assert.deepEqual(
@@ -110,15 +110,15 @@ test("ontology API preserves the original semantic-layer contract", async () => 
   assert.ok(ontology.relations.some(({ subject, property, object }) => subject === "WorkspaceAutomationRule" && property === "triggers" && object === "FanRelay01"));
 });
 
-test("main page keeps the Semantic Layer Explorer baseline", async () => {
+test("main page keeps the BestAiCom Semantic Workspace baseline", async () => {
   const response = await fetch(origin);
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /Semantic Layer Explorer/);
-  assert.match(html, /Workspace overview/);
-  assert.match(html, /Event timeline/);
-  assert.match(html, /Rules/);
-  assert.match(html, /Ask AI/);
+  assert.match(html, /BestAiCom Semantic/);
+  assert.match(html, /Operational Workspace Overview/);
+  assert.match(html, /Event Timeline/);
+  assert.match(html, /Automation/);
+  assert.match(html, /Ops Copilot/);
   assert.doesNotMatch(html, /Your site is taking shape/);
 });
 
@@ -150,6 +150,12 @@ test("scenario and manual readings use the same sensor event contract", async ()
   assert.equal(temperature.value, 31.5);
   assert.equal(temperature.source, "simulator");
 
+  const buttonScenarioResponse = await fetch(`${origin}/api/simulator/scenarios/button-pressed`, { method: "POST" });
+  assert.equal(buttonScenarioResponse.status, 200);
+  const buttonScenarioState = await buttonScenarioResponse.json();
+  assert.equal(buttonScenarioState.readings.find(({ sensorId }) => sensorId === "button-01").value, true);
+  assert.equal(buttonScenarioState.simulator.scenario, "normal");
+
   const manualResponse = await fetch(`${origin}/api/simulator/sensors/light-01/readings`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -162,21 +168,32 @@ test("scenario and manual readings use the same sensor event contract", async ()
 });
 
 test("virtual device commands update state and write auditable events", async () => {
-  const commandResponse = await fetch(`${origin}/api/devices/led-01/commands`, {
+  const ledCommandResponse = await fetch(`${origin}/api/devices/led-01/commands`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ command: "on" }),
   });
-  assert.equal(commandResponse.status, 200);
-  const commandResult = await commandResponse.json();
-  assert.equal(commandResult.success, true);
-  assert.equal(commandResult.state.status, "on");
+  assert.equal(ledCommandResponse.status, 200);
+  const ledCommandResult = await ledCommandResponse.json();
+  assert.equal(ledCommandResult.success, true);
+  assert.equal(ledCommandResult.state.status, "on");
+
+  const buzzerCommandResponse = await fetch(`${origin}/api/devices/buzzer-01/commands`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ command: "beep" }),
+  });
+  assert.equal(buzzerCommandResponse.status, 200);
+  const buzzerCommandResult = await buzzerCommandResponse.json();
+  assert.equal(buzzerCommandResult.success, true);
+  assert.equal(buzzerCommandResult.state.status, "off");
 
   const eventsResponse = await fetch(`${origin}/api/events?limit=100`);
   assert.equal(eventsResponse.status, 200);
   const events = await eventsResponse.json();
   assert.ok(events.some(({ type }) => type === "sensor.reading"));
   assert.ok(events.some(({ type, sourceId }) => type === "device.command.succeeded" && sourceId === "led-01"));
+  assert.ok(events.some(({ type, sourceId, payload }) => type === "device.command.succeeded" && sourceId === "buzzer-01" && payload.command.command === "beep"));
 });
 
 test("rules are validated, editable, and execute device commands from sensor events", async () => {

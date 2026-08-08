@@ -20,6 +20,20 @@ type GeminiResponse = {
 
 let accessToken: { value: string; expiresAt: number } | null = null;
 
+const generationConfigFields = new Set([
+  "candidateCount",
+  "frequencyPenalty",
+  "maxOutputTokens",
+  "presencePenalty",
+  "responseMimeType",
+  "responseSchema",
+  "seed",
+  "stopSequences",
+  "temperature",
+  "topK",
+  "topP",
+]);
+
 function encode(value: unknown) {
   return Buffer.from(JSON.stringify(value)).toString("base64url");
 }
@@ -90,6 +104,14 @@ export function getGeminiClient() {
         if (typeof requestConfig.systemInstruction === "string") {
           requestConfig.systemInstruction = { parts: [{ text: requestConfig.systemInstruction }] };
         }
+        const generationConfig = { ...(requestConfig.generationConfig as Record<string, unknown> | undefined) };
+        for (const field of generationConfigFields) {
+          if (field in requestConfig) {
+            generationConfig[field] = requestConfig[field];
+            delete requestConfig[field];
+          }
+        }
+        if (Object.keys(generationConfig).length > 0) requestConfig.generationConfig = generationConfig;
         const response = await fetchGeminiResource("Vertex generateContent", endpoint, {
           method: "POST",
           headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },

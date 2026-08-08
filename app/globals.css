@@ -661,10 +661,81 @@ nav button.active {
   align-items: center;
 }
 
-.answer-card > p {
-  font-size: 18px;
-  line-height: 1.6;
-  margin: 15px 0;
+.answer-markdown {
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.72;
+  margin-top: 15px;
+}
+
+.answer-markdown > :first-child {
+  margin-top: 0;
+}
+
+.answer-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.answer-markdown p {
+  margin: 10px 0;
+}
+
+.answer-markdown h1,
+.answer-markdown h2,
+.answer-markdown h3 {
+  color: var(--ink);
+  font-weight: 750;
+  line-height: 1.25;
+  margin: 18px 0 8px;
+}
+
+.answer-markdown h1 {
+  font-size: 22px;
+}
+
+.answer-markdown h2 {
+  font-size: 19px;
+}
+
+.answer-markdown h3 {
+  font-size: 16px;
+}
+
+.answer-markdown strong {
+  font-weight: 750;
+}
+
+.answer-markdown ul,
+.answer-markdown ol {
+  margin: 10px 0;
+  padding-left: 20px;
+}
+
+.answer-markdown li {
+  margin: 5px 0;
+}
+
+.answer-markdown code {
+  border: 1px solid #eadff1;
+  background: #f8f3fb;
+  color: #6c478f;
+  border-radius: 5px;
+  padding: 1px 5px;
+  font: 0.86em var(--font-mono);
+}
+
+.answer-markdown pre {
+  overflow: auto;
+  border: 1px solid #eadff1;
+  background: #fbf8fd;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.answer-markdown pre code {
+  border: 0;
+  background: transparent;
+  padding: 0;
 }
 
 .trace {
@@ -781,12 +852,18 @@ nav button.active {
   justify-content: space-between;
   align-items: flex-end;
   margin: 4px 2px 24px;
+  min-width: 0;
+}
+
+.dashboard-hero > div:first-child {
+  min-width: 0;
 }
 
 .dashboard-hero h1 {
   font-size: 36px;
   letter-spacing: -0.045em;
   margin: 5px 0;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-hero p {
@@ -795,6 +872,7 @@ nav button.active {
   margin: 0;
   max-width: 690px;
   line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .runtime-pill {
@@ -808,6 +886,7 @@ nav button.active {
   padding: 11px 14px;
   min-width: 150px;
   box-shadow: 0 6px 20px #34203f08;
+  max-width: 100%;
 }
 
 .runtime-pill i {
@@ -827,11 +906,15 @@ nav button.active {
   font: 9px var(--font-mono);
   text-transform: uppercase;
   color: #918497;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .runtime-pill strong {
   font-size: 12px;
   text-transform: capitalize;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-metrics {
@@ -846,6 +929,7 @@ nav button.active {
   align-items: center;
   gap: 12px;
   padding: 15px;
+  min-width: 0;
 }
 
 .metric > svg {
@@ -858,6 +942,7 @@ nav button.active {
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: #8d8194;
+  min-width: 0;
 }
 
 .metric strong {
@@ -867,6 +952,7 @@ nav button.active {
   letter-spacing: 0;
   color: var(--ink);
   margin-top: 3px;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-grid {
@@ -890,16 +976,25 @@ nav button.active {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 17px;
+  gap: 12px;
+  min-width: 0;
 }
 
-.dashboard-title h2 {
+.dashboard-title > div {
+  min-width: 0;
+}
+
+.dashboard-title h2,
+.dashboard-title [data-slot="card-title"] {
   font-size: 17px;
   margin: 3px 0 0;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-title small {
   font: 10px var(--font-mono);
   color: #938798;
+  flex: 0 0 auto;
 }
 
 .sensor-grid {
@@ -988,6 +1083,10 @@ nav button.active {
   align-items: center;
   text-align: left;
   color: #857a8c;
+  height: auto;
+  min-height: 70px;
+  min-width: 0;
+  white-space: normal;
 }
 
 .device-card:hover:not(:disabled) {
@@ -1006,6 +1105,8 @@ nav button.active {
 .device-card span {
   font-size: 11px;
   color: var(--ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .device-card small {
@@ -1022,6 +1123,7 @@ nav button.active {
   background: #eeeaf0;
   padding: 5px 7px;
   border-radius: 6px;
+  white-space: nowrap;
 }
 
 .device-card.on {
@@ -1052,6 +1154,12 @@ nav button.active {
   gap: 6px;
   font-size: 11px;
   font-weight: 600;
+  height: auto;
+  min-height: 38px;
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.25;
+  text-align: left;
 }
 
 .scenario-row button svg {

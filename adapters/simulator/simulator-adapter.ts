@@ -119,6 +119,7 @@ export class SimulatorAdapter implements PhysicalWorkspaceAdapter {
     for (const [sensorId, value] of Object.entries(values)) {
       if (value !== undefined) this.injectReading(sensorId, value);
     }
+    if (scenario === "button-pressed") this.activeScenario = "normal";
   }
 
   injectReading(sensorId: string, value: number | boolean) {
@@ -140,7 +141,7 @@ export class SimulatorAdapter implements PhysicalWorkspaceAdapter {
       this.deviceStates.set(device.id, { status: "on", angle: command.value, lastCommandAt: command.issuedAt });
     } else if (command.command === "beep") {
       if (device.type !== "buzzer") return { success: false, deviceId: command.deviceId, state: this.deviceStates.get(command.deviceId) ?? { status: "off" }, error: "Only a buzzer can beep." };
-      this.deviceStates.set(device.id, { status: "on", lastCommandAt: command.issuedAt });
+      this.deviceStates.set(device.id, { status: "off", lastCommandAt: command.issuedAt });
     } else {
       this.deviceStates.set(device.id, { ...(this.deviceStates.get(device.id) ?? {}), status: command.command, lastCommandAt: command.issuedAt });
     }
@@ -156,7 +157,7 @@ export class SimulatorAdapter implements PhysicalWorkspaceAdapter {
       "temperature-01": Number(clamp(previous("temperature-01", 24) + (this.random() - 0.5) * 0.7, 20, 35).toFixed(1)),
       "light-01": Math.round(clamp(previous("light-01", 550) + (this.random() - 0.5) * 50, 20, 1000)),
       "distance-01": Number(clamp(previous("distance-01", 120) + (this.random() - 0.5) * 12, 5, 200).toFixed(1)),
-      "button-01": this.activeScenario === "button-pressed" ? true : this.random() < 0.03,
+      "button-01": this.random() < 0.03,
     };
     for (const sensor of sensors) {
       if (!this.disconnectedSensors.has(sensor.id)) this.emit(sensor, nextValues[sensor.id]);

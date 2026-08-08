@@ -1,14 +1,16 @@
-# Semantic Layer Explorer
+# BestAiCom Semantic Workspace
+
+[한국어 README 보기](./READMEKor.md)
 
 > A Minimal Ontology → Database → API → AI Demo
 
-Semantic Layer Explorer is a deliberately small portfolio project that demonstrates how shared business meaning can sit between an LLM, REST APIs, and operational data. It borrows only three approachable ideas from Protégé—**Class**, **Property**, and **Individual**—and keeps the implementation compact enough to understand in one sitting.
+BestAiCom Semantic Workspace is a deliberately small portfolio project that demonstrates how shared business meaning can sit between an LLM, REST APIs, and operational data. It borrows only three approachable ideas from Protégé—**Class**, **Property**, and **Individual**—and keeps the implementation compact enough to understand in one sitting.
 
 ## Why
 
 An LLM does not inherently understand what a table, ERP field, or CRM relationship means to a business. Database schemas describe storage; they do not reliably communicate business semantics.
 
-A semantic layer provides that missing contract. It tells an AI that `Alice` is a `Person`, that `worksFor` connects a `Person` to a `Company`, and that `OpenAI` is a concrete `Company`. This project implements the smallest useful version of that idea.
+A semantic layer provides that missing contract. It tells an AI that `InspectionTeam` is a `Person`, that `assignedTo` connects an operator to a workspace project, and that `BestAiCom` is a concrete `Company`. This project implements the smallest useful version of that idea.
 
 ## Architecture
 
@@ -38,20 +40,22 @@ Simulator Sensor → Sensor Event → Rule Engine → Virtual Device
 
 The rule engine—not Gemini—evaluates approved rules and executes device commands. The simulator implements the same adapter boundary reserved for a future MQTT/Arduino connection.
 
+The demo keeps deployment simple by using one SQLite file, but the schema separates the semantic metadata store from operational state. Ontology records live in `semantic_classes`, `semantic_properties`, `semantic_individuals`, and `semantic_relations`; runtime state lives in `sensors`, `devices`, `sensor_readings`, `events`, and `rules`.
+
 ```text
-"Where does Alice work?"
+"Which project is the operations engineer assigned to?"
   → getOntology()
   → recognizes Person —worksFor→ Company
   → getIndividuals()
   → getRelations()
-  → "Alice works for OpenAI."
+  → "OpsEngineer is assigned to BestAiCom Smart Workspace."
 ```
 
 ## Features
 
 - Three-column ontology explorer with details and live JSON
 - Relationship graph powered by React Flow
-- Original four-table ontology model, plus isolated physical workspace tables for sensors, devices, readings, rules, and events
+- Namespaced semantic metadata tables, plus isolated physical workspace tables for sensors, devices, readings, rules, and events
 - Read and create REST endpoints with Zod validation
 - Gemini tool-calling agent with an enforced ontology-first flow
 - Temporary per-process Ask AI protection: 10 requests per visitor and UTC day
