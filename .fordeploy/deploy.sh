@@ -39,7 +39,7 @@ set -euo pipefail
 test -f "${BASTION_SSH_KEY}" || { echo "Missing bastion SSH key: ${BASTION_SSH_KEY}"; exit 1; }
 scp -o StrictHostKeyChecking=accept-new -i "${BASTION_SSH_KEY}" "${REMOTE_DIR}/${ARCHIVE_NAME}" "${PRIVATE_HOST}:${REMOTE_DIR}/${ARCHIVE_NAME}"
 ssh -o StrictHostKeyChecking=accept-new -i "${BASTION_SSH_KEY}" "${PRIVATE_HOST}" \
-  REMOTE_DIR="${REMOTE_DIR}" ARCHIVE_NAME="${ARCHIVE_NAME}" IMAGE_TAG="${IMAGE_TAG}" \
+  REMOTE_DIR="${REMOTE_DIR}" ARCHIVE_NAME="${ARCHIVE_NAME}" IMAGE_REPOSITORY="${IMAGE_REPOSITORY}" IMAGE_TAG="${IMAGE_TAG}" \
   CONTAINER_NAME="${CONTAINER_NAME}" HOST_PORT="${HOST_PORT}" CONTAINER_PORT="${CONTAINER_PORT}" \
   DATA_DIR="${DATA_DIR}" GCP_KEY="${GCP_KEY}" bash -s <<'PRIVATE'
 set -euo pipefail
@@ -63,8 +63,8 @@ for attempt in {1..30}; do
 done
 
 # Remove only stale artifacts belonging to this application. The exact running
-# container and the image it references are preserved; other repositories such
-# as sampoongaptcom are never selected.
+# container and the image it references are preserved; unrelated production
+# repositories are never selected.
 CURRENT_CONTAINER_ID="$(sudo docker inspect --format '{{.Id}}' "${CONTAINER_NAME}")"
 CURRENT_IMAGE_ID="$(sudo docker inspect --format '{{.Image}}' "${CONTAINER_NAME}")"
 
