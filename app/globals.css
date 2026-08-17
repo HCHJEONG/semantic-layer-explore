@@ -976,6 +976,71 @@ nav button.active {
   overflow-wrap: anywhere;
 }
 
+.semantic-access-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 18px;
+  align-items: center;
+  padding: 17px 18px;
+  margin-bottom: 14px;
+  border-color: #e8deee;
+  background: #fbf8fd;
+}
+
+.semantic-access-panel h2 {
+  margin: 4px 0 5px;
+  font-size: 18px;
+}
+
+.semantic-access-panel p {
+  margin: 0;
+  color: #766b7c;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 520px;
+}
+
+.semantic-role-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.semantic-role-grid article {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid #eee7f2;
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.semantic-role-grid svg {
+  grid-row: 1 / 4;
+  width: 17px;
+  color: var(--purple);
+}
+
+.semantic-role-grid span {
+  color: #6f4a95;
+  font: 10px var(--font-mono);
+}
+
+.semantic-role-grid strong {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.semantic-role-grid small {
+  color: #8d8194;
+  font: 9px/1.35 var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 370px;
@@ -1425,6 +1490,10 @@ nav button.active {
   }
   .dashboard-metrics {
     grid-template-columns: 1fr 1fr;
+  }
+  .semantic-access-panel,
+  .semantic-role-grid {
+    grid-template-columns: 1fr;
   }
   .sensor-grid,
   .device-grid {

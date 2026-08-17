@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Activity, BellRing, Fan, Gauge, Lightbulb, Play, Radio, RefreshCw, Ruler, Thermometer, ToggleLeft, Zap } from "lucide-react";
+import { Activity, BellRing, Fan, Gauge, Lightbulb, Play, Radio, RefreshCw, Ruler, ShieldCheck, Thermometer, ToggleLeft, UserCheck, Zap } from "lucide-react";
 import type { DeviceState, DeviceType, SensorReading, SensorType, SimulatorScenario } from "@/domain/physical";
 import type { RuleRecord } from "@/domain/rule";
 import { Button } from "@/components/ui/button";
@@ -124,6 +124,28 @@ export function WorkspaceDashboard() {
       <Card className="metric"><Zap /><span>Active rules<strong>{rules.filter((rule) => rule.enabled).length}</strong></span></Card>
       <Card className="metric"><RefreshCw /><span>Rule matches<strong>{matchedEvents.length} recent</strong></span></Card>
     </div>
+
+    <Card className="semantic-access-panel">
+      <div>
+        <span className="eyebrow">SEMANTIC ACCESS POLICY</span>
+        <h2>Ontology-derived responsibility model</h2>
+        <p>This demo makes operational responsibility explicit from semantic relationships; it does not replace user authentication.</p>
+      </div>
+      <div className="semantic-role-grid">
+        <article>
+          <UserCheck />
+          <span>InspectionTeam</span>
+          <strong>Monitors live sensors and reviews the event timeline.</strong>
+          <small>Policy basis: InspectionTeam worksFor BestAiCom</small>
+        </article>
+        <article>
+          <ShieldCheck />
+          <span>OpsEngineer</span>
+          <strong>Approves automation changes and issues audited commands.</strong>
+          <small>Policy basis: OpsEngineer assignedTo BestAiCom Smart Workspace</small>
+        </article>
+      </div>
+    </Card>
 
     <div className="dashboard-grid">
       <div className="dashboard-main">
