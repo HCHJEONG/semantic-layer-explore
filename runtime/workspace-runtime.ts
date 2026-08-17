@@ -1,6 +1,6 @@
 import "server-only";
 
-import { desc, eq } from "drizzle-orm";
+import { asc, desc, eq, gt } from "drizzle-orm";
 import { SimulatorAdapter } from "@/adapters/simulator/simulator-adapter";
 import { getDb } from "@/db";
 import { devices, events, sensorReadings } from "@/db/schema";
@@ -80,6 +80,13 @@ class WorkspaceRuntime {
 
   getEvents(limit = 50) {
     return getDb().select().from(events).orderBy(desc(events.occurredAt)).limit(Math.min(Math.max(limit, 1), 200)).all().map((event) => ({
+      ...event,
+      payload: JSON.parse(event.payloadJson) as unknown,
+    }));
+  }
+
+  getEventsAfter(id: number, limit = 50) {
+    return getDb().select().from(events).where(gt(events.id, id)).orderBy(asc(events.id)).limit(Math.min(Math.max(limit, 1), 200)).all().map((event) => ({
       ...event,
       payload: JSON.parse(event.payloadJson) as unknown,
     }));

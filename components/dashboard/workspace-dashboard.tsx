@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, BellRing, Fan, Gauge, Lightbulb, Play, Radio, RefreshCw, Ruler, ShieldCheck, Thermometer, ToggleLeft, UserCheck, Zap } from "lucide-react";
 import type { SensorReading, SimulatorScenario, WorkspaceState } from "@/domain/physical";
 import type { RuleRecord } from "@/domain/rule";
@@ -57,12 +57,33 @@ function deviceStateLabel(device: WorkspaceState["devices"][number]) {
   return device.state.status;
 }
 
+function mergeEvents(currentEvents: WorkspaceEvent[], incomingEvents: WorkspaceEvent[]) {
+  const byId = new Map<string, WorkspaceEvent>();
+  for (const event of [...incomingEvents, ...currentEvents]) byId.set(event.eventId, event);
+  return [...byId.values()].sort((left, right) => right.id - left.id).slice(0, 40);
+}
+
 export function WorkspaceDashboard() {
   const [state, setState] = useState<WorkspaceState | null>(null);
   const [events, setEvents] = useState<WorkspaceEvent[]>([]);
   const [rules, setRules] = useState<RuleRecord[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<BusyState>(null);
+  const bufferedEventsRef = useRef<WorkspaceEvent[]>([]);
+  const visibleRef = useRef(true);
+  const refreshTimerRef = useRef<number | null>(null);
+
+  const refreshStateAndRules = useCallback(async () => {
+    try {
+      const [stateResponse, rulesResponse] = await Promise.all([
+        fetch("/api/state", { cache: "no-store" }),
+        fetch("/api/rules", { cache: "no-store" }),
+      ]);
+      if (!stateResponse.ok || !rulesResponse.ok) throw new Error("Workspace runtime is unavailable.");
+      const [nextState, nextRules] = await Promise.all([stateResponse.json(), rulesResponse.json()]);
+      setState(nextState); setRules(nextRules); setError("");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Workspace runtime is unavailable."); }
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -77,11 +98,73 @@ export function WorkspaceDashboard() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Workspace runtime is unavailable."); }
   }, []);
 
+  const scheduleStateAndRulesRefresh = useCallback(() => {
+    if (refreshTimerRef.current !== null) return;
+    refreshTimerRef.current = window.setTimeout(() => {
+      refreshTimerRef.current = null;
+      void refreshStateAndRules();
+    }, 250);
+  }, [refreshStateAndRules]);
+
   useEffect(() => {
     const initial = window.setTimeout(() => void refresh(), 0);
-    const timer = window.setInterval(() => void refresh(), 2_000);
-    return () => { window.clearTimeout(initial); window.clearInterval(timer); };
+    return () => window.clearTimeout(initial);
   }, [refresh]);
+
+  /*
+   * Previous polling version kept for React study notes.
+   *
+   * useEffect(() => {
+   *   const initial = window.setTimeout(() => void refresh(), 0);
+   *   const timer = window.setInterval(() => void refresh(), 2_000);
+   *   return () => {
+   *     window.clearTimeout(initial);
+   *     window.clearInterval(timer);
+   *   };
+   * }, [refresh]);
+   *
+   * The live dashboard now uses SSE below. That keeps the initial snapshot fetch
+   * but lets the server push timeline events as they occur.
+   */
+
+  useEffect(() => {
+    const source = new EventSource("/api/events/stream");
+
+    source.addEventListener("workspace-event", (message) => {
+      const event = JSON.parse(message.data) as WorkspaceEvent;
+      if (visibleRef.current) {
+        setEvents((currentEvents) => mergeEvents(currentEvents, [event]));
+        scheduleStateAndRulesRefresh();
+        return;
+      }
+      bufferedEventsRef.current = mergeEvents(bufferedEventsRef.current, [event]);
+    });
+
+    source.onerror = () => setError("Live event stream is reconnecting.");
+
+    return () => {
+      source.close();
+      if (refreshTimerRef.current !== null) {
+        window.clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+  }, [scheduleStateAndRulesRefresh]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      visibleRef.current = document.visibilityState === "visible";
+      if (!visibleRef.current) return;
+      const bufferedEvents = bufferedEventsRef.current;
+      bufferedEventsRef.current = [];
+      if (bufferedEvents.length) setEvents((currentEvents) => mergeEvents(currentEvents, bufferedEvents));
+      void refreshStateAndRules();
+    };
+
+    visibleRef.current = document.visibilityState === "visible";
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [refreshStateAndRules]);
 
   async function runScenario(scenario: SimulatorScenario) {
     setBusy({ type: "scenario", id: scenario });
@@ -175,7 +258,7 @@ export function WorkspaceDashboard() {
                 <span className="eyebrow">LIVE TELEMETRY</span>
                 <CardTitle>Sensors</CardTitle>
               </div>
-              <small>Updates every 2 seconds</small>
+              <small>Streams live updates</small>
             </CardHeader>
             <CardContent className="p-4">
               <div className="sensor-grid">
