@@ -125,6 +125,22 @@ The Google Cloud project is read from the service account JSON's `project_id`; `
 
 The runtime retains high-volume sensor readings and matching `sensor.reading` events for 7 days, while lower-volume audit events are retained for 30 days. Cleanup runs at startup and hourly in bounded batches so it does not monopolize SQLite. Deleted pages are reused by SQLite; the scheduler intentionally does not run `VACUUM`, which could block live traffic. Rule evaluation is serialized and keeps at most the newest pending reading per sensor, preventing an unbounded async backlog when device execution is slow.
 
+## AWS deployment shape
+
+This repository intentionally keeps a source-archive-based AWS deployment example in `.fordeploy/deploy.sh`. Unlike sibling projects such as `global-ai-pricing` and `legacy-lang-intelligence`, this script does not build a Docker image locally and ship an image tar to AWS. Instead, it packages the source tree, sends that source archive through the Bastion host, and builds the Docker image on the private EC2 instance.
+
+```text
+local machine
+  -> create ai-workspace-source.xxxxxx.tar.gz
+  -> scp source archive to Bastion EC2
+  -> Bastion scp source archive to private EC2
+  -> private EC2 extracts the source into a temporary build directory
+  -> private EC2 runs docker build
+  -> private EC2 replaces the ai-physical-workspace container
+```
+
+The source archive excludes `.git`, `node_modules`, `.next`, and `data`, so the upload is small and the persistent SQLite volume is not replaced by deployment. The Docker build, including `npm run build`, happens on the private EC2 instance. This is intentionally different from the local-build/image-tar pattern and is kept as a reference deployment style for future projects where a remote build example is useful.
+
 ## Project philosophy
 
 This is not a Protégé clone. It intentionally does not implement OWL, RDF, SPARQL, reasoning, ontology import/export, permissions, or a graph database. Its purpose is educational: make the flow **Semantic Layer → API → Gemini → UI** visible, inspectable, and easy to discuss in an interview.
