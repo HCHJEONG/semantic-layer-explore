@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { loadOntologyPolicyCheck } from "@/lib/semantic-policy";
 
 const examples = ["현재 운영 상태 요약해줘.", "어떤 자동화가 방금 실행됐어?", "주의해야 할 센서 변화가 있어?", "Which assets need attention right now?"];
 
@@ -15,6 +16,7 @@ export function AskAi() {
   const [question, setQuestion] = useState(examples[0]);
   const [answer, setAnswer] = useState("");
   const [trace, setTrace] = useState<string[]>([]);
+  const [semanticTrace, setSemanticTrace] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -23,6 +25,8 @@ export function AskAi() {
     if (!question.trim() || loading) return;
     setLoading(true); setAnswer(""); setTrace([]); setError("");
     try {
+      const approved = await confirmInspectionTeamQuery();
+      if (!approved) return;
       const response = await fetch("/api/ai/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "BestAiCom AI could not answer.");
@@ -34,6 +38,16 @@ export function AskAi() {
     }
   }, [question, loading]);
 
+  async function confirmInspectionTeamQuery() {
+    setSemanticTrace(["Starting semantic role policy check…"]);
+    const check = await loadOntologyPolicyCheck("copilot.query");
+    setSemanticTrace([check.policy.title, ...check.steps]);
+    if (!check.individualFound || !check.relationFound) throw new Error(`Semantic role policy failed: ${check.steps.join(" / ")}`);
+    const confirmed = window.confirm(check.policy.prompt);
+    setSemanticTrace((current) => [...current, confirmed ? `User confirmed ${check.policy.requiredIndividual}.` : `User cancelled ${check.policy.requiredIndividual} confirmation.`]);
+    return confirmed;
+  }
+
   return <section className="ai-page">
     <div className="ai-intro"><div className="ai-orb"><Bot size={28} /></div><div className="eyebrow">BESTAICOM OPS ANALYST</div><h1>Ask what changed, why it happened, and what is active.</h1><p>BestAiCom AI reads the semantic map first, then explains current state, approved rules, and recent events using auditable application data.</p></div>
     <Card className="ask-card">
@@ -44,6 +58,7 @@ export function AskAi() {
           <Button onClick={ask} disabled={loading}>{loading ? "Analyzing…" : <><span>Ask BestAiCom AI</span><Send size={16} /></>}</Button>
         </div>
         <div className="examples">{examples.map((example) => <Button key={example} variant="outline" size="sm" onClick={() => setQuestion(example)}>{example}</Button>)}</div>
+        {semanticTrace.length > 0 && <SemanticPolicyTrace steps={semanticTrace} />}
       </CardContent>
     </Card>
     {(answer || loading) && <Card className="answer-card">
@@ -56,4 +71,11 @@ export function AskAi() {
     {error && <div className="error">{error}</div>}
     <div className="pipeline"><span><Bot />BestAiCom AI</span><ArrowRight/><span><Network />Semantic Map</span><ArrowRight/><span><Braces />Application APIs</span><ArrowRight/><span><Database />Operational Store</span></div>
   </section>;
+}
+
+function SemanticPolicyTrace({ steps }: { steps: string[] }) {
+  return <div className="semantic-policy-trace">
+    <strong>Ontology policy processing</strong>
+    {steps.map((step, index) => <span key={`${step}-${index}`}>{step}</span>)}
+  </div>;
 }

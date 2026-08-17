@@ -6,6 +6,7 @@ import type { RuleInput, RuleRecord } from "@/domain/rule";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { loadOntologyPolicyCheck, type SemanticAction } from "@/lib/semantic-policy";
 
 const examples = ["온도가 30도를 넘으면 팬을 켜.", "조도가 100 lux보다 낮으면 LED를 켜.", "버튼을 누르면 부저를 울려."];
 
@@ -19,6 +20,7 @@ export function RuleStudio() {
   const [proposal, setProposal] = useState<RuleInput | null>(null);
   const [rules, setRules] = useState<RuleRecord[]>([]);
   const [trace, setTrace] = useState<string[]>([]);
+  const [semanticTrace, setSemanticTrace] = useState<string[]>([]);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -47,6 +49,8 @@ export function RuleStudio() {
     if (!proposal || busy) return;
     setBusy("approve"); setError("");
     try {
+      const approved = await confirmSemanticAction("rule.approve");
+      if (!approved) return;
       const response = await fetch("/api/rules", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(proposal) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Rule could not be saved.");
@@ -58,12 +62,24 @@ export function RuleStudio() {
   async function mutateRule(rule: RuleRecord, action: "toggle" | "delete") {
     setBusy(rule.id); setError("");
     try {
+      const approved = await confirmSemanticAction(action === "delete" ? "rule.delete" : "rule.toggle");
+      if (!approved) return;
       const path = action === "delete" ? `/api/rules/${rule.id}` : `/api/rules/${rule.id}/${rule.enabled ? "disable" : "enable"}`;
       const response = await fetch(path, { method: action === "delete" ? "DELETE" : "POST" });
       if (!response.ok) throw new Error("Rule update failed.");
       await refreshRules();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Rule update failed."); }
     finally { setBusy(""); }
+  }
+
+  async function confirmSemanticAction(action: SemanticAction) {
+    setSemanticTrace(["Starting semantic role policy check…"]);
+    const check = await loadOntologyPolicyCheck(action);
+    setSemanticTrace([check.policy.title, ...check.steps]);
+    if (!check.individualFound || !check.relationFound) throw new Error(`Semantic role policy failed: ${check.steps.join(" / ")}`);
+    const confirmed = window.confirm(check.policy.prompt);
+    setSemanticTrace((current) => [...current, confirmed ? `User confirmed ${check.policy.requiredIndividual}.` : `User cancelled ${check.policy.requiredIndividual} confirmation.`]);
+    return confirmed;
   }
 
   return <section className="rules-page">
@@ -76,6 +92,7 @@ export function RuleStudio() {
           <div className="examples">{examples.map((example) => <Button key={example} variant="outline" size="sm" onClick={() => setInstruction(example)}>{example}</Button>)}</div>
           <Button className="propose-button" onClick={() => void propose()} disabled={Boolean(busy)}><Sparkles />{busy === "propose" ? "Reading semantic map…" : "Generate Rule Proposal"}</Button>
           {trace.length > 0 && <div className="trace rule-trace">{trace.map((step, index) => <span key={step}>{step}{index < trace.length - 1 && <ArrowRight />}</span>)}</div>}
+          {semanticTrace.length > 0 && <SemanticPolicyTrace steps={semanticTrace} />}
           {remaining !== null && <small className="remaining">{remaining} AI requests remaining today</small>}
         </CardContent>
       </Card>
@@ -93,4 +110,11 @@ export function RuleStudio() {
     </Card>
     {error && <div className="error toast">{error}</div>}
   </section>;
+}
+
+function SemanticPolicyTrace({ steps }: { steps: string[] }) {
+  return <div className="semantic-policy-trace">
+    <strong>Ontology policy processing</strong>
+    {steps.map((step, index) => <span key={`${step}-${index}`}>{step}</span>)}
+  </div>;
 }
