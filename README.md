@@ -51,6 +51,23 @@ The demo keeps deployment simple by using one SQLite file, but the schema separa
   → "OpsEngineer is assigned to BestAiCom Smart Workspace."
 ```
 
+## Implementation planning note
+
+For a project like this, it is more natural to define the domain model before designing the database schema. The database is the persistence layer for the concepts; it should not be the first place where the concepts are invented.
+
+The development sequence can be planned as:
+
+1. Start with `domain/physical.ts`.
+   Define what a sensor is, what a device is, and the minimum shared contract for readings and commands.
+2. Then define `domain/rule.ts`.
+   Decide which readings can be evaluated as conditions, and which device actions can be executed.
+3. Then define `domain/ontology.ts`.
+   Describe the system at the semantic layer: classes, properties, individuals, and relations.
+4. Finally, design `db/schema.ts`.
+   Map those domain concepts into persistent tables.
+
+This keeps the implementation plan centered on the system's vocabulary and behavior first, then turns that model into storage, runtime orchestration, APIs, and AI tools.
+
 ## Features
 
 - Three-column ontology explorer with details and live JSON
