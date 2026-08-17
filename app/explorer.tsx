@@ -36,14 +36,49 @@ export default function Explorer() {
   }
 
   return <AppShell tab={tab} onTabChange={setTab}>
-    {tab === "dashboard" ? <WorkspaceDashboard /> : tab === "rules" ? <RuleStudio /> : tab === "explorer" ? <>
-      <section className="workspace">
-        <OntologyTree ontology={ontology} selection={selection} loading={!ontology && !error} onSelect={selectOntologyItem} />
-        <ObjectDetail selection={selection} />
-        <JsonViewer ontology={ontology} selection={selection} />
-      </section>
-      <OntologyGraph ontology={ontology} />
-      {error && <div className="error toast">{error}</div>}
-    </> : <AskAi />}
+    {renderTabContent(tab, { ontology, selection, error, onSelect: selectOntologyItem })}
   </AppShell>;
+}
+
+function renderTabContent(
+  tab: AppTab,
+  explorerProps: {
+    ontology: Ontology | null;
+    selection: OntologySelection | null;
+    error: string;
+    onSelect: (kind: OntologyKind, item: OntologyItem) => void;
+  },
+) {
+  switch (tab) {
+    case "dashboard":
+      return <WorkspaceDashboard />;
+    case "rules":
+      return <RuleStudio />;
+    case "explorer":
+      return <OntologyExplorer {...explorerProps} />;
+    case "ai":
+      return <AskAi />;
+  }
+}
+
+function OntologyExplorer({
+  ontology,
+  selection,
+  error,
+  onSelect,
+}: {
+  ontology: Ontology | null;
+  selection: OntologySelection | null;
+  error: string;
+  onSelect: (kind: OntologyKind, item: OntologyItem) => void;
+}) {
+  return <>
+    <section className="workspace">
+      <OntologyTree ontology={ontology} selection={selection} loading={!ontology && !error} onSelect={onSelect} />
+      <ObjectDetail selection={selection} />
+      <JsonViewer ontology={ontology} selection={selection} />
+    </section>
+    <OntologyGraph ontology={ontology} />
+    {error && <div className="error toast">{error}</div>}
+  </>;
 }
