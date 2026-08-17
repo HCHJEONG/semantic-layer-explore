@@ -41,3 +41,11 @@ export type SensorDefinition = { id: string; name: string; type: SensorType; uni
 export type DeviceDefinition = { id: string; name: string; type: DeviceType };
 
 export type SimulatorScenario = "normal" | "high-temperature" | "dark-room" | "object-approaching" | "button-pressed" | "sensor-disconnected";
+export type WorkspaceState = {
+  mode: "simulator";
+  connection: { state: "connected" | "disconnected"; adapter: string };
+  simulator: { running: boolean; scenario: SimulatorScenario; intervalMs: number };
+  sensors: SensorDefinition[];
+  readings: SensorReading[];
+  devices: Array<DeviceDefinition & { state: DeviceState }>;
+};

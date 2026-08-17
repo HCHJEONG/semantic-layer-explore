@@ -2,19 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Activity, BellRing, Fan, Gauge, Lightbulb, Play, Radio, RefreshCw, Ruler, ShieldCheck, Thermometer, ToggleLeft, UserCheck, Zap } from "lucide-react";
-import type { DeviceState, DeviceType, SensorReading, SensorType, SimulatorScenario } from "@/domain/physical";
+import type { SensorReading, SimulatorScenario, WorkspaceState } from "@/domain/physical";
 import type { RuleRecord } from "@/domain/rule";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-type WorkspaceState = {
-  mode: "simulator";
-  connection: { state: "connected" | "disconnected"; adapter: string };
-  simulator: { running: boolean; scenario: SimulatorScenario; intervalMs: number };
-  sensors: Array<{ id: string; name: string; type: SensorType; unit: string }>;
-  readings: SensorReading[];
-  devices: Array<{ id: string; name: string; type: DeviceType; state: DeviceState }>;
-};
 
 type WorkspaceEvent = {
   id: number;
@@ -32,7 +23,13 @@ const scenarios: Array<{ id: SimulatorScenario; label: string }> = [
   { id: "dark-room", label: "Dark room" },
   { id: "object-approaching", label: "Near object" },
   { id: "button-pressed", label: "Button" },
+  { id: "sensor-disconnected", label: "Sensor offline" },
 ];
+
+type BusyState =
+  | { type: "scenario"; id: SimulatorScenario }
+  | { type: "device"; id: string }
+  | null;
 
 const sensorIcons = { temperature: Thermometer, light: Lightbulb, distance: Ruler, button: ToggleLeft };
 const deviceIcons = { led: Lightbulb, servo: Gauge, buzzer: BellRing, relay: Fan };
@@ -50,6 +47,7 @@ function eventDescription(event: WorkspaceEvent, rules: RuleRecord[]) {
   if (event.type === "device.command.succeeded") return `${event.sourceId} accepted a device command`;
   if (event.type === "device.command.failed") return `${event.sourceId} rejected a device command`;
   if (event.type === "simulator.scenario") return `Scenario changed to ${event.sourceId}`;
+  if (event.type === "rule.execution.failed") return `Rule evaluation failed for ${event.sourceId}`;
   return event.type.replaceAll(".", " ");
 }
 
@@ -64,7 +62,7 @@ export function WorkspaceDashboard() {
   const [events, setEvents] = useState<WorkspaceEvent[]>([]);
   const [rules, setRules] = useState<RuleRecord[]>([]);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState("");
+  const [busy, setBusy] = useState<BusyState>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -86,19 +84,19 @@ export function WorkspaceDashboard() {
   }, [refresh]);
 
   async function runScenario(scenario: SimulatorScenario) {
-    setBusy(scenario);
+    setBusy({ type: "scenario", id: scenario });
     try {
       const response = await fetch(`/api/simulator/scenarios/${scenario}`, { method: "POST" });
       if (!response.ok) throw new Error("Could not run the simulator scenario.");
       setState(await response.json());
       await refresh();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Scenario failed."); }
-    finally { setBusy(""); }
+    finally { setBusy(null); }
   }
 
   async function toggleDevice(device: WorkspaceState["devices"][number]) {
     if (device.type === "servo") return;
-    setBusy(device.id);
+    setBusy({ type: "device", id: device.id });
     try {
       const command = device.type === "buzzer" ? "beep" : device.state.status === "on" ? "off" : "on";
       const response = await fetch(`/api/devices/${device.id}/commands`, {
@@ -107,76 +105,184 @@ export function WorkspaceDashboard() {
       if (!response.ok) throw new Error("The virtual device rejected the command.");
       await refresh();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Device command failed."); }
-    finally { setBusy(""); }
+    finally { setBusy(null); }
   }
 
   const matchedEvents = events.filter((event) => event.type === "rule.matched");
 
-  return <section className="dashboard-page">
-    <div className="dashboard-hero">
-      <div><span className="eyebrow">BESTAICOM OPERATIONS LAYER</span><h1>Operational Workspace Overview</h1><p>BestAiCom connects field signals, business meaning, and approved automation through one inspectable control layer.</p></div>
-      <div className="runtime-pill"><i className={state?.connection.state === "connected" ? "online" : ""} /><span>{state?.mode ?? "loading"}</span><strong>{state?.connection.state ?? "connecting"}</strong></div>
-    </div>
+  return (
+    <section className="dashboard-page">
+      <div className="dashboard-hero">
+        <div>
+          <span className="eyebrow">BESTAICOM OPERATIONS LAYER</span>
+          <h1>Operational Workspace Overview</h1>
+          <p>BestAiCom connects field signals, business meaning, and approved automation through one inspectable control layer.</p>
+        </div>
 
-    <div className="dashboard-metrics">
-      <Card className="metric"><Radio /><span>Adapter<strong>{state?.connection.adapter ?? "—"}</strong></span></Card>
-      <Card className="metric"><Activity /><span>Sensors<strong>{state?.readings.length ?? 0} / {state?.sensors.length ?? 4} live</strong></span></Card>
-      <Card className="metric"><Zap /><span>Active rules<strong>{rules.filter((rule) => rule.enabled).length}</strong></span></Card>
-      <Card className="metric"><RefreshCw /><span>Rule matches<strong>{matchedEvents.length} recent</strong></span></Card>
-    </div>
-
-    <Card className="semantic-access-panel">
-      <div>
-        <span className="eyebrow">SEMANTIC ACCESS POLICY</span>
-        <h2>Ontology-derived responsibility model</h2>
-        <p>This demo makes operational responsibility explicit from semantic relationships; it does not replace user authentication.</p>
+        <div className="runtime-pill">
+          <i className={state?.connection.state === "connected" ? "online" : ""} />
+          <span>{state?.mode ?? "loading"}</span>
+          <strong>{state?.connection.state ?? "connecting"}</strong>
+        </div>
       </div>
-      <div className="semantic-role-grid">
-        <article>
-          <UserCheck />
-          <span>InspectionTeam</span>
-          <strong>Monitors live sensors and reviews the event timeline.</strong>
-          <small>Policy basis: InspectionTeam worksFor BestAiCom</small>
-        </article>
-        <article>
-          <ShieldCheck />
-          <span>OpsEngineer</span>
-          <strong>Approves automation changes and issues audited commands.</strong>
-          <small>Policy basis: OpsEngineer assignedTo BestAiCom Smart Workspace</small>
-        </article>
-      </div>
-    </Card>
 
-    <div className="dashboard-grid">
-      <div className="dashboard-main">
-        <Card className="dashboard-panel">
-          <CardHeader className="dashboard-title"><div><span className="eyebrow">LIVE TELEMETRY</span><CardTitle>Sensors</CardTitle></div><small>Updates every 2 seconds</small></CardHeader>
-          <CardContent className="p-4"><div className="sensor-grid">{state?.sensors.map((sensor) => {
-            const Icon = sensorIcons[sensor.type];
-            const reading = state.readings.find((item) => item.sensorId === sensor.id);
-            return <article className={`sensor-card ${sensor.type}`} key={sensor.id}><div className="card-icon"><Icon /></div><div><span>{sensor.name}</span><strong>{readingLabel(reading)}</strong><small>{reading ? new Date(reading.measuredAt).toLocaleTimeString() : "Waiting for data"}</small></div></article>;
-          }) ?? <div className="loading-lines">Connecting to sensors…</div>}</div></CardContent>
+      <div className="dashboard-metrics">
+        <Card className="metric">
+          <Radio />
+          <span>Adapter<strong>{state?.connection.adapter ?? "—"}</strong></span>
         </Card>
-
-        <Card className="dashboard-panel">
-          <CardHeader className="dashboard-title"><div><span className="eyebrow">ACTUATORS</span><CardTitle>Virtual Devices</CardTitle></div><small>Manual commands are audited</small></CardHeader>
-          <CardContent className="p-4"><div className="device-grid">{state?.devices.map((device) => {
-            const Icon = deviceIcons[device.type];
-            return <Button key={device.id} variant="outline" className={`device-card ${device.state.status}`} disabled={busy === device.id || device.type === "servo"} onClick={() => void toggleDevice(device)}><Icon /><span>{device.name}<small>{device.type}</small></span><strong>{deviceStateLabel(device)}</strong></Button>;
-          })}</div></CardContent>
+        <Card className="metric">
+          <Activity />
+          <span>Sensors<strong>{state?.readings.length ?? 0} / {state?.sensors.length ?? 4} live</strong></span>
         </Card>
-
-        <Card className="dashboard-panel">
-          <CardHeader className="dashboard-title"><div><span className="eyebrow">SIMULATOR PRESETS</span><CardTitle>Scenario Controls</CardTitle></div><small>{state?.simulator.running ? `Running · ${state.simulator.intervalMs} ms` : "Stopped"}</small></CardHeader>
-          <CardContent className="p-4"><div className="scenario-row">{scenarios.map((scenario) => <Button key={scenario.id} variant={state?.simulator.scenario === scenario.id ? "secondary" : "outline"} disabled={Boolean(busy)} onClick={() => void runScenario(scenario.id)}><Play />{scenario.label}</Button>)}</div></CardContent>
+        <Card className="metric">
+          <Zap />
+          <span>Active rules<strong>{rules.filter((rule) => rule.enabled).length}</strong></span>
+        </Card>
+        <Card className="metric">
+          <RefreshCw />
+          <span>Rule matches<strong>{matchedEvents.length} recent</strong></span>
         </Card>
       </div>
 
-      <Card className="timeline-panel">
-        <CardHeader className="dashboard-title"><div><span className="eyebrow">AUDIT TRAIL</span><CardTitle>Event Timeline</CardTitle></div><span className="live-label"><i />LIVE</span></CardHeader>
-        <CardContent className="p-5"><div className="timeline">{events.length ? events.map((event) => <article key={event.eventId} className={event.type === "rule.matched" ? "matched" : ""}><time>{new Date(event.occurredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time><i /><div><strong>{eventDescription(event, rules)}</strong><span>{event.type}</span></div></article>) : <div className="empty">Events will appear as the simulator runs.</div>}</div></CardContent>
+      <Card className="semantic-access-panel">
+        <div>
+          <span className="eyebrow">SEMANTIC ACCESS POLICY</span>
+          <h2>Ontology-derived responsibility model</h2>
+          <p>This demo makes operational responsibility explicit from semantic relationships; it does not replace user authentication.</p>
+        </div>
+        <div className="semantic-role-grid">
+          <article>
+            <UserCheck />
+            <span>InspectionTeam</span>
+            <strong>Monitors live sensors and reviews the event timeline.</strong>
+            <small>Policy basis: InspectionTeam worksFor BestAiCom</small>
+          </article>
+          <article>
+            <ShieldCheck />
+            <span>OpsEngineer</span>
+            <strong>Approves automation changes and issues audited commands.</strong>
+            <small>Policy basis: OpsEngineer assignedTo BestAiCom Smart Workspace</small>
+          </article>
+        </div>
       </Card>
-    </div>
-    {error && <div className="error toast">{error}</div>}
-  </section>;
+
+      <div className="dashboard-grid">
+        <div className="dashboard-main">
+          <Card className="dashboard-panel">
+            <CardHeader className="dashboard-title">
+              <div>
+                <span className="eyebrow">LIVE TELEMETRY</span>
+                <CardTitle>Sensors</CardTitle>
+              </div>
+              <small>Updates every 2 seconds</small>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="sensor-grid">
+                {state?.sensors.map((sensor) => {
+                  const Icon = sensorIcons[sensor.type];
+                  const reading = state.readings.find((item) => item.sensorId === sensor.id);
+
+                  return (
+                    <article className={`sensor-card ${sensor.type}`} key={sensor.id}>
+                      <div className="card-icon">
+                        <Icon />
+                      </div>
+                      <div>
+                        <span>{sensor.name}</span>
+                        <strong>{readingLabel(reading)}</strong>
+                        <small>{reading ? new Date(reading.measuredAt).toLocaleTimeString() : "Waiting for data"}</small>
+                      </div>
+                    </article>
+                  );
+                }) ?? <div className="loading-lines">Connecting to sensors…</div>}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="dashboard-panel">
+            <CardHeader className="dashboard-title">
+              <div>
+                <span className="eyebrow">ACTUATORS</span>
+                <CardTitle>Virtual Devices</CardTitle>
+              </div>
+              <small>Manual commands are audited</small>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="device-grid">
+                {state?.devices.map((device) => {
+                  const Icon = deviceIcons[device.type];
+
+                  return (
+                    <Button
+                      key={device.id}
+                      variant="outline"
+                      className={`device-card ${device.state.status}`}
+                      disabled={(busy?.type === "device" && busy.id === device.id) || device.type === "servo"}
+                      onClick={() => void toggleDevice(device)}
+                    >
+                      <Icon />
+                      <span>{device.name}<small>{device.type}</small></span>
+                      <strong>{deviceStateLabel(device)}</strong>
+                    </Button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="dashboard-panel">
+            <CardHeader className="dashboard-title">
+              <div>
+                <span className="eyebrow">SIMULATOR PRESETS</span>
+                <CardTitle>Scenario Controls</CardTitle>
+              </div>
+              <small>{state?.simulator.running ? `Running · ${state.simulator.intervalMs} ms` : "Stopped"}</small>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="scenario-row">
+                {scenarios.map((scenario) => (
+                  <Button
+                    key={scenario.id}
+                    variant={state?.simulator.scenario === scenario.id ? "secondary" : "outline"}
+                    disabled={Boolean(busy)}
+                    onClick={() => void runScenario(scenario.id)}
+                  >
+                    <Play />
+                    {scenario.label}
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="timeline-panel">
+          <CardHeader className="dashboard-title">
+            <div>
+              <span className="eyebrow">AUDIT TRAIL</span>
+              <CardTitle>Event Timeline</CardTitle>
+            </div>
+            <span className="live-label"><i />LIVE</span>
+          </CardHeader>
+          <CardContent className="p-5">
+            <div className="timeline">
+              {events.length ? events.map((event) => (
+                <article key={event.eventId} className={event.type === "rule.matched" ? "matched" : ""}>
+                  <time>{new Date(event.occurredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time>
+                  <i />
+                  <div>
+                    <strong>{eventDescription(event, rules)}</strong>
+                    <span>{event.type}</span>
+                  </div>
+                </article>
+              )) : <div className="empty">Events will appear as the simulator runs.</div>}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {error && <div className="error toast">{error}</div>}
+    </section>
+  );
 }
