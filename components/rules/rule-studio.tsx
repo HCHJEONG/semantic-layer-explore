@@ -10,6 +10,25 @@ import { loadOntologyPolicyCheck, type SemanticAction } from "@/lib/semantic-pol
 
 const examples = ["온도가 30도를 넘으면 팬을 켜.", "조도가 100 lux보다 낮으면 LED를 켜.", "버튼을 누르면 부저를 울려."];
 
+type ApiErrorBody = {
+  error?: string;
+  details?: {
+    formErrors?: string[];
+    fieldErrors?: Record<string, string[] | undefined>;
+  };
+};
+
+function formatApiError(result: ApiErrorBody, fallback: string) {
+  const messages = [result.error || fallback];
+  const formErrors = result.details?.formErrors ?? [];
+  messages.push(...formErrors);
+  const fieldErrors = result.details?.fieldErrors ?? {};
+  for (const [field, errors] of Object.entries(fieldErrors)) {
+    for (const error of errors ?? []) messages.push(`${field}: ${error}`);
+  }
+  return [...new Set(messages)].join("\n");
+}
+
 function conditionText(rule: RuleRecord) {
   const operators = { gt: ">", gte: "≥", lt: "<", lte: "≤", eq: "=" };
   return `${rule.condition.sensorId} ${operators[rule.condition.operator]} ${String(rule.condition.value)} ${rule.condition.unit}`;
@@ -39,7 +58,7 @@ export function RuleStudio() {
     try {
       const response = await fetch("/api/ai/rules/propose", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ instruction }) });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "BestAiCom AI could not propose a rule.");
+      if (!response.ok) throw new Error(formatApiError(result, "BestAiCom AI could not propose a rule."));
       setProposal(result.proposal); setTrace(result.trace ?? []); setRemaining(result.remaining ?? null);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to propose a rule."); }
     finally { setBusy(""); }
@@ -53,7 +72,7 @@ export function RuleStudio() {
       if (!approved) return;
       const response = await fetch("/api/rules", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(proposal) });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Rule could not be saved.");
+      if (!response.ok) throw new Error(formatApiError(result, "Rule could not be saved."));
       setProposal(null); await refreshRules();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to save the rule."); }
     finally { setBusy(""); }
