@@ -1,2 +1,5 @@
-import Explorer from "./explorer";
-export default function Home() { return <Explorer />; }
+import ClientApp from "./client-app";
+
+export default function Home() {
+  return <ClientApp />;
+}

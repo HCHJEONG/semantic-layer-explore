@@ -12,7 +12,7 @@ import { OntologyTree } from "@/components/ontology/ontology-tree";
 import { AppShell, type AppTab } from "@/components/shell/app-shell";
 import type { Ontology, OntologyItem, OntologyKind, OntologySelection } from "@/domain/ontology";
 
-export default function Explorer() {
+export default function ClientApp() {
   const [ontology, setOntology] = useState<Ontology | null>(null);
   const [selection, setSelection] = useState<OntologySelection | null>(null);
   const [tab, setTab] = useState<AppTab>("dashboard");

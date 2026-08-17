@@ -12,17 +12,42 @@ const tabs: Array<{ id: AppTab; label: string; icon: typeof Braces }> = [
 ];
 
 export function AppShell({ tab, onTabChange, children }: { tab: AppTab; onTabChange: (tab: AppTab) => void; children: ReactNode }) {
-  return <main>
-    <header className="topbar">
-      <div className="brand"><div className="brandmark"><Network size={18} /></div><div><strong>BestAiCom Semantic</strong><span>Workspace</span></div></div>
-      <nav aria-label="Primary navigation">
-        {tabs.map((item) => {
-          const Icon = item.icon;
-          return <Button key={item.id} variant={tab === item.id ? "secondary" : "ghost"} size="sm" onClick={() => onTabChange(item.id)}><Icon size={15} /> {item.label}</Button>;
-        })}
-      </nav>
-      <div className="status"><i /> Operational store connected</div>
-    </header>
-    {children}
-  </main>;
+  return (
+    <main>
+      <header className="topbar">
+        <div className="brand">
+          <div className="brandmark">
+            <Network size={18} />
+          </div>
+          <div>
+            <strong>BestAiCom Semantic</strong>
+            <span>Workspace</span>
+          </div>
+        </div>
+
+        <nav aria-label="Primary navigation">
+          {tabs.map((item) => {
+            const Icon = item.icon;
+
+            return (
+              <Button
+                key={item.id}
+                variant={tab === item.id ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => onTabChange(item.id)}
+              >
+                <Icon size={15} /> {item.label}
+              </Button>
+            );
+          })}
+        </nav>
+
+        <div className="status">
+          <i /> Operational store connected
+        </div>
+      </header>
+
+      {children}
+    </main>
+  );
 }
