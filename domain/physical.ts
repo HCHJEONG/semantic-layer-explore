@@ -11,7 +11,7 @@ export const sensorReadingSchema = z.object({
   sensorType: sensorTypeSchema,
   value: z.union([z.number(), z.boolean()]),
   unit: sensorUnitSchema,
-  measuredAt: z.string().datetime(),
+  measuredAt: z.iso.datetime(),
   source: z.enum(["simulator", "mqtt"]),
 });
 
@@ -22,7 +22,7 @@ export const deviceCommandSchema = z.object({
   command: deviceCommandNameSchema,
   value: z.number().optional(),
   issuedBy: z.enum(["rule-engine", "user"]),
-  issuedAt: z.string().datetime(),
+  issuedAt: z.iso.datetime(),
 });
 
 export const manualReadingSchema = z.object({ value: z.union([z.number(), z.boolean()]) });
