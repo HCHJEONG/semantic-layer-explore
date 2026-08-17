@@ -111,6 +111,14 @@ The runtime should:
 
 Implement a simulator adapter first. The adapter should produce deterministic sensor readings and virtual device states while preserving the boundary needed for a future MQTT or hardware adapter.
 
+The same replaceability principle should apply to other infrastructure choices:
+
+- physical input/output should be replaceable through an adapter boundary, such as simulator now and MQTT or hardware later
+- persistence should be isolated behind database access modules so SQLite can be replaced by another database with limited impact
+- LLM access should be isolated behind provider helpers so Gemini can be replaced or supplemented by another model provider
+
+The domain contract should remain more stable than any one adapter, database, or LLM model.
+
 ### 4. Rule engine and rule storage
 
 Implement rule behavior in two parts:
@@ -140,6 +148,17 @@ The minimum API surface should include:
 
 REST APIs are the boundary for UI and AI access. Gemini or other AI tools should not access the database directly.
 
+For live operational updates, expose an event stream endpoint using Server-Sent Events. The stream should:
+
+- send an initial connection comment
+- support a cursor such as `after` or `Last-Event-ID`
+- periodically send heartbeats
+- query only events newer than the last delivered event ID
+- serialize each workspace event as an auditable stream message
+- close cleanly when the client aborts the request
+
+This gives the UI a simple real-time pattern without requiring WebSockets.
+
 ### 6. UI
 
 Build a compact interface that makes the architecture inspectable.
@@ -160,6 +179,8 @@ The UI should show:
 
 Implement an AI tool layer that exposes only safe application-level tools.
 
+Keep model-provider details behind a small LLM access layer. The application should depend on domain contracts, REST tools, and structured outputs rather than on Gemini-specific code throughout the codebase. This makes it easier to change models while preserving the ontology-first tool calling behavior.
+
 The AI should be able to call:
 
 - `getOntology`
@@ -170,6 +191,42 @@ The AI should be able to call:
 - `getRules`
 
 The AI should inspect ontology first, use REST tool results as evidence, and never claim direct database or hardware access. Rule generation should propose a validated rule only; saving or executing the rule should remain a separate human-approved action.
+
+The ontology-first behavior should be enforced by the implementation, not left only as a prompt convention:
+
+- declare application tools in a dedicated tool layer
+- map each tool to an internal REST endpoint
+- on the first AI turn, allow only `getOntology`
+- after ontology inspection, allow the remaining read-only tools
+- record a tool-call trace for auditability and debugging
+- keep mutation tools out of the chat agent
+- make rule proposal return structured JSON that is validated against `domain/rule.ts`
+
+This keeps AI behavior grounded in the semantic model while preserving the application boundary.
+
+## Core design patterns
+
+The implementation should preserve these architectural patterns:
+
+- Domain-first development: manually define `domain/` before database, runtime, API, UI, or AI implementation.
+- Schema-backed contracts: use runtime validation schemas as the source of truth and infer TypeScript types from them where useful.
+- Runtime validation at boundaries: validate external input at API routes, simulator injection, device command execution, and AI proposal parsing.
+- Adapter boundary: keep physical workspace access behind a simulator/MQTT-ready adapter interface.
+- Replaceable infrastructure: isolate physical adapters, database access, and LLM provider access so each can evolve without rewriting the domain model.
+- Runtime orchestration: centralize reading persistence, event persistence, rule evaluation, and device command execution.
+- Auditable events: record sensor readings, scenario changes, rule matches, command outcomes, and failures as events.
+- Failure as event: persist rule or command failures as events so operational explanations include errors, not only successful paths.
+- State snapshot plus event history: expose the current workspace state for fast UI rendering and the event timeline for explanation and audit.
+- SSE event stream: expose the event log as a cursor-based Server-Sent Events stream with heartbeats.
+- Pure rule evaluation: keep condition matching separate from rule persistence and command execution.
+- Bounded async queue: keep rule evaluation from building an unbounded backlog when sensor readings arrive faster than commands can execute.
+- Thin route handlers: keep API route files focused on request parsing, validation, helper calls, and response formatting.
+- Human-approved automation: AI may propose rules, but approved rule creation remains a separate action.
+- Ontology-first tool calling: force AI to inspect the ontology before accessing operational state.
+- Prompt as policy, code as enforcement: express desired AI behavior in prompts but enforce critical constraints through tool availability, schemas, and API boundaries.
+- REST-only AI access: AI tools call application APIs, never SQLite or hardware directly.
+- Health and readiness split: expose lightweight process health separately from database and runtime readiness.
+- Deterministic simulator seed: make simulator behavior reproducible enough for tests, demos, and interviews.
 
 ### 8. Verification
 
@@ -189,11 +246,15 @@ The prototype is complete when:
 - the database schema persists those concepts cleanly
 - the simulator emits sensor readings and updates workspace state
 - readings create auditable events
+- rule and command failures are persisted as auditable events
 - enabled rules are evaluated against readings
 - matched rules execute virtual device commands
 - REST APIs expose state, events, devices, simulator controls, rules, and ontology
+- the event stream exposes auditable workspace events through a cursor-based SSE pattern
+- route handlers remain thin and delegate business behavior to domain, runtime, and helper modules
 - AI chat answers only through ontology-first REST tools
 - AI rule proposal returns a validated preview without saving it automatically
+- AI tool calls are traceable and ontology inspection is enforced on the first turn
 - the UI makes the full domain-to-runtime-to-AI flow visible
 
 ## Non-goals

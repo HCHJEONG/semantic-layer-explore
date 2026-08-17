@@ -1,235 +1,183 @@
-# BestAiCom Semantic Workspace (한국어)
+# BestAiCom Semantic Workspace
 
-BestAiCom 회사를 위한 운영 인텔리전스 포트폴리오입니다. Semantic Map 기반 지식 그래프, 실시간 센서/기기 제어, BestAiCom AI를 활용한 자연어 질의, 승인 기반 자동화를 통합한 풀스택 애플리케이션입니다.
+[English README](./README.md)
 
----
+> Minimal Ontology → Database → API → AI Demo
 
-## 핵심 아키텍처
+BestAiCom Semantic Workspace는 LLM, REST API, 운영 데이터 사이에 공유된 업무 의미가 어떻게 놓일 수 있는지 보여주는 작고 의도적으로 제한된 포트폴리오 프로젝트입니다. Protégé에서 가져온 세 가지 접근 가능한 개념인 **Class**, **Property**, **Individual**만 빌려와, 한 번에 이해할 수 있을 만큼 compact하게 구현했습니다.
 
-### 1. 도메인 중심 설계 (DDD)
+## 왜 만들었나
 
-```
-domain/         → 타입 정의 (순수 TypeScript)
-  ↓
-runtime/        → 비즈니스 로직 (규칙 엔진, 시뮬레이터)
-  ↓
-adapters/       → 외부 시스템 연결 (시뮬레이터 어댑터)
-  ↓
-app/api/        → HTTP API 엔드포인트 (Next.js API Routes)
-  ↓
-components/     → UI 컴포넌트 (React + shadcn)
-  ↓
-app/            → 페이지 라우팅 (Next.js App Router)
-```
+LLM은 테이블, ERP 필드, CRM 관계가 비즈니스에서 어떤 의미를 갖는지 본질적으로 이해하지 못합니다. 데이터베이스 스키마는 저장 구조를 설명하지만, 업무 의미를 안정적으로 전달하지는 못합니다.
 
-**핵심 원칙:**
-- **계층 분리** — 단방향 의존성 (상위 → 하위만 참조)
-- **어댑터 패턴** — `adapters/physical-workspace-adapter.ts`가 시뮬레이터와 실제 하드웨어를 추상화
-- **도메인 순수성** — `domain/`은 프레임워크 독립적 타입 정의
+Semantic layer는 그 빠진 계약을 제공합니다. 예를 들어 AI에게 `InspectionTeam`은 `Person`이고, `assignedTo`는 operator와 workspace project를 연결하며, `BestAiCom`은 구체적인 `Company`라는 사실을 알려줍니다. 이 프로젝트는 그 아이디어의 가장 작은 유용한 버전을 구현합니다.
 
----
+## 아키텍처
 
-### 2. 폴더 구조
-
-| 폴더 | 역할 | 핵심 파일 |
-|---|---|---|
-| **`app/`** | Next.js App Router — 페이지, 레이아웃, API 라우트 | `page.tsx`, `layout.tsx`, `globals.css`, `api/` |
-| **`components/`** | UI 컴포넌트 — 재사용 가능한 React 컴포넌트 | `ai/ask-ai.tsx`, `dashboard/workspace-dashboard.tsx`, `ontology/`, `rules/rule-studio.tsx`, `shell/app-shell.tsx`, `ui/` (shadcn) |
-| **`domain/`** | 도메인 타입 정의 — TypeScript 타입/인터페이스 | `ontology.ts`, `physical.ts`, `rule.ts` |
-| **`runtime/`** | 런타임 엔진 — 시뮬레이터, 규칙 엔진, 데이터 유지보수 | `workspace-runtime.ts`, `rule-engine.ts`, `retention.ts` |
-| **`adapters/`** | 어댑터 패턴 — 외부 시스템(시뮬레이터)과의 연결 | `physical-workspace-adapter.ts`, `simulator/simulator-adapter.ts` |
-| **`db/`** | 데이터베이스 — Drizzle ORM 스키마와 연결 | `schema.ts`, `index.ts` |
-| **`lib/`** | 유틸리티/라이브러리 — AI, 검증, 레이트리밋 등 | `gemini.ts`, `ai-http.ts`, `ai-tool-layer.ts`, `validation.ts`, `rate-limit.ts`, `internal-api.ts`, `ontology.ts`, `rules.ts`, `utils.ts` |
-| **`drizzle/`** | SQL 마이그레이션 — `drizzle-kit generate`로 생성된 SQL 파일 | `outputFileTracingIncludes`로 standalone에 포함 |
-| **`tests/`** | 통합 테스트 — Node.js 테스트 | `app.test.mjs` |
-
----
-
-### 3. 주요 기능
-
-#### A. Semantic Map
-
-- **클래스(Classes)**, **프로퍼티(Properties)**, **인스턴스(Individuals)** 계층 구조 탐색
-- React Flow 기반 그래프 시각화
-- JSON Viewer로 원본 데이터 확인
-- 의미론적 의미 자동 생성 ("X connects Y to Z")
-
-#### B. Operations
-
-- **4개 센서**: 온도, 조도, 거리, 버튼
-- **4개 가상 기기**: LED, 서보, 부저, 릴레이
-- **시뮬레이터 시나리오**: Normal, High temp, Dark room, Button press
-- **이벤트 타임라인**: 감사 로그 (rule.matched, device.command 등)
-- 2초마다 자동 새로고침
-
-#### C. Ops Copilot (자연어 질의)
-
-- **BestAiCom AI Function Calling** — 6개 도구를 사용한 단계적 데이터 수집
-- **도구 목록**:
-  1. `getOntology` — 온톨로지 스키마 조회
-  2. `getCurrentState` — 전체 워크스페이스 상태
-  3. `getSensors` — 센서 목록 및 최신 readings
-  4. `getDevices` — 가상 기기 목록 및 상태
-  5. `getRecentEvents` — 최근 50개 이벤트 타임라인
-  6. `getRules` — 승인된 자동화 규칙
-- **입력 측 통제** — 도구 정의를 시스템 프롬프트에 미리 제공 (LangChain Harness의 출력 측 제어와 대비)
-- **읽기 전용** — 모든 도구가 GET 요청 (데이터 조회만)
-
-#### D. Automation Studio (자동화 규칙 생성)
-
-- **자연어 → 규칙 변환**: "온도가 30도를 넘으면 팬을 켜" → 구조화된 규칙 JSON
-- **BestAiCom AI 6단계 Tool Calling**: Semantic Map → 센서 → 기기 → 규칙 확인
-- **인간 in the loop**: AI 제안 → 사용자 검토/승인 → DB 저장
-- **자동 실행**: 승인된 규칙은 `rule-engine.ts`가 실시간 평가 (Gemini 의존 없음)
-
----
-
-### 4. 기술 스택
-
-| 카테고리 | 기술 | 용도 |
-|---|---|---|
-| **프레임워크** | Next.js 16 (App Router) | 풀스택 웹 애플리케이션 |
-| **번들러** | Turbopack / Vinext | 개발/빌드 최적화 |
-| **UI 라이브러리** | shadcn/ui + Radix UI | 접근성 높은 UI 컴포넌트 |
-| **스타일링** | Tailwind CSS v4 | 유틸리티 퍼스트 CSS |
-| **AI/LLM** | Google Gemini 기반 BestAiCom AI | 자연어 처리, Function Calling |
-| **데이터베이스** | SQLite + Drizzle ORM | 로컬 관계형 데이터베이스 |
-| **검증** | Zod | 런타임 입력 검증 |
-| **폰트** | Geist (Vercel) | 본문/코드 폰트 |
-| **배포** | Docker + AWS EC2 | standalone 출력, SSH 터널링 배포 |
-
----
-
-### 5. 자동 제어 vs Ops Copilot
-
-| 구분 | 자동 제어 (Rule Engine) | Ops Copilot (BestAiCom AI) |
-|---|---|---|
-| **트리거** | 센서 이벤트 발생 | 사용자 질문 입력 |
-| **처리 방식** | `rule-engine.ts` (로컬 평가) | BestAiCom AI Function Calling (6단계) |
-| **속도** | ~10-50ms | ~2-5초 |
-| **비용** | 무료 (로컬) | Gemini API 호출 비용 |
-| **신뢰성** | 항상 동작 (오프라인 가능) | API 의존 |
-| **용도** | "IF 온도 > 30 THEN 팬 ON" | "현재 운영 상태 요약해줘." |
-
-**핵심:**
-- **자동 제어**: 실시간, 로컬, 규칙 기반
-- **Ops Copilot**: 분석, 설명, 자연어 기반
-
----
-
-### 6. 배포 아키텍처
-
-```
-로컬 개발
-  ↓
-.gitignore (node_modules, .next, .vinext, data)
-  ↓
-Git 커밋
-  ↓
-.fordeploy/deploy.sh (배포 스크립트)
-  ↓
-Bastion 호스트 (43.202.136.180)
-  ↓
-Private 호스트 (172.31.76.194)
-  ↓
-Docker 빌드 (.fordeploy/ai-workspace-aws/Dockerfile)
-  ↓
-컨테이너 실행 (포트 3010:3000)
-  - /app/data 볼륨 마운트 (SQLite DB)
-  - gcp-key.json 마운트 (BestAiCom AI / Gemini 인증)
+```text
+Browser
+   ↓
+Next.js UI
+   ↓
+Gemini (tool calling)
+   ↓
+Semantic Layer API (/api/ontology)
+   ↓
+Entity REST APIs
+   ↓
+SQLite (Drizzle ORM)
 ```
 
-**특징:**
-- **Standalone 출력** — `next.config.ts`의 `output: "standalone"`로 최소 의존성 번들
-- **SSH 터널링** — Bastion → Private 호스트 2단계 배포
-- **데이터 영속화** — Docker 볼륨으로 SQLite DB 유지
+Gemini는 SQLite에 직접 접근하지 않습니다. 모든 질문은 `getOntology()`로 시작합니다. 사용 가능한 class, property, relationship을 이해한 뒤에야 Gemini는 필요한 REST resource만 요청합니다.
 
----
+Physical AI 확장은 같은 경계를 유지하면서 API 아래에 deterministic runtime을 추가합니다.
 
-### 7. 설정 파일 역할
+```text
+Simulator Sensor → Sensor Event → Rule Engine → Virtual Device
+                                      ↓
+                               Auditable Event Log
+```
 
-| 파일 | 참조 주체 | 역할 |
-|---|---|---|
-| **`next.config.ts`** | Next.js 프레임워크 | 빌드 설정 (standalone, better-sqlite3 외부화, X-Robots-Tag) |
-| **`postcss.config.mjs`** | Turbopack (PostCSS 로더) | Tailwind v4 플러그인 등록 |
-| **`eslint.config.mjs`** | ESLint | 코드 품질 검사 (Next.js + TypeScript 규칙) |
-| **`drizzle.config.ts`** | Drizzle Kit CLI | SQL 마이그레이션 생성 (db/schema.ts → drizzle/*.sql) |
-| **`components.json`** | shadcn CLI | 컴포넌트 설정 (스타일, 경로, 아이콘) |
-| **`tsconfig.json`** | TypeScript + Turbopack + VS Code | 타입 검사, 경로 별칭 (@/components) |
+승인된 rule을 평가하고 device command를 실행하는 것은 Gemini가 아니라 rule engine입니다. Simulator는 향후 MQTT/Arduino 연결을 위해 남겨둔 adapter boundary와 같은 경계를 구현합니다.
 
----
+데모는 하나의 SQLite 파일을 사용해 배포를 단순하게 유지하지만, schema는 semantic metadata store와 operational state를 분리합니다. Ontology record는 `semantic_classes`, `semantic_properties`, `semantic_individuals`, `semantic_relations`에 저장되고, runtime state는 `sensors`, `devices`, `sensor_readings`, `events`, `rules`에 저장됩니다.
 
-### 8. 개발 워크플로우
+```text
+"Which project is the operations engineer assigned to?"
+  → getOntology()
+  → recognizes Person —worksFor→ Company
+  → getIndividuals()
+  → getRelations()
+  → "OpsEngineer is assigned to BestAiCom Smart Workspace."
+```
+
+## 구현 계획 메모
+
+이런 프로젝트에서는 database schema를 먼저 설계하기보다 domain model을 먼저 정의하는 편이 자연스럽습니다. 데이터베이스는 개념을 저장하는 persistence layer이지, 개념이 처음 발명되는 장소가 아니어야 합니다.
+
+개발 순서는 다음처럼 계획할 수 있습니다.
+
+1. `domain/physical.ts`에서 시작합니다.  
+   sensor란 무엇인지, device란 무엇인지, reading과 command의 최소 공유 계약이 무엇인지 정의합니다.
+2. 그다음 `domain/rule.ts`를 정의합니다.  
+   어떤 reading을 condition으로 평가할 수 있는지, 어떤 device action을 실행할 수 있는지 결정합니다.
+3. 그다음 `domain/ontology.ts`를 정의합니다.  
+   class, property, individual, relation으로 시스템을 semantic layer에서 설명합니다.
+4. 마지막으로 `db/schema.ts`를 설계합니다.  
+   domain concept를 persistent table로 매핑합니다.
+
+이 방식은 implementation plan을 시스템의 vocabulary와 behavior에 먼저 맞춘 다음, 그 모델을 storage, runtime orchestration, API, AI tool로 확장하게 해줍니다.
+
+같은 계획은 몇 가지 재사용 가능한 architecture pattern도 보존합니다.
+
+- Physical I/O, database access, LLM provider call은 교체 가능한 adapter 또는 provider boundary 뒤에 둡니다.
+- 외부 입력은 runtime boundary에서 검증하고, 가능하면 같은 schema에서 TypeScript type을 추론합니다.
+- 빠른 UI rendering을 위해 current state snapshot을 제공하고, 설명과 debugging을 위해 auditable event history를 남깁니다.
+- 실시간 운영 update는 WebSocket 없이 cursor 기반 SSE와 heartbeat로 stream합니다.
+- Rule evaluation은 pure하게 유지하고, runtime orchestration이 persistence, event, device command를 담당합니다.
+- Ontology-first AI tool calling은 prompt만이 아니라 code로 강제하고, AI tool은 database/hardware 직접 접근 대신 REST API를 통하게 합니다.
+- AI는 automation을 propose할 수 있지만, approval과 mutation은 별도의 human-controlled action으로 유지합니다.
+
+전체 retrospective handoff plan은 [`implementation-plan.md`](./implementation-plan.md)를 참고하세요.
+
+## 기능
+
+- 세 열 ontology explorer와 detail view, live JSON
+- React Flow 기반 relationship graph
+- Sensor, device, reading, rule, event를 위한 physical workspace table과 분리된 namespaced semantic metadata table
+- Zod validation이 적용된 read/create REST endpoint
+- Ontology-first flow가 강제된 Gemini tool-calling agent
+- 방문자별 UTC day 기준 10회 Ask AI 임시 보호
+- 자동 Drizzle migration, WAL mode, persistent volume을 지원하는 file-backed SQLite
+- Local/AWS 운영을 위한 health 및 readiness endpoint
+- Temperature, light, distance, button reading을 생성하는 seeded sensor simulator
+- Hardware-neutral adapter 뒤의 virtual LED, Servo, Buzzer, Relay device
+- Persistent Sensor/Event audit trail과 deterministic demo scenario
+- Bounded latest-state rule evaluation, cached active rules, batched data retention cleanup
+- Validated Rule CRUD, deterministic operator evaluation, per-rule cooldown
+- Sensor Event → Rule match → Virtual Device execution으로 이어지는 auditable outcome
+- Live sensor card, device control, deterministic demo scenario, event timeline을 보여주는 polling-based workspace dashboard
+- Ontology/sensor/device tool call, validated JSON preview, explicit human approval gate를 갖춘 Gemini Rule Compiler
+- Current state, approved rules, recent events에 grounded된 Physical Workspace Chat
+- `Sensor → Event → Rule → Device`를 보여주고 runtime ID를 semantic Individual에 binding하는 확장 physical ontology
+- Original business demo와 Physical Workspace relationship 모두를 위한 data-driven React Flow layout
+- Responsive portfolio-ready interface
+
+## API
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET`, `POST` | `/api/classes` | Class 목록 조회 또는 생성 |
+| `GET`, `POST` | `/api/properties` | Property 목록 조회 또는 생성 |
+| `GET`, `POST` | `/api/individuals` | Individual 목록 조회 또는 생성 |
+| `GET` | `/api/relations` | Resolved relationship 목록 조회 |
+| `GET` | `/api/ontology` | 전체 semantic layer 반환 |
+| `POST` | `/api/ask` | Gemini에게 ontology-aware question 질의 |
+| `GET` | `/api/health` | 가벼운 process health check |
+| `GET` | `/api/ready` | Database 및 runtime readiness check |
+| `GET` | `/api/state` | 현재 simulated workspace snapshot |
+| `GET` | `/api/sensors` | 최신 reading이 포함된 sensor 목록 |
+| `GET` | `/api/devices` | Virtual device state 목록 |
+| `POST` | `/api/devices/:id/commands` | 검증된 virtual-device command 실행 |
+| `GET` | `/api/events` | Physical workspace event timeline 조회 |
+| `GET`, `POST` | `/api/rules` | 검증된 automation rule 목록 조회 또는 생성 |
+| `GET`, `PATCH`, `DELETE` | `/api/rules/:id` | Rule 조회, 수정, 삭제 |
+| `POST` | `/api/rules/:id/enable` | Rule 활성화 |
+| `POST` | `/api/rules/:id/disable` | Rule 비활성화 |
+| `GET`, `POST` | `/api/simulator/*` | Simulator 조회 및 제어 |
+| `POST` | `/api/ai/rules/propose` | Gemini로 검증된 rule을 제안하되 저장하지 않음 |
+| `POST` | `/api/ai/chat` | Ontology-first tool을 통해 workspace state와 event 설명 |
+
+## 로컬 개발
+
+요구사항: Node.js 22.13+ 및 기존 `lawvot` setup과 호환되는 Google Cloud Application Default Credentials.
 
 ```bash
-# 개발 서버 (Turbopack)
+npm install
 npm run dev
-
-# 빌드 (standalone 출력)
-npm run build
-
-# 테스트 (빌드 + Node.js 테스트)
-npm run test
-
-# 린트
-npm run lint
-
-# DB 마이그레이션 생성
-npm run db:generate
-
-# 배포
-.fordeploy/deploy.sh
 ```
 
----
+Gemini는 `lawvot`와 같은 environment convention을 따릅니다.
 
-### 9. 핵심 설계 패턴
-
-#### A. 입력 측 통제 (Input-Side Control)
-
-- **LangChain Harness** (출력 측): LLM 출력 파싱 → 도구 호출 추출
-- **이 레포** (입력 측): 도구 정의를 시스템 프롬프트에 미리 제공 → LLM이 구조화된 JSON 반환
-
-**장점:**
-- 안정성 (파싱 에러 없음)
-- 단순성 (Agent 루프 불필요)
-- 제어 가능성 (6개 도구로 제한)
-
-#### B. 2단계 파이프라인 (규칙 생성 → 실행)
-
-```
-1단계: 자연어 → 규칙 JSON (BestAiCom AI, 6단계 tool calling)
-  ↓ (사용자 검토/승인)
-2단계: 규칙 JSON → 자동 실행 (rule-engine.ts, 로컬)
+```dotenv
+GOOGLE_CLOUD_LOCATION=global
+GEMINI_MODEL=gemini-3.5-flash-lite
+GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
+DATABASE_PATH=./data/ai-workspace.sqlite
+READING_RETENTION_DAYS=1
+AUDIT_EVENT_RETENTION_DAYS=30
+RETENTION_CLEANUP_INTERVAL_MS=3600000
+RETENTION_BATCH_SIZE=5000
 ```
 
-**장점:**
-- 인간 in the loop (안전성)
-- 실시간 성능 (로컬 규칙 엔진)
-- 오프라인 동작 (BestAiCom AI API 의존 없음)
+Google Cloud project는 service account JSON의 `project_id`에서 읽습니다. `GOOGLE_CLOUD_PROJECT`는 optional override로 남아 있습니다. Gemini model의 configuration source는 `GEMINI_MODEL` 하나이며, 기본값은 `gemini-3.5-flash-lite`입니다.
 
-#### C. 도메인 계층 활용
+Runtime은 high-volume sensor reading과 matching `sensor.reading` event를 7일 동안 보존하고, low-volume audit event는 30일 동안 보존합니다. Cleanup은 startup 및 hourly schedule로 bounded batch 단위 실행되어 SQLite를 독점하지 않습니다. 삭제된 page는 SQLite가 재사용하며, scheduler는 live traffic을 block할 수 있는 `VACUUM`을 의도적으로 실행하지 않습니다. Rule evaluation은 serialized되고 sensor별 최신 pending reading만 유지하여 device execution이 느릴 때 unbounded async backlog를 방지합니다.
 
-- **온톨로지**가 단순 메타데이터가 아님
-- 자연어 → 규칙 변환 시 **의미적 매핑**에 사용
-- 예: "팬" → `getOntology()`로 "Fan" 클래스 확인 → `getDevices()`로 정확한 deviceId 매핑
+## AWS 배포 형태
 
----
+이 repository는 `.fordeploy/deploy.sh`에 source-archive 기반 AWS deployment example을 의도적으로 유지합니다. `global-ai-pricing`, `legacy-lang-intelligence` 같은 sibling project와 달리 local에서 Docker image를 build해 image tar를 AWS로 보내지 않습니다. 대신 source tree를 package하고, Bastion host를 통해 source archive를 전송한 뒤 private EC2 instance에서 Docker image를 build합니다.
 
-### 10. 면접에서 강조할 점
+```text
+local machine
+  -> create ai-workspace-source.xxxxxx.tar.gz
+  -> scp source archive to Bastion EC2
+  -> Bastion scp source archive to private EC2
+  -> private EC2 extracts the source into a temporary build directory
+  -> private EC2 runs docker build
+  -> private EC2 replaces the ai-physical-workspace container
+```
 
-1. **DDD + 어댑터 패턴** — 도메인/런타임/어댑터 계층 분리
-2. **온톨로지 기반 AI** — 단순 API 호출이 아닌 의미론적 지식 그래프 활용
-3. **2단계 파이프라인** — 생성(BestAiCom AI)과 실행(로컬) 분리로 안전성과 성능 확보
-4. **입력 측 통제** — LangChain Harness와 대비되는 설계 선택
-5. **실시간 규칙 엔진** — LLM 의존 없이 로컬에서 자동 제어
+Source archive는 `.git`, `node_modules`, `.next`, `data`를 제외하므로 upload가 작고 persistent SQLite volume이 deployment로 교체되지 않습니다. `npm run build`를 포함한 Docker build는 private EC2 instance에서 실행됩니다. 이 방식은 local-build/image-tar pattern과 의도적으로 다르며, remote build example이 유용한 future project를 위한 reference deployment style로 남겨둔 것입니다.
 
----
+## 프로젝트 철학
 
-## 라이선스
+이 프로젝트는 Protégé clone이 아닙니다. OWL, RDF, SPARQL, reasoning, ontology import/export, permission, graph database는 의도적으로 구현하지 않습니다. 목적은 교육용입니다. **Semantic Layer → API → Gemini → UI** 흐름을 visible하고 inspectable하게 만들어 interview에서 쉽게 설명할 수 있게 하는 것입니다.
 
-MIT
+## 향후 작업
 
-## 제작
+OWL import, RDF export, reasoner, Neo4j/GraphDB, Palantir-style ontology modeling, MCP server, enterprise semantic layer, natural-language workflow, role-based action은 숨겨진 scope가 아니라 future direction으로 남겨둡니다.
 
-HCHJEONG
+## 스택
+
+Next.js 16 standalone · TypeScript · Tailwind CSS · shadcn-style UI primitives · SQLite · Drizzle ORM · React Flow · Zod · Google Gemini

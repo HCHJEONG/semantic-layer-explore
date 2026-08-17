@@ -68,6 +68,18 @@ The development sequence can be planned as:
 
 This keeps the implementation plan centered on the system's vocabulary and behavior first, then turns that model into storage, runtime orchestration, APIs, and AI tools.
 
+The same plan also preserves a few reusable architecture patterns:
+
+- Keep physical I/O, database access, and LLM provider calls behind replaceable adapter or provider boundaries.
+- Validate external input at runtime boundaries, and infer TypeScript types from the same schemas where useful.
+- Use a current state snapshot for fast UI rendering, plus an auditable event history for explanation and debugging.
+- Stream live operational updates with cursor-based SSE and heartbeats instead of requiring WebSockets.
+- Keep rule evaluation pure, while runtime orchestration handles persistence, events, and device commands.
+- Force ontology-first AI tool calling in code, not only in prompts, and expose AI tools through REST APIs rather than direct database or hardware access.
+- Let AI propose automation, but keep approval and mutation as separate human-controlled actions.
+
+For the full retrospective handoff plan, see [`implementation-plan.md`](./implementation-plan.md).
+
 ## Features
 
 - Three-column ontology explorer with details and live JSON
