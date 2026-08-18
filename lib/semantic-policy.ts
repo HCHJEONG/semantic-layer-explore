@@ -6,7 +6,7 @@ export type SemanticPolicy = {
   action: SemanticAction;
   title: string;
   requiredIndividual: string;
-  requiredRelation: { subject: string; property: string; object: string };
+  requiredRelation: { subject: string; predicate: string; object: string };
   prompt: string;
 };
 
@@ -22,28 +22,28 @@ export const semanticPolicies: Record<SemanticAction, SemanticPolicy> = {
     action: "rule.approve",
     title: "Automation approval",
     requiredIndividual: "OpsEngineer",
-    requiredRelation: { subject: "OpsEngineer", property: "assignedTo", object: "BestAiCom Smart Workspace" },
+    requiredRelation: { subject: "OpsEngineer", predicate: "assignedTo", object: "BestAiCom Smart Workspace" },
     prompt: "Ontology confirms OpsEngineer is assigned to BestAiCom Smart Workspace. Continue as OpsEngineer?",
   },
   "rule.toggle": {
     action: "rule.toggle",
     title: "Automation state change",
     requiredIndividual: "OpsEngineer",
-    requiredRelation: { subject: "OpsEngineer", property: "assignedTo", object: "BestAiCom Smart Workspace" },
+    requiredRelation: { subject: "OpsEngineer", predicate: "assignedTo", object: "BestAiCom Smart Workspace" },
     prompt: "Ontology confirms OpsEngineer is assigned to BestAiCom Smart Workspace. Continue as OpsEngineer?",
   },
   "rule.delete": {
     action: "rule.delete",
     title: "Automation removal",
     requiredIndividual: "OpsEngineer",
-    requiredRelation: { subject: "OpsEngineer", property: "assignedTo", object: "BestAiCom Smart Workspace" },
+    requiredRelation: { subject: "OpsEngineer", predicate: "assignedTo", object: "BestAiCom Smart Workspace" },
     prompt: "Ontology confirms OpsEngineer is assigned to BestAiCom Smart Workspace. Continue as OpsEngineer?",
   },
   "copilot.query": {
     action: "copilot.query",
     title: "Operational context query",
     requiredIndividual: "InspectionTeam",
-    requiredRelation: { subject: "InspectionTeam", property: "worksFor", object: "BestAiCom" },
+    requiredRelation: { subject: "InspectionTeam", predicate: "worksFor", object: "BestAiCom" },
     prompt: "Ontology confirms InspectionTeam works for BestAiCom. Continue as InspectionTeam?",
   },
 };
@@ -57,7 +57,7 @@ export async function loadOntologyPolicyCheck(action: SemanticAction): Promise<S
   const individualFound = ontology.individuals.some((item) => item.name === policy.requiredIndividual);
   const relationFound = ontology.relations.some((item) =>
     item.subject === policy.requiredRelation.subject &&
-    item.property === policy.requiredRelation.property &&
+    item.predicate === policy.requiredRelation.predicate &&
     item.object === policy.requiredRelation.object
   );
 
@@ -68,7 +68,7 @@ export async function loadOntologyPolicyCheck(action: SemanticAction): Promise<S
     steps: [
       `Loaded ontology: ${ontology.individuals.length} individuals, ${ontology.relations.length} relations`,
       `${individualFound ? "Found" : "Missing"} required individual: ${policy.requiredIndividual}`,
-      `${relationFound ? "Found" : "Missing"} required relation: ${policy.requiredRelation.subject} ${policy.requiredRelation.property} ${policy.requiredRelation.object}`,
+      `${relationFound ? "Found" : "Missing"} required relation: ${policy.requiredRelation.subject} ${policy.requiredRelation.predicate} ${policy.requiredRelation.object}`,
     ],
   };
 }

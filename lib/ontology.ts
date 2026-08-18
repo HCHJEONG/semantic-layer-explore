@@ -20,7 +20,7 @@ function resolveRelations(rows: RelationRow[], individualRows: IndividualRow[], 
   return rows.map((item) => ({
     ...item,
     subject: individualNames.get(item.subjectId),
-    property: propertyNames.get(item.propertyId),
+    predicate: propertyNames.get(item.propertyId),
     object: individualNames.get(item.objectId),
   }));
 }

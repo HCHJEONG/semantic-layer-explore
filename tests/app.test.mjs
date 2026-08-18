@@ -89,10 +89,10 @@ test("ontology API preserves the original semantic-layer contract", async () => 
     { name: "BestAiCom", class: "Company" },
     { name: "BestAiCom Smart Workspace", class: "Project" },
   ]);
-  assert.deepEqual(ontology.relations.slice(0, 3).map(({ subject, property, object }) => ({ subject, property, object })), [
-    { subject: "InspectionTeam", property: "worksFor", object: "BestAiCom" },
-    { subject: "OpsEngineer", property: "worksFor", object: "BestAiCom" },
-    { subject: "OpsEngineer", property: "assignedTo", object: "BestAiCom Smart Workspace" },
+  assert.deepEqual(ontology.relations.slice(0, 3).map(({ subject, predicate, object }) => ({ subject, predicate, object })), [
+    { subject: "InspectionTeam", predicate: "worksFor", object: "BestAiCom" },
+    { subject: "OpsEngineer", predicate: "worksFor", object: "BestAiCom" },
+    { subject: "OpsEngineer", predicate: "assignedTo", object: "BestAiCom Smart Workspace" },
   ]);
   assert.deepEqual(ontology.classes.slice(3).map(({ name }) => name), ["Sensor", "Event", "Rule", "Device", "Room"]);
   assert.deepEqual(
@@ -105,9 +105,9 @@ test("ontology API preserves the original semantic-layer contract", async () => 
   );
   assert.equal(ontology.individuals.find(({ name }) => name === "TemperatureSensor01").externalId, "temperature-01");
   assert.equal(ontology.individuals.find(({ name }) => name === "FanRelay01").externalId, "relay-fan-01");
-  assert.ok(ontology.relations.some(({ subject, property, object }) => subject === "TemperatureSensor01" && property === "emits" && object === "SensorReadingEvent"));
-  assert.ok(ontology.relations.some(({ subject, property, object }) => subject === "SensorReadingEvent" && property === "evaluatedBy" && object === "WorkspaceAutomationRule"));
-  assert.ok(ontology.relations.some(({ subject, property, object }) => subject === "WorkspaceAutomationRule" && property === "triggers" && object === "FanRelay01"));
+  assert.ok(ontology.relations.some(({ subject, predicate, object }) => subject === "TemperatureSensor01" && predicate === "emits" && object === "SensorReadingEvent"));
+  assert.ok(ontology.relations.some(({ subject, predicate, object }) => subject === "SensorReadingEvent" && predicate === "evaluatedBy" && object === "WorkspaceAutomationRule"));
+  assert.ok(ontology.relations.some(({ subject, predicate, object }) => subject === "WorkspaceAutomationRule" && predicate === "triggers" && object === "FanRelay01"));
 });
 
 test("main page keeps the BestAiCom Semantic Workspace baseline", async () => {

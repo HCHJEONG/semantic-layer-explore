@@ -35,9 +35,9 @@ export function OntologyGraph({ ontology }: { ontology: Ontology | null }) {
       } };
     });
     const edges: Edge[] = ontology.relations.map((item) => ({
-      id: String(item.id), source: item.subject, target: item.object, label: item.property,
-      animated: ["emits", "evaluatedBy", "triggers"].includes(item.property),
-      style: { stroke: item.property === "triggers" ? "#8459ae" : "#9a8da1" },
+      id: String(item.id), source: item.subject, target: item.object, label: item.predicate,
+      animated: ["emits", "evaluatedBy", "triggers"].includes(item.predicate),
+      style: { stroke: item.predicate === "triggers" ? "#8459ae" : "#9a8da1" },
       labelStyle: { fill: "#655878", fontSize: 10, fontWeight: 600 },
     }));
     return { nodes, edges };

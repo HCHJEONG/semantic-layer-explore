@@ -286,6 +286,10 @@ nav button.active {
   background: #559ab3;
 }
 
+.dot.relation {
+  background: #3f9a68;
+}
+
 /* ============ Object Detail (중앙) ============ */
 .detail {
   padding: 24px 27px;
@@ -335,6 +339,11 @@ nav button.active {
 .object-icon.individual {
   background: #e5f2f5;
   color: #397f98;
+}
+
+.object-icon.relation {
+  background: #e4f4eb;
+  color: #2e7f54;
 }
 
 .description {

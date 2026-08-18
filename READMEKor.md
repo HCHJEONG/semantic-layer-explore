@@ -82,7 +82,9 @@ LLM 연동은 provider boundary 뒤에 준비하고 있습니다. `lib/llm/provi
 - Ontology-first AI tool calling은 prompt만이 아니라 code로 강제하고, AI tool은 database/hardware 직접 접근 대신 REST API를 통하게 합니다.
 - AI는 automation을 propose할 수 있지만, approval과 mutation은 별도의 human-controlled action으로 유지합니다.
 
-전체 retrospective handoff plan은 [`implementation-plan.md`](./implementation-plan.md)를 참고하세요.
+`domain/` model을 만들기 전에 필요한 ontology 용어 결정은 [`docs/ontology-modeling-notes.md`](./docs/ontology-modeling-notes.md)에 정리해 두었습니다.
+
+완성된 domain model을 기반으로 구체적 개발을 이어가는 retrospective implementation handoff plan은 [`docs/implementation-plan.md`](./docs/implementation-plan.md)를 참고하세요.
 
 ## 기능
 

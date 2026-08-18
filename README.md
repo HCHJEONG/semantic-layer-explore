@@ -82,7 +82,9 @@ The same plan also preserves a few reusable architecture patterns:
 - Force ontology-first AI tool calling in code, not only in prompts, and expose AI tools through REST APIs rather than direct database or hardware access.
 - Let AI propose automation, but keep approval and mutation as separate human-controlled actions.
 
-For the full retrospective handoff plan, see [`implementation-plan.md`](./implementation-plan.md).
+For the ontology terminology decisions that guide the `domain/` model, see [`docs/ontology-modeling-notes.md`](./docs/ontology-modeling-notes.md).
+
+For the retrospective implementation handoff plan that builds on the completed domain model, see [`docs/implementation-plan.md`](./docs/implementation-plan.md).
 
 ## Features
 
