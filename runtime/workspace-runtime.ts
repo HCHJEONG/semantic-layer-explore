@@ -3,8 +3,7 @@ import "server-only";
 import { SimulatorAdapter } from "@/adapters/simulator/simulator-adapter";
 import { deviceCommandSchema, type DeviceCommand, type SensorReading, type SimulatorScenario } from "@/domain/physical";
 import { listEnabledRules, markRuleTriggered } from "@/lib/rules";
-import { getEventStore, type NewWorkspaceEvent } from "@/lib/stores/events-store";
-import { getPhysicalStore } from "@/lib/stores/physical-store";
+import { getEventStore, getPhysicalStore, type NewWorkspaceEvent } from "@/lib/stores";
 import { evaluateRule } from "@/runtime/rule-engine";
 import { startRetentionScheduler } from "@/runtime/retention";
 

@@ -150,6 +150,8 @@ GOOGLE_CLOUD_LOCATION=global
 GEMINI_MODEL=gemini-3.5-flash-lite
 GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
 DATABASE_PATH=./data/ai-workspace.sqlite
+DB_PROVIDER=sqlite
+EXPLAIN_LLM_REVIEW=disabled
 READING_RETENTION_DAYS=1
 AUDIT_EVENT_RETENTION_DAYS=30
 RETENTION_CLEANUP_INTERVAL_MS=3600000
@@ -157,6 +159,8 @@ RETENTION_BATCH_SIZE=5000
 ```
 
 Google Cloud project는 service account JSON의 `project_id`에서 읽습니다. `GOOGLE_CLOUD_PROJECT`는 optional override로 남아 있습니다. Gemini model의 configuration source는 `GEMINI_MODEL` 하나이며, 기본값은 `gemini-3.5-flash-lite`입니다.
+
+`DB_PROVIDER`는 현재 `sqlite`로 문서화만 해두었습니다. 아직 두 번째 DB 구현을 추가하지 않고, 나중에 PostgreSQL 또는 MariaDB store provider를 붙일 때 사용할 설정 이름을 미리 고정해 둔 것입니다. `EXPLAIN_LLM_REVIEW=enabled`를 설정하면 Mastra evidence review step들이 앱 전체 LLM adapter를 통해 live LLM review를 수행합니다.
 
 Runtime은 high-volume sensor reading과 matching `sensor.reading` event를 7일 동안 보존하고, low-volume audit event는 30일 동안 보존합니다. Cleanup은 startup 및 hourly schedule로 bounded batch 단위 실행되어 SQLite를 독점하지 않습니다. 삭제된 page는 SQLite가 재사용하며, scheduler는 live traffic을 block할 수 있는 `VACUUM`을 의도적으로 실행하지 않습니다. Rule evaluation은 serialized되고 sensor별 최신 pending reading만 유지하여 device execution이 느릴 때 unbounded async backlog를 방지합니다.
 

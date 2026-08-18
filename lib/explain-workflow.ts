@@ -2,29 +2,16 @@ import "server-only";
 
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
-import { buildCausalTrace, type CausalTrace, type EvidenceSupport } from "@/lib/causal-trace";
-
-export const evidenceFindingSchema = z.object({
-  claim: z.string().min(1),
-  evidenceIds: z.array(z.string().min(1)),
-  support: z.enum(["proven", "derived", "insufficient"]),
-});
-
-export const evidenceReviewSchema = z.object({
-  agent: z.enum(["sensor", "rule", "execution"]),
-  findings: z.array(evidenceFindingSchema),
-  uncertainties: z.array(z.string()),
-});
-
-export const criticReviewSchema = z.object({
-  verifiedClaims: z.array(evidenceFindingSchema),
-  rejectedClaims: z.array(evidenceFindingSchema),
-  uncertainties: z.array(z.string()),
-});
-
-export type EvidenceFinding = z.infer<typeof evidenceFindingSchema>;
-export type EvidenceReview = z.infer<typeof evidenceReviewSchema>;
-export type CriticReview = z.infer<typeof criticReviewSchema>;
+import { buildCausalTrace, type CausalTrace } from "@/lib/causal-trace";
+import {
+  criticReviewSchema,
+  evidenceReviewSchema,
+  finding,
+  reviewCriticWithOptionalLlm,
+  reviewEvidenceWithOptionalLlm,
+  type CriticReview,
+  type EvidenceReview,
+} from "@/lib/llm/explain-review";
 
 export type ExplainEventWorkflowResult = CausalTrace & {
   workflow: {
@@ -38,10 +25,6 @@ export type ExplainEventWorkflowResult = CausalTrace & {
   };
   critic: CriticReview;
 };
-
-function finding(claim: string, evidenceIds: string[], support: EvidenceSupport): EvidenceFinding {
-  return { claim, evidenceIds, support };
-}
 
 function reviewSensorEvidence(trace: CausalTrace): EvidenceReview {
   const evidence = trace.evidence.find((item) => item.id === "trigger-reading");
@@ -85,9 +68,8 @@ function verifyEvidence(trace: CausalTrace, reviews: EvidenceReview[]): CriticRe
   });
 }
 
-function buildWorkflowResult(trace: CausalTrace, reviews: { sensor: EvidenceReview; rule: EvidenceReview; execution: EvidenceReview }): ExplainEventWorkflowResult {
+function buildWorkflowResult(trace: CausalTrace, reviews: { sensor: EvidenceReview; rule: EvidenceReview; execution: EvidenceReview }, critic: CriticReview): ExplainEventWorkflowResult {
   const { sensor, rule, execution } = reviews;
-  const critic = verifyEvidence(trace, [sensor, rule, execution]);
 
   return {
     ...trace,
@@ -98,7 +80,8 @@ function buildWorkflowResult(trace: CausalTrace, reviews: { sensor: EvidenceRevi
         { id: "sensor-review", label: "Review sensor evidence", status: "completed" },
         { id: "rule-review", label: "Review rule evidence", status: "completed" },
         { id: "execution-review", label: "Review execution evidence", status: "completed" },
-        { id: "critic", label: "Verify evidence support", status: "completed" },
+        { id: "critic", label: "Review claims with optional LLM critic", status: "completed" },
+        { id: "final-verifier", label: "Constrain critic output with deterministic verifier", status: "completed" },
       ],
     },
     agentFindings: { sensor, rule, execution },
@@ -134,28 +117,33 @@ const sensorReviewStep = createStep({
   id: "sensor-review",
   inputSchema: causalTraceSchema,
   outputSchema: evidenceReviewSchema,
-  execute: async ({ inputData }) => reviewSensorEvidence(inputData),
+  execute: async ({ inputData }) => reviewEvidenceWithOptionalLlm("sensor", inputData, reviewSensorEvidence(inputData)),
 });
 
 const ruleReviewStep = createStep({
   id: "rule-review",
   inputSchema: causalTraceSchema,
   outputSchema: evidenceReviewSchema,
-  execute: async ({ inputData }) => reviewRuleEvidence(inputData),
+  execute: async ({ inputData }) => reviewEvidenceWithOptionalLlm("rule", inputData, reviewRuleEvidence(inputData)),
 });
 
 const executionReviewStep = createStep({
   id: "execution-review",
   inputSchema: causalTraceSchema,
   outputSchema: evidenceReviewSchema,
-  execute: async ({ inputData }) => reviewExecutionEvidence(inputData),
+  execute: async ({ inputData }) => reviewEvidenceWithOptionalLlm("execution", inputData, reviewExecutionEvidence(inputData)),
 });
 
 const criticStep = createStep({
   id: "critic",
   inputSchema: criticInputSchema,
   outputSchema: workflowResultSchema,
-  execute: async ({ inputData }) => buildWorkflowResult(inputData.trace, inputData.reviews),
+  execute: async ({ inputData }) => {
+    const reviewList = [inputData.reviews.sensor, inputData.reviews.rule, inputData.reviews.execution];
+    const deterministicCritic = verifyEvidence(inputData.trace, reviewList);
+    const critic = await reviewCriticWithOptionalLlm(inputData.trace, reviewList, deterministicCritic);
+    return buildWorkflowResult(inputData.trace, inputData.reviews, critic);
+  },
 });
 
 export const explainEventWorkflow = createWorkflow({

@@ -150,6 +150,8 @@ GOOGLE_CLOUD_LOCATION=global
 GEMINI_MODEL=gemini-3.5-flash-lite
 GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
 DATABASE_PATH=./data/ai-workspace.sqlite
+DB_PROVIDER=sqlite
+EXPLAIN_LLM_REVIEW=disabled
 READING_RETENTION_DAYS=1
 AUDIT_EVENT_RETENTION_DAYS=30
 RETENTION_CLEANUP_INTERVAL_MS=3600000
@@ -157,6 +159,8 @@ RETENTION_BATCH_SIZE=5000
 ```
 
 The Google Cloud project is read from the service account JSON's `project_id`; `GOOGLE_CLOUD_PROJECT` remains an optional override. The Gemini model has one configuration source: `GEMINI_MODEL`, with `gemini-3.5-flash-lite` as the default.
+
+`DB_PROVIDER` is currently documented as `sqlite`; it reserves the configuration name for a future PostgreSQL or MariaDB store provider without adding a second implementation yet. `EXPLAIN_LLM_REVIEW=enabled` opts the Mastra evidence review steps into live LLM review through the app-level LLM adapter.
 
 The runtime retains high-volume sensor readings and matching `sensor.reading` events for 7 days, while lower-volume audit events are retained for 30 days. Cleanup runs at startup and hourly in bounded batches so it does not monopolize SQLite. Deleted pages are reused by SQLite; the scheduler intentionally does not run `VACUUM`, which could block live traffic. Rule evaluation is serialized and keeps at most the newest pending reading per sensor, preventing an unbounded async backlog when device execution is slow.
 

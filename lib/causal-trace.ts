@@ -2,7 +2,7 @@ import "server-only";
 
 import { deviceCommandSchema, sensorReadingSchema } from "@/domain/physical";
 import { ruleActionSchema, ruleConditionSchema } from "@/domain/rule";
-import { getEventStore, type WorkspaceEvent } from "@/lib/stores/events-store";
+import { getEventStore, type WorkspaceEvent } from "@/lib/stores";
 import { InputValidationError } from "@/lib/validation";
 
 export type EvidenceSupport = "proven" | "derived" | "insufficient";

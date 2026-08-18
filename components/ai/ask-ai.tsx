@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { ArrowRight, Bot, Braces, CheckCircle2, Database, Network, Send, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Background, type Edge, Handle, type Node, Position, ReactFlow } from "@xyflow/react";
+import { ArrowRight, Bot, Braces, CheckCircle2, Database, GitBranch, Network, Send, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -130,6 +131,7 @@ function ExplainResultView({ result }: { result: ExplainResult }) {
     <h2>{result.title}</h2>
     <p>{result.summary}</p>
     <div className={`explain-status ${result.completeness}`}>{result.completeness.toUpperCase()}</div>
+    {result.workflow && <WorkflowGraph result={result} />}
     {result.workflow && <div className="workflow-stages">
       <strong>Workflow</strong>
       <small>{result.workflow.engine}</small>
@@ -164,6 +166,57 @@ function ExplainResultView({ result }: { result: ExplainResult }) {
       <span>{result.critic.rejectedClaims.length} rejected claims</span>
       {result.critic.uncertainties.map((item) => <small key={item}>{item}</small>)}
     </div>}
+  </div>;
+}
+
+function WorkflowNode({ data }: { data: { label: string; kind: string; done: boolean } }) {
+  return <div className={`workflow-flow-node ${data.done ? "done" : ""}`}>
+    <Handle type="target" position={Position.Left} />
+    <span>{data.kind}</span>
+    <strong>{data.label}</strong>
+    <Handle type="source" position={Position.Right} />
+  </div>;
+}
+
+const workflowNodeTypes = { workflow: WorkflowNode };
+
+function WorkflowGraph({ result }: { result: ExplainResult }) {
+  const completed = useMemo(() => new Set(result.workflow?.stages.map((stage) => stage.id) ?? []), [result.workflow]);
+  const graph = useMemo(() => {
+    const makeNode = (id: string, label: string, kind: string, x: number, y: number): Node => ({
+      id,
+      type: "workflow",
+      position: { x, y },
+      data: { label, kind, done: completed.has(id) },
+      draggable: false,
+    });
+    const nodes: Node[] = [
+      makeNode("causal-trace", "Causal Trace", "deterministic", 0, 90),
+      makeNode("sensor-review", "Sensor Review", "optional LLM", 250, 0),
+      makeNode("rule-review", "Rule Review", "optional LLM", 250, 90),
+      makeNode("execution-review", "Execution Review", "optional LLM", 250, 180),
+      makeNode("critic", "Critic", "optional LLM", 520, 90),
+      makeNode("final-verifier", "Final Verifier", "deterministic", 760, 90),
+    ];
+    const edges: Edge[] = [
+      { id: "trace-sensor", source: "causal-trace", target: "sensor-review", animated: true },
+      { id: "trace-rule", source: "causal-trace", target: "rule-review", animated: true },
+      { id: "trace-execution", source: "causal-trace", target: "execution-review", animated: true },
+      { id: "sensor-critic", source: "sensor-review", target: "critic" },
+      { id: "rule-critic", source: "rule-review", target: "critic" },
+      { id: "execution-critic", source: "execution-review", target: "critic" },
+      { id: "critic-final", source: "critic", target: "final-verifier" },
+    ].map((edge) => ({ ...edge, style: { stroke: "#9a8da1" } }));
+    return { nodes, edges };
+  }, [completed]);
+
+  return <div className="workflow-graph" aria-label="Mastra workflow graph">
+    <strong><GitBranch size={14} /> Mastra Graph</strong>
+    <div className="workflow-flow">
+      <ReactFlow nodes={graph.nodes} edges={graph.edges} nodeTypes={workflowNodeTypes} fitView nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} panOnDrag={false} zoomOnScroll={false} zoomOnPinch={false} zoomOnDoubleClick={false} proOptions={{ hideAttribution: true }}>
+        <Background color="#ddd6e8" gap={24} />
+      </ReactFlow>
+    </div>
   </div>;
 }
 

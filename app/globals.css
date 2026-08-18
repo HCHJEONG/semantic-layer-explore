@@ -1449,6 +1449,7 @@ nav button.active {
 }
 
 .workflow-stages,
+.workflow-graph,
 .agent-findings,
 .critic-review,
 .explain-missing,
@@ -1458,6 +1459,7 @@ nav button.active {
 }
 
 .workflow-stages,
+.workflow-graph,
 .agent-findings,
 .critic-review {
   border: 1px solid var(--line);
@@ -1467,8 +1469,58 @@ nav button.active {
 }
 
 .workflow-stages > strong,
+.workflow-graph > strong,
 .agent-findings > strong,
 .critic-review > strong {
+  font-size: 12px;
+}
+
+.workflow-graph > strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.workflow-flow {
+  width: 100%;
+  height: 260px;
+  overflow: hidden;
+  border: 1px solid #eee7f2;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.workflow-flow .react-flow__handle {
+  width: 7px;
+  height: 7px;
+  border: 1px solid #fff;
+  background: #9a8da1;
+}
+
+.workflow-flow-node {
+  display: grid;
+  gap: 3px;
+  min-width: 145px;
+  border: 1px solid #e5dceb;
+  border-left: 3px solid #9a8da1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(44, 36, 52, 0.06);
+}
+
+.workflow-flow-node.done {
+  border-left-color: #5d9965;
+}
+
+.workflow-flow-node span {
+  color: #988da0;
+  font: 10px var(--font-mono);
+  text-transform: uppercase;
+}
+
+.workflow-flow-node strong {
+  color: #3a303f;
   font-size: 12px;
 }
 

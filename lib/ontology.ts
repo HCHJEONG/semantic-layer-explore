@@ -1,4 +1,4 @@
-import { getOntologyStore, type ClassRow, type IndividualRow, type PropertyRow, type RelationRow } from "@/lib/stores/ontology-store";
+import { getOntologyStore, type ClassRow, type IndividualRow, type PropertyRow, type RelationRow } from "@/lib/stores";
 
 function resolveProperties(rows: PropertyRow[], classRows: ClassRow[]) {
   const classNames = new Map(classRows.map((item) => [item.id, item.name]));

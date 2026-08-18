@@ -260,6 +260,7 @@ Current implementation:
 - `lib/explain-workflow.ts` owns the Mastra workflow boundary.
 - `/api/ai/explain-event` calls `runExplainEventWorkflow(eventId)`.
 - Ask AI renders workflow stages, prepared agent findings, evidence, and critic output.
+- Ask AI renders the Mastra graph with `@xyflow/react`.
 - `@mastra/core@1.59.0` is installed.
 - The first Mastra pass uses deterministic workflow steps, not live LLM agents.
 - `lib/llm/provider.ts` defines a model-agnostic LLM provider interface.
@@ -611,6 +612,12 @@ Current state:
   - `app/api/ready/route.ts` uses the database store for readiness checks.
   - `runtime/retention.ts` uses the database store for batched cleanup
     execution.
+- Store consumers now use a single factory/export entrypoint:
+  - `lib/stores/index.ts`
+  - App routes, runtime modules, and domain services import store factories from
+    `@/lib/stores`.
+- `DB_PROVIDER=sqlite` is documented as the reserved provider selection setting.
+  The project still ships only the SQLite implementation.
 
 Target state:
 
@@ -633,6 +640,7 @@ Recommended store order:
 3. Ontology store. Completed.
 4. Device/sensor store. Completed.
 5. Database infrastructure store. Completed.
+6. Store factory/export entrypoint. Completed.
 
 Start with Event store because Explain Why and Mastra causal trace depend on
 auditable event history.
@@ -685,7 +693,8 @@ Current state:
       ↓
   critic
 
-- The workflow does not call the LLM adapter yet.
+- The evidence review steps can call the LLM adapter only when
+  `EXPLAIN_LLM_REVIEW=enabled`.
 
 Target state:
 
@@ -715,6 +724,9 @@ Bounded evidence views:
 - Rule reviewer receives only rule condition/action/match evidence.
 - Execution reviewer receives only command/execution/resulting-state evidence.
 - Critic receives the deterministic trace plus structured reviewer findings.
+- Critic can call the LLM adapter when `EXPLAIN_LLM_REVIEW=enabled`, but final
+  critic claims are still constrained by a deterministic verifier that checks
+  known evidence IDs and preserves missing evidence.
 
 The LLM must not receive raw DB access, broad event dumps, or hardware access.
 
@@ -736,10 +748,10 @@ Minimal steps:
 2. Keep all four steps deterministic first. Completed.
 3. Use Mastra `.parallel()` for the three evidence review steps if it fits
    cleanly. Completed.
-4. Add `lib/llm/explain-review.ts`.
+4. Add `lib/llm/explain-review.ts`. Completed.
 5. Behind `EXPLAIN_LLM_REVIEW=enabled`, call `getLlmProvider()` from the review
-   helpers.
-6. Keep deterministic fallback as the default path.
+   helpers. Completed.
+6. Keep deterministic fallback as the default path. Completed.
 
 ==================================================
 21. RECOMMENDED NEXT TWO SMALL STEPS

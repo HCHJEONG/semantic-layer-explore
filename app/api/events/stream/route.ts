@@ -1,5 +1,5 @@
 import { getWorkspaceRuntime } from "@/runtime/workspace-runtime";
-import { getEventStore } from "@/lib/stores/events-store";
+import { getEventStore } from "@/lib/stores";
 import { errorResponse } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";

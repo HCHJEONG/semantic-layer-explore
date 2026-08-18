@@ -1,7 +1,7 @@
 import "server-only";
 
 import { sql } from "drizzle-orm";
-import { getDatabaseStore } from "@/lib/stores/database-store";
+import { getDatabaseStore } from "@/lib/stores";
 
 const DAY_MS = 86_400_000;
 

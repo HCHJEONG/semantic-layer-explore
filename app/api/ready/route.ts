@@ -1,5 +1,5 @@
 import { getLlmProviderConfiguration } from "@/lib/llm/provider";
-import { getDatabaseStore } from "@/lib/stores/database-store";
+import { getDatabaseStore } from "@/lib/stores";
 import { getRetentionConfiguration } from "@/runtime/retention";
 
 export const dynamic = "force-dynamic";
