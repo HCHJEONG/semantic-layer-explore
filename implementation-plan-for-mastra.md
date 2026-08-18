@@ -254,21 +254,36 @@ The LLM must receive only structured evidence, not direct database access.
 Mastra is optional for this MVP unless it is already installed or can be added
 with very low risk.
 
+Current implementation:
+
+- `lib/causal-trace.ts` owns deterministic evidence reconstruction.
+- `lib/explain-workflow.ts` owns the Mastra workflow boundary.
+- `/api/ai/explain-event` calls `runExplainEventWorkflow(eventId)`.
+- Ask AI renders workflow stages, prepared agent findings, evidence, and critic output.
+- `@mastra/core@1.59.0` is installed.
+- The first Mastra pass uses deterministic workflow steps, not live LLM agents.
+
+This means Mastra should be introduced by replacing or wrapping the internals of
+`runExplainEventWorkflow`, not by changing the dashboard entry point or API
+response shape.
+
 Before adding Mastra:
 
 - inspect package.json;
 - verify compatibility with current Next.js and Node runtime;
 - avoid large dependency churn.
+- current installed package: `@mastra/core@1.59.0`.
 
-If Mastra is added, keep it minimal:
+Current minimal Mastra workflow:
 
   deterministic causal trace
       ↓
-  one small evidence workflow
+  evidence review + critic workflow step
       ↓
   final structured explanation
 
-Do not build a large multi-agent system in the MVP.
+Do not build a large multi-agent system until the deterministic workflow is
+stable.
 
 Do not add three role-play agents unless there is a real bounded evidence split.
 

@@ -659,6 +659,13 @@ nav button.active {
   display: flex;
   gap: 7px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.answer-label b {
+  color: #9887a4;
+  font-weight: 500;
 }
 
 .answer-markdown {
@@ -1351,8 +1358,212 @@ nav button.active {
   margin-top: 4px;
 }
 
+.explain-event-button {
+  margin-top: 8px;
+  width: fit-content;
+  color: #67428d;
+  border-color: #e5dced;
+  background: #fff;
+}
+
+.explain-event-button svg {
+  width: 12px;
+}
+
 .timeline .empty {
   padding: 30px 0;
+}
+
+.explain-card {
+  border-color: #ded3e6;
+}
+
+.explain-card [data-slot="button"] {
+  margin-top: 14px;
+}
+
+.explain-thinking {
+  margin-top: 16px;
+}
+
+.explain-result {
+  margin-top: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.explain-result h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.explain-result p {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.65;
+}
+
+.explain-status {
+  width: fit-content;
+  border: 1px solid #e4d9ec;
+  border-radius: 7px;
+  padding: 5px 8px;
+  color: #68408d;
+  background: #f9f5fc;
+  font: 700 10px var(--font-mono);
+}
+
+.explain-status.partial,
+.explain-status.insufficient {
+  border-color: #ecd8c8;
+  color: #955f2d;
+  background: #fff8f1;
+}
+
+.causal-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fcfbfd;
+}
+
+.causal-steps span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.causal-steps strong {
+  font-size: 12px;
+}
+
+.causal-steps small {
+  color: #8f8199;
+  font: 10px var(--font-mono);
+}
+
+.workflow-stages,
+.agent-findings,
+.critic-review,
+.explain-missing,
+.evidence-list {
+  display: grid;
+  gap: 8px;
+}
+
+.workflow-stages,
+.agent-findings,
+.critic-review {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px;
+  background: #fcfbfd;
+}
+
+.workflow-stages > strong,
+.agent-findings > strong,
+.critic-review > strong {
+  font-size: 12px;
+}
+
+.workflow-stages > small {
+  color: #988da0;
+  font: 10px var(--font-mono);
+}
+
+.workflow-stages span {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  color: #594960;
+  font-size: 12px;
+}
+
+.workflow-stages svg {
+  color: #5d9965;
+}
+
+.agent-findings article {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid #eee7f2;
+  padding-top: 8px;
+}
+
+.agent-findings b {
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.agent-findings span,
+.critic-review span {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.agent-findings small,
+.critic-review small {
+  color: #988da0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.explain-missing {
+  border-left: 3px solid #d49a62;
+  padding: 8px 0 8px 12px;
+  color: #7e5735;
+}
+
+.explain-missing span {
+  font-size: 12px;
+}
+
+.evidence-list > strong,
+.explain-missing > strong {
+  font-size: 12px;
+}
+
+.evidence-list article {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px;
+  background: #fff;
+}
+
+.evidence-list svg {
+  color: #5d9965;
+  margin-top: 2px;
+}
+
+.evidence-list b,
+.evidence-list span,
+.evidence-list small {
+  display: block;
+}
+
+.evidence-list b {
+  font-size: 12px;
+}
+
+.evidence-list span {
+  margin-top: 3px;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.evidence-list small {
+  margin-top: 5px;
+  color: #988da0;
+  font: 10px var(--font-mono);
 }
 
 /* ============ 반응형 ============ */

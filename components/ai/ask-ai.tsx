@@ -1,25 +1,77 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { ArrowRight, Bot, Braces, Database, Network, Send, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { ArrowRight, Bot, Braces, CheckCircle2, Database, Network, Send, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { ExplainContext } from "@/app/client-app";
 import { loadOntologyPolicyCheck } from "@/lib/semantic-policy";
 
 const examples = ["현재 운영 상태 요약해줘.", "어떤 자동화가 방금 실행됐어?", "주의해야 할 센서 변화가 있어?", "Which assets need attention right now?"];
 
-export function AskAi() {
+type ExplainResult = {
+  eventId: string;
+  explainable: boolean;
+  completeness: "complete" | "partial" | "insufficient";
+  title: string;
+  summary: string;
+  missing: string[];
+  workflow?: { engine: string; stages: Array<{ id: string; label: string; status: "completed" }> };
+  agentFindings?: Record<string, { findings: Array<{ claim: string; evidenceIds: string[]; support: "proven" | "derived" | "insufficient" }>; uncertainties: string[] }>;
+  critic?: { verifiedClaims: Array<{ claim: string; support: string }>; rejectedClaims: Array<{ claim: string; support: string }>; uncertainties: string[] };
+  evidence: Array<{ id: string; label: string; support: "proven" | "derived" | "insufficient"; eventId?: string; eventType?: string; detail: string }>;
+  causalSteps: Array<{ type: "sensor" | "rule" | "execution"; label: string; detail: string; evidenceId?: string; support: "proven" | "derived" | "insufficient" }>;
+};
+
+export function AskAi({ explainContext, onBackToWorkspace }: { explainContext: ExplainContext | null; onBackToWorkspace: () => void }) {
   const [question, setQuestion] = useState(examples[0]);
   const [answer, setAnswer] = useState("");
   const [trace, setTrace] = useState<string[]>([]);
   const [semanticTrace, setSemanticTrace] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [explainLoading, setExplainLoading] = useState(false);
+  const [explainResult, setExplainResult] = useState<ExplainResult | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!explainContext) return;
+    let cancelled = false;
+    const { eventId } = explainContext;
+    async function explain() {
+      setExplainLoading(true); setExplainResult(null); setAnswer(""); setTrace([]); setError("");
+      try {
+        const response = await fetch("/api/ai/explain-event", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ eventId }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Could not explain the selected event.");
+        if (!cancelled) setExplainResult(result);
+      } catch (reason) {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : "Could not explain the selected event.");
+      } finally {
+        if (!cancelled) setExplainLoading(false);
+      }
+    }
+    void explain();
+    return () => { cancelled = true; };
+  }, [explainContext]);
+
+  const confirmInspectionTeamQuery = useCallback(async () => {
+    setSemanticTrace(["Starting semantic role policy check…"]);
+    const check = await loadOntologyPolicyCheck("copilot.query");
+    setSemanticTrace([check.policy.title, ...check.steps]);
+    if (!check.individualFound || !check.relationFound) throw new Error(`Semantic role policy failed: ${check.steps.join(" / ")}`);
+    const confirmed = window.confirm(check.policy.prompt);
+    setSemanticTrace((current) => [...current, confirmed ? `User confirmed ${check.policy.requiredIndividual}.` : `User cancelled ${check.policy.requiredIndividual} confirmation.`]);
+    return confirmed;
+  }, []);
 
   const ask = useCallback(async () => {
     if (!question.trim() || loading) return;
@@ -36,20 +88,20 @@ export function AskAi() {
     } finally {
       setLoading(false);
     }
-  }, [question, loading]);
+  }, [confirmInspectionTeamQuery, question, loading]);
 
-  async function confirmInspectionTeamQuery() {
-    setSemanticTrace(["Starting semantic role policy check…"]);
-    const check = await loadOntologyPolicyCheck("copilot.query");
-    setSemanticTrace([check.policy.title, ...check.steps]);
-    if (!check.individualFound || !check.relationFound) throw new Error(`Semantic role policy failed: ${check.steps.join(" / ")}`);
-    const confirmed = window.confirm(check.policy.prompt);
-    setSemanticTrace((current) => [...current, confirmed ? `User confirmed ${check.policy.requiredIndividual}.` : `User cancelled ${check.policy.requiredIndividual} confirmation.`]);
-    return confirmed;
-  }
+  const explainMode = Boolean(explainContext);
 
   return <section className="ai-page">
     <div className="ai-intro"><div className="ai-orb"><Bot size={28} /></div><div className="eyebrow">BESTAICOM OPS ANALYST</div><h1>Ask what changed, why it happened, and what is active.</h1><p>BestAiCom AI reads the semantic map first, then explains current state, approved rules, and recent events using auditable application data.</p></div>
+    {explainMode && <Card className="answer-card explain-card">
+      <CardContent className="p-6">
+        <div className="answer-label"><Sparkles size={15} /> ASK AI · EXPLAIN MODE <b>Source event {explainContext?.eventId}</b></div>
+        <Button variant="outline" size="sm" onClick={onBackToWorkspace}>Back to Workspace</Button>
+        {explainLoading && <div className="thinking explain-thinking"><Skeleton className="h-4 w-32" /><i /><i /><i /> Building causal trace</div>}
+        {explainResult && <ExplainResultView result={explainResult} />}
+      </CardContent>
+    </Card>}
     <Card className="ask-card">
       <CardContent className="p-6">
         <Label htmlFor="question">Your question</Label>
@@ -71,6 +123,48 @@ export function AskAi() {
     {error && <div className="error">{error}</div>}
     <div className="pipeline"><span><Bot />BestAiCom AI</span><ArrowRight/><span><Network />Semantic Map</span><ArrowRight/><span><Braces />Application APIs</span><ArrowRight/><span><Database />Operational Store</span></div>
   </section>;
+}
+
+function ExplainResultView({ result }: { result: ExplainResult }) {
+  return <div className="explain-result">
+    <h2>{result.title}</h2>
+    <p>{result.summary}</p>
+    <div className={`explain-status ${result.completeness}`}>{result.completeness.toUpperCase()}</div>
+    {result.workflow && <div className="workflow-stages">
+      <strong>Workflow</strong>
+      <small>{result.workflow.engine}</small>
+      {result.workflow.stages.map((stage) => <span key={stage.id}><CheckCircle2 size={13} />{stage.label}</span>)}
+    </div>}
+    {result.causalSteps.length > 0 && <div className="causal-steps">
+      {result.causalSteps.map((step, index) => <span key={`${step.type}-${step.label}-${index}`}>
+        <strong>{step.label}</strong>
+        <small>{step.detail} · {step.support}</small>
+        {index < result.causalSteps.length - 1 && <ArrowRight size={13} />}
+      </span>)}
+    </div>}
+    {result.missing.length > 0 && <div className="explain-missing"><strong>Missing evidence</strong>{result.missing.map((item) => <span key={item}>{item}</span>)}</div>}
+    {result.agentFindings && <div className="agent-findings">
+      <strong>Prepared Agent Findings</strong>
+      {Object.entries(result.agentFindings).map(([agent, review]) => <article key={agent}>
+        <b>{agent}</b>
+        {review.findings.map((item) => <span key={`${agent}-${item.claim}`}>{item.claim} · {item.support}</span>)}
+        {review.uncertainties.map((item) => <small key={`${agent}-${item}`}>{item}</small>)}
+      </article>)}
+    </div>}
+    <div className="evidence-list">
+      <strong>Evidence Review</strong>
+      {result.evidence.map((item) => <article key={item.id}>
+        <CheckCircle2 size={14} />
+        <div><b>{item.label}</b><span>{item.detail}</span><small>{item.support}{item.eventId ? ` · ${item.eventId}` : ""}</small></div>
+      </article>)}
+    </div>
+    {result.critic && <div className="critic-review">
+      <strong>Critic / Verifier</strong>
+      <span>{result.critic.verifiedClaims.length} verified claims</span>
+      <span>{result.critic.rejectedClaims.length} rejected claims</span>
+      {result.critic.uncertainties.map((item) => <small key={item}>{item}</small>)}
+    </div>}
+  </div>;
 }
 
 function SemanticPolicyTrace({ steps }: { steps: string[] }) {

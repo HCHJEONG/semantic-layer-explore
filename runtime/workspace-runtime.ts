@@ -143,16 +143,25 @@ class WorkspaceRuntime {
     for (const rule of listEnabledRules()) {
       if (!evaluateRule(rule, reading).matched) continue;
       const triggeredAt = new Date().toISOString();
+      const correlationId = crypto.randomUUID();
+      const ruleEventId = crypto.randomUUID();
       markRuleTriggered(rule.id, triggeredAt);
       this.persistEvent({
-        eventId: crypto.randomUUID(), type: "rule.matched", sourceType: "rule", sourceId: rule.id,
-        payload: { ruleId: rule.id, condition: rule.condition, action: rule.action, reading }, occurredAt: triggeredAt,
+        eventId: ruleEventId, type: "rule.matched", sourceType: "rule", sourceId: rule.id,
+        payload: {
+          ruleId: rule.id,
+          condition: rule.condition,
+          action: rule.action,
+          reading,
+          causation: { correlationId, triggerEventId: reading.eventId },
+        }, occurredAt: triggeredAt,
       });
       const device = this.adapter.getDevices().find((item) => item.id === rule.action.deviceId);
       if (!device) throw new Error(`Rule ${rule.id} targets an unavailable device: ${rule.action.deviceId}`);
       await this.executeCommand({
         commandId: crypto.randomUUID(), deviceId: device.id, deviceType: device.type,
         command: rule.action.command, value: rule.action.value, issuedBy: "rule-engine", issuedAt: triggeredAt,
+        causation: { correlationId, ruleId: rule.id, ruleEventId, triggerEventId: reading.eventId },
       });
     }
   }

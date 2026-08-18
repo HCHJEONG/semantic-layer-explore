@@ -40,6 +40,8 @@ Simulator Sensor → Sensor Event → Rule Engine → Virtual Device
 
 승인된 rule을 평가하고 device command를 실행하는 것은 Gemini가 아니라 rule engine입니다. Simulator는 향후 MQTT/Arduino 연결을 위해 남겨둔 adapter boundary와 같은 경계를 구현합니다.
 
+Workspace Dashboard에는 설명 가능한 action event를 위한 최소 **Explain Why** 흐름도 포함됩니다. Event Timeline에 device command가 나타나면 사용자는 Ask AI Explain Mode로 이동할 수 있습니다. Backend는 먼저 기록된 event에서 application-level causal trace를 deterministic하게 재구성한 뒤, 작은 Mastra workflow로 sensor, rule, execution evidence를 검토하고 structured explanation을 생성합니다. 이 기능은 read-only입니다. Device command를 실행하거나 rule을 바꾸지 않으며, 물리 세계가 왜 특정 sensor reading을 만들었는지는 추론하지 않습니다.
+
 데모는 하나의 SQLite 파일을 사용해 배포를 단순하게 유지하지만, schema는 semantic metadata store와 operational state를 분리합니다. Ontology record는 `semantic_classes`, `semantic_properties`, `semantic_individuals`, `semantic_relations`에 저장되고, runtime state는 `sensors`, `devices`, `sensor_readings`, `events`, `rules`에 저장됩니다.
 
 ```text
@@ -97,6 +99,7 @@ Simulator Sensor → Sensor Event → Rule Engine → Virtual Device
 - Validated Rule CRUD, deterministic operator evaluation, per-rule cooldown
 - Sensor Event → Rule match → Virtual Device execution으로 이어지는 auditable outcome
 - Live sensor card, device control, deterministic demo scenario, event timeline을 보여주는 polling-based workspace dashboard
+- Eligible device-command event에 대한 Explain Why, deterministic causal trace, provenance가 부족할 때 partial explanation 제공
 - Ontology/sensor/device tool call, validated JSON preview, explicit human approval gate를 갖춘 Gemini Rule Compiler
 - Current state, approved rules, recent events에 grounded된 Physical Workspace Chat
 - `Sensor → Event → Rule → Device`를 보여주고 runtime ID를 semantic Individual에 binding하는 확장 physical ontology
@@ -127,6 +130,7 @@ Simulator Sensor → Sensor Event → Rule Engine → Virtual Device
 | `GET`, `POST` | `/api/simulator/*` | Simulator 조회 및 제어 |
 | `POST` | `/api/ai/rules/propose` | Gemini로 검증된 rule을 제안하되 저장하지 않음 |
 | `POST` | `/api/ai/chat` | Ontology-first tool을 통해 workspace state와 event 설명 |
+| `POST` | `/api/ai/explain-event` | 설명 가능한 단일 event에 대해 read-only causal trace 생성 |
 
 ## 로컬 개발
 

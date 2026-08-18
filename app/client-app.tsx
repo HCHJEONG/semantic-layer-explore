@@ -12,10 +12,13 @@ import { OntologyTree } from "@/components/ontology/ontology-tree";
 import { AppShell, type AppTab } from "@/components/shell/app-shell";
 import type { Ontology, OntologyItem, OntologyKind, OntologySelection } from "@/domain/ontology";
 
+export type ExplainContext = { mode: "explain"; eventId: string; requestedAt: number };
+
 export default function ClientApp() {
   const [ontology, setOntology] = useState<Ontology | null>(null);
   const [selection, setSelection] = useState<OntologySelection | null>(null);
   const [tab, setTab] = useState<AppTab>("dashboard");
+  const [explainContext, setExplainContext] = useState<ExplainContext | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -35,8 +38,13 @@ export default function ClientApp() {
     setSelection({ kind, item });
   }
 
+  function explainEvent(eventId: string) {
+    setExplainContext((current) => ({ mode: "explain", eventId, requestedAt: (current?.requestedAt ?? 0) + 1 }));
+    setTab("ai");
+  }
+
   return <AppShell tab={tab} onTabChange={setTab}>
-    {renderTabContent(tab, { ontology, selection, error, onSelect: selectOntologyItem })}
+    {renderTabContent(tab, { ontology, selection, error, explainContext, onExplainEvent: explainEvent, onSelect: selectOntologyItem, onBackToWorkspace: () => setTab("dashboard") })}
   </AppShell>;
 }
 
@@ -46,18 +54,21 @@ function renderTabContent(
     ontology: Ontology | null;
     selection: OntologySelection | null;
     error: string;
+    explainContext: ExplainContext | null;
+    onExplainEvent: (eventId: string) => void;
     onSelect: (kind: OntologyKind, item: OntologyItem) => void;
+    onBackToWorkspace: () => void;
   },
 ) {
   switch (tab) {
     case "dashboard":
-      return <WorkspaceDashboard />;
+      return <WorkspaceDashboard onExplainEvent={explorerProps.onExplainEvent} />;
     case "rules":
       return <RuleStudio />;
     case "explorer":
       return <OntologyExplorer {...explorerProps} />;
     case "ai":
-      return <AskAi />;
+      return <AskAi explainContext={explorerProps.explainContext} onBackToWorkspace={explorerProps.onBackToWorkspace} />;
   }
 }
 

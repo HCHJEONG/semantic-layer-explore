@@ -16,6 +16,7 @@
   "dependencies": {
     "@base-ui/react": "^1.7.0",
     "@google/genai": "2.8.0",
+    "@mastra/core": "^1.59.0",
     "@xyflow/react": "^12.11.2",
     "better-sqlite3": "^13.0.2",
     "class-variance-authority": "^0.7.1",

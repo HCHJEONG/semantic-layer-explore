@@ -23,6 +23,12 @@ export const deviceCommandSchema = z.object({
   value: z.number().optional(),
   issuedBy: z.enum(["rule-engine", "user"]),
   issuedAt: z.iso.datetime(),
+  causation: z.object({
+    correlationId: z.string().min(1),
+    ruleId: z.string().min(1),
+    ruleEventId: z.string().min(1),
+    triggerEventId: z.string().min(1),
+  }).optional(),
 });
 
 export const manualReadingSchema = z.object({ value: z.union([z.number(), z.boolean()]) });

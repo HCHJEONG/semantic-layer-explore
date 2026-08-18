@@ -40,6 +40,8 @@ Simulator Sensor → Sensor Event → Rule Engine → Virtual Device
 
 The rule engine—not Gemini—evaluates approved rules and executes device commands. The simulator implements the same adapter boundary reserved for a future MQTT/Arduino connection.
 
+The Workspace Dashboard also includes a minimal **Explain Why** flow for explainable action events. When a device command appears in the Event Timeline, the user can jump to Ask AI Explain Mode. The backend reconstructs the application-level causal trace from recorded events first, then runs a small Mastra workflow that reviews sensor, rule, and execution evidence before producing the structured explanation. This is read-only: it does not issue commands, change rules, or infer why the physical world produced a sensor reading.
+
 The demo keeps deployment simple by using one SQLite file, but the schema separates the semantic metadata store from operational state. Ontology records live in `semantic_classes`, `semantic_properties`, `semantic_individuals`, and `semantic_relations`; runtime state lives in `sensors`, `devices`, `sensor_readings`, `events`, and `rules`.
 
 ```text
@@ -97,6 +99,7 @@ For the full retrospective handoff plan, see [`implementation-plan.md`](./implem
 - Validated Rule CRUD, deterministic operator evaluation, and per-rule cooldown
 - Sensor Event → Rule match → Virtual Device execution with auditable outcomes
 - Polling-based workspace dashboard with live sensor cards, device controls, deterministic demo scenarios, and an event timeline
+- Explain Why for eligible device-command events, with deterministic causal traces and partial explanations when provenance is missing
 - Gemini Rule Compiler with ontology/sensor/device tool calls, validated JSON preview, and an explicit human approval gate
 - Physical Workspace Chat grounded in current state, approved rules, and recent events
 - Extended physical ontology showing `Sensor → Event → Rule → Device`, with runtime IDs bound to semantic Individuals
@@ -127,6 +130,7 @@ For the full retrospective handoff plan, see [`implementation-plan.md`](./implem
 | `GET`, `POST` | `/api/simulator/*` | Inspect and control the simulator |
 | `POST` | `/api/ai/rules/propose` | Propose—but never save—a validated rule with Gemini |
 | `POST` | `/api/ai/chat` | Explain workspace state and events through ontology-first tools |
+| `POST` | `/api/ai/explain-event` | Build a read-only causal trace for one explainable event |
 
 ## Local development
 

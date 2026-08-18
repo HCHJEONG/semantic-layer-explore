@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, BellRing, Fan, Gauge, Lightbulb, Play, Radio, RefreshCw, Ruler, ShieldCheck, Thermometer, ToggleLeft, UserCheck, Zap } from "lucide-react";
+import { Activity, BellRing, Fan, Gauge, HelpCircle, Lightbulb, Play, Radio, RefreshCw, Ruler, ShieldCheck, Thermometer, ToggleLeft, UserCheck, Zap } from "lucide-react";
 import type { SensorReading, SimulatorScenario, WorkspaceState } from "@/domain/physical";
 import type { RuleRecord } from "@/domain/rule";
 import { Button } from "@/components/ui/button";
@@ -63,7 +63,11 @@ function mergeEvents(currentEvents: WorkspaceEvent[], incomingEvents: WorkspaceE
   return [...byId.values()].sort((left, right) => right.id - left.id).slice(0, 40);
 }
 
-export function WorkspaceDashboard() {
+function isExplainableEvent(event: WorkspaceEvent) {
+  return event.type === "device.command.succeeded" || event.type === "device.command.failed";
+}
+
+export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventId: string) => void }) {
   const [state, setState] = useState<WorkspaceState | null>(null);
   const [events, setEvents] = useState<WorkspaceEvent[]>([]);
   const [rules, setRules] = useState<RuleRecord[]>([]);
@@ -357,6 +361,12 @@ export function WorkspaceDashboard() {
                   <div>
                     <strong>{eventDescription(event, rules)}</strong>
                     <span>{event.type}</span>
+                    {isExplainableEvent(event) && (
+                      <Button className="explain-event-button" variant="outline" size="xs" onClick={() => onExplainEvent(event.eventId)}>
+                        <HelpCircle />
+                        Explain Why
+                      </Button>
+                    )}
                   </div>
                 </article>
               )) : <div className="empty">Events will appear as the simulator runs.</div>}

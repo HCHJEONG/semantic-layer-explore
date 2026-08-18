@@ -123,12 +123,14 @@ test("main page keeps the BestAiCom Semantic Workspace baseline", async () => {
 });
 
 test("Physical AI endpoints reject invalid requests before invoking Gemini", async () => {
-  const [chatResponse, proposalResponse] = await Promise.all([
+  const [chatResponse, proposalResponse, explainResponse] = await Promise.all([
     fetch(`${origin}/api/ai/chat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question: "" }) }),
     fetch(`${origin}/api/ai/rules/propose`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ instruction: "x" }) }),
+    fetch(`${origin}/api/ai/explain-event`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ eventId: "" }) }),
   ]);
   assert.equal(chatResponse.status, 400);
   assert.equal(proposalResponse.status, 400);
+  assert.equal(explainResponse.status, 400);
 });
 
 test("simulator exposes four sensors and four virtual devices", async () => {
@@ -252,4 +254,97 @@ test("rules are validated, editable, and execute device commands from sensor eve
   const deleteResponse = await fetch(`${origin}/api/rules/${created.id}`, { method: "DELETE" });
   assert.equal(deleteResponse.status, 204);
   assert.equal((await fetch(`${origin}/api/rules/${created.id}`)).status, 404);
+});
+
+test("Explain Why reconstructs rule-triggered device command causality", async () => {
+  const createResponse = await fetch(`${origin}/api/rules`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: "Explain high temperature fan", description: "Turn on the fan above 30 C for explanation tests",
+      condition: { sensorId: "temperature-01", operator: "gt", value: 30, unit: "celsius" },
+      action: { deviceId: "relay-fan-01", command: "on" }, enabled: true, cooldownSeconds: 0,
+    }),
+  });
+  assert.equal(createResponse.status, 201);
+  const created = await createResponse.json();
+
+  const readingResponse = await fetch(`${origin}/api/simulator/sensors/temperature-01/readings`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ value: 33 }),
+  });
+  assert.equal(readingResponse.status, 201);
+
+  let ruleCommandEvent;
+  const deadline = Date.now() + 3_000;
+  while (Date.now() < deadline) {
+    const eventLog = await fetch(`${origin}/api/events?limit=200`).then((response) => response.json());
+    ruleCommandEvent = eventLog.find(({ type, sourceId, payload }) => (
+      type === "device.command.succeeded"
+      && sourceId === "relay-fan-01"
+      && payload.command.issuedBy === "rule-engine"
+      && payload.command.causation?.ruleId === created.id
+    ));
+    if (ruleCommandEvent) break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.ok(ruleCommandEvent);
+
+  const explainResponse = await fetch(`${origin}/api/ai/explain-event`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ eventId: ruleCommandEvent.eventId }),
+  });
+  assert.equal(explainResponse.status, 200);
+  const explanation = await explainResponse.json();
+
+  assert.equal(explanation.explainable, true);
+  assert.equal(explanation.completeness, "complete");
+  assert.deepEqual(explanation.causalSteps.map(({ type }) => type), ["sensor", "rule", "execution"]);
+  assert.equal(explanation.matchedRule.ruleId, created.id);
+  assert.equal(explanation.triggerReading.sensorId, "temperature-01");
+  assert.equal(explanation.deviceExecution.sourceId, "relay-fan-01");
+  assert.ok(explanation.evidence.every(({ support }) => support === "proven"));
+  assert.equal(explanation.workflow.engine, "mastra-workflow");
+  assert.deepEqual(Object.keys(explanation.agentFindings), ["sensor", "rule", "execution"]);
+  assert.equal(explanation.critic.rejectedClaims.length, 0);
+  assert.equal(explanation.critic.verifiedClaims.length, 3);
+
+  const deleteResponse = await fetch(`${origin}/api/rules/${created.id}`, { method: "DELETE" });
+  assert.equal(deleteResponse.status, 204);
+});
+
+test("Explain Why returns a partial trace for manual device commands", async () => {
+  const commandResponse = await fetch(`${origin}/api/devices/led-01/commands`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ command: "off" }),
+  });
+  assert.equal(commandResponse.status, 200);
+
+  const eventLog = await fetch(`${origin}/api/events?limit=100`).then((response) => response.json());
+  const manualCommandEvent = eventLog.find(({ type, sourceId, payload }) => (
+    type === "device.command.succeeded"
+    && sourceId === "led-01"
+    && payload.command.issuedBy === "user"
+  ));
+  assert.ok(manualCommandEvent);
+
+  const explainResponse = await fetch(`${origin}/api/ai/explain-event`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ eventId: manualCommandEvent.eventId }),
+  });
+  assert.equal(explainResponse.status, 200);
+  const explanation = await explainResponse.json();
+
+  assert.equal(explanation.explainable, true);
+  assert.equal(explanation.completeness, "partial");
+  assert.deepEqual(explanation.missing, ["matched rule", "trigger sensor reading"]);
+  assert.deepEqual(explanation.causalSteps.map(({ type }) => type), ["execution"]);
+  assert.ok(explanation.evidence.some(({ id, support }) => id === "device-execution" && support === "proven"));
+  assert.equal(explanation.agentFindings.sensor.uncertainties.length, 1);
+  assert.equal(explanation.agentFindings.rule.uncertainties.length, 1);
+  assert.equal(explanation.critic.verifiedClaims.length, 1);
 });
