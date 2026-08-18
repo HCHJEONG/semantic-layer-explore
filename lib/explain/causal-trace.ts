@@ -92,11 +92,10 @@ export async function buildCausalTrace(eventId: string): Promise<CausalTrace> {
   if (!parsedCommand.success) return buildInsufficientTrace(eventId, selectedEvent, "The selected action event does not include a valid device command payload.");
 
   const command = parsedCommand.data;
-  const allRows = await eventStore.listEventsAscending(200);
   const causation = command.causation;
   const ruleEvent = causation
-    ? allRows.find((event) => event.eventId === causation.ruleEventId)
-    : [...allRows].reverse().find((event) => {
+    ? await eventStore.getEventByEventId(causation.ruleEventId) ?? undefined
+    : (await eventStore.listEventsBefore(selectedEvent.id, 200)).find((event) => {
         const payload = getPayloadObject(event);
         const action = ruleActionSchema.safeParse(payload.action);
         return event.type === "rule.matched" && action.success && action.data.deviceId === command.deviceId && action.data.command === command.command && event.id < selectedEvent.id;

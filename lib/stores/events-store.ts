@@ -1,6 +1,6 @@
 import "server-only";
 
-import { asc, desc, eq, gt } from "drizzle-orm";
+import { asc, desc, eq, gt, lt } from "drizzle-orm";
 import { getDb } from "@/db";
 import { events } from "@/db/schema";
 
@@ -29,6 +29,7 @@ export type EventStore = {
   getEventByEventId(eventId: string): Promise<WorkspaceEvent | null>;
   listEvents(limit?: number): Promise<WorkspaceEvent[]>;
   listEventsAfter(id: number, limit?: number): Promise<WorkspaceEvent[]>;
+  listEventsBefore(id: number, limit?: number): Promise<WorkspaceEvent[]>;
   listEventsAscending(limit?: number): Promise<WorkspaceEvent[]>;
   insertEvent(event: NewWorkspaceEvent): Promise<void>;
 };
@@ -44,6 +45,9 @@ export function getEventStore(): EventStore {
     },
     async listEventsAfter(id, limit = 50) {
       return getDb().select().from(events).where(gt(events.id, id)).orderBy(asc(events.id)).limit(limitEvents(limit)).all().map(toWorkspaceEvent);
+    },
+    async listEventsBefore(id, limit = 50) {
+      return getDb().select().from(events).where(lt(events.id, id)).orderBy(desc(events.id)).limit(limitEvents(limit)).all().map(toWorkspaceEvent);
     },
     async listEventsAscending(limit = 200) {
       return getDb().select().from(events).orderBy(asc(events.id)).limit(limitEvents(limit)).all().map(toWorkspaceEvent);
