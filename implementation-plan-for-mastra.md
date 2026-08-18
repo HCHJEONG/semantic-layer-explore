@@ -678,7 +678,12 @@ Current state:
 
   causal-trace
       ↓
-  evidence-review-and-critic
+  parallel evidence review
+      ├─ sensor-review
+      ├─ rule-review
+      └─ execution-review
+      ↓
+  critic
 
 - The workflow does not call the LLM adapter yet.
 
@@ -727,9 +732,10 @@ Minimal steps:
    - `rule-review`
    - `execution-review`
    - `critic`
-2. Keep all four steps deterministic first.
+   Completed.
+2. Keep all four steps deterministic first. Completed.
 3. Use Mastra `.parallel()` for the three evidence review steps if it fits
-   cleanly.
+   cleanly. Completed.
 4. Add `lib/llm/explain-review.ts`.
 5. Behind `EXPLAIN_LLM_REVIEW=enabled`, call `getLlmProvider()` from the review
    helpers.

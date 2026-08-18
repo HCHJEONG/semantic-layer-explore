@@ -85,10 +85,8 @@ function verifyEvidence(trace: CausalTrace, reviews: EvidenceReview[]): CriticRe
   });
 }
 
-function buildWorkflowResult(trace: CausalTrace): ExplainEventWorkflowResult {
-  const sensor = reviewSensorEvidence(trace);
-  const rule = reviewRuleEvidence(trace);
-  const execution = reviewExecutionEvidence(trace);
+function buildWorkflowResult(trace: CausalTrace, reviews: { sensor: EvidenceReview; rule: EvidenceReview; execution: EvidenceReview }): ExplainEventWorkflowResult {
+  const { sensor, rule, execution } = reviews;
   const critic = verifyEvidence(trace, [sensor, rule, execution]);
 
   return {
@@ -111,6 +109,19 @@ function buildWorkflowResult(trace: CausalTrace): ExplainEventWorkflowResult {
 const explainInputSchema = z.object({ eventId: z.string().min(1) });
 const causalTraceSchema = z.custom<CausalTrace>();
 const workflowResultSchema = z.custom<ExplainEventWorkflowResult>();
+const parallelReviewOutputSchema = z.object({
+  "sensor-review": evidenceReviewSchema,
+  "rule-review": evidenceReviewSchema,
+  "execution-review": evidenceReviewSchema,
+});
+const criticInputSchema = z.object({
+  trace: causalTraceSchema,
+  reviews: z.object({
+    sensor: evidenceReviewSchema,
+    rule: evidenceReviewSchema,
+    execution: evidenceReviewSchema,
+  }),
+});
 
 const buildTraceStep = createStep({
   id: "causal-trace",
@@ -119,11 +130,32 @@ const buildTraceStep = createStep({
   execute: async ({ inputData }) => buildCausalTrace(inputData.eventId),
 });
 
-const reviewEvidenceStep = createStep({
-  id: "evidence-review-and-critic",
+const sensorReviewStep = createStep({
+  id: "sensor-review",
   inputSchema: causalTraceSchema,
+  outputSchema: evidenceReviewSchema,
+  execute: async ({ inputData }) => reviewSensorEvidence(inputData),
+});
+
+const ruleReviewStep = createStep({
+  id: "rule-review",
+  inputSchema: causalTraceSchema,
+  outputSchema: evidenceReviewSchema,
+  execute: async ({ inputData }) => reviewRuleEvidence(inputData),
+});
+
+const executionReviewStep = createStep({
+  id: "execution-review",
+  inputSchema: causalTraceSchema,
+  outputSchema: evidenceReviewSchema,
+  execute: async ({ inputData }) => reviewExecutionEvidence(inputData),
+});
+
+const criticStep = createStep({
+  id: "critic",
+  inputSchema: criticInputSchema,
   outputSchema: workflowResultSchema,
-  execute: async ({ inputData }) => buildWorkflowResult(inputData),
+  execute: async ({ inputData }) => buildWorkflowResult(inputData.trace, inputData.reviews),
 });
 
 export const explainEventWorkflow = createWorkflow({
@@ -132,7 +164,19 @@ export const explainEventWorkflow = createWorkflow({
   outputSchema: workflowResultSchema,
 })
   .then(buildTraceStep)
-  .then(reviewEvidenceStep)
+  .parallel([sensorReviewStep, ruleReviewStep, executionReviewStep])
+  .map(async ({ inputData, getStepResult }) => {
+    const reviews = parallelReviewOutputSchema.parse(inputData);
+    return criticInputSchema.parse({
+      trace: getStepResult(buildTraceStep),
+      reviews: {
+        sensor: reviews["sensor-review"],
+        rule: reviews["rule-review"],
+        execution: reviews["execution-review"],
+      },
+    });
+  })
+  .then(criticStep)
   .commit();
 
 export async function runExplainEventWorkflow(eventId: string): Promise<ExplainEventWorkflowResult> {
