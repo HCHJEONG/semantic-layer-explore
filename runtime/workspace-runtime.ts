@@ -1,11 +1,10 @@
 import "server-only";
 
-import { asc, desc, eq, gt } from "drizzle-orm";
 import { SimulatorAdapter } from "@/adapters/simulator/simulator-adapter";
-import { getDb } from "@/db";
-import { devices, events, sensorReadings } from "@/db/schema";
 import { deviceCommandSchema, type DeviceCommand, type SensorReading, type SimulatorScenario } from "@/domain/physical";
 import { listEnabledRules, markRuleTriggered } from "@/lib/rules";
+import { getEventStore, type NewWorkspaceEvent } from "@/lib/stores/events-store";
+import { getPhysicalStore } from "@/lib/stores/physical-store";
 import { evaluateRule } from "@/runtime/rule-engine";
 import { startRetentionScheduler } from "@/runtime/retention";
 
@@ -25,7 +24,9 @@ class WorkspaceRuntime {
 
   start() {
     if (!this.initialized) {
-      this.adapter.subscribeSensors((reading) => this.persistReading(reading));
+      this.adapter.subscribeSensors((reading) => {
+        void this.persistReading(reading);
+      });
       startRetentionScheduler();
       this.initialized = true;
     }
@@ -69,7 +70,7 @@ class WorkspaceRuntime {
     const result = await this.adapter.executeCommand(validCommand);
     const now = new Date().toISOString();
     if (result.success) {
-      getDb().update(devices).set({ stateJson: JSON.stringify(result.state), updatedAt: now }).where(eq(devices.id, result.deviceId)).run();
+      await getPhysicalStore().updateDeviceState(result.deviceId, result.state, now);
     }
     this.persistEvent({
       eventId: crypto.randomUUID(), type: result.success ? "device.command.succeeded" : "device.command.failed",
@@ -78,26 +79,16 @@ class WorkspaceRuntime {
     return result;
   }
 
-  getEvents(limit = 50) {
-    return getDb().select().from(events).orderBy(desc(events.occurredAt)).limit(Math.min(Math.max(limit, 1), 200)).all().map((event) => ({
-      ...event,
-      payload: JSON.parse(event.payloadJson) as unknown,
-    }));
+  async getEvents(limit = 50) {
+    return getEventStore().listEvents(limit);
   }
 
-  getEventsAfter(id: number, limit = 50) {
-    return getDb().select().from(events).where(gt(events.id, id)).orderBy(asc(events.id)).limit(Math.min(Math.max(limit, 1), 200)).all().map((event) => ({
-      ...event,
-      payload: JSON.parse(event.payloadJson) as unknown,
-    }));
+  async getEventsAfter(id: number, limit = 50) {
+    return getEventStore().listEventsAfter(id, limit);
   }
 
-  private persistReading(reading: SensorReading) {
-    const db = getDb();
-    db.insert(sensorReadings).values({
-      eventId: reading.eventId, sensorId: reading.sensorId, valueJson: JSON.stringify(reading.value),
-      measuredAt: reading.measuredAt, source: reading.source,
-    }).run();
+  private async persistReading(reading: SensorReading) {
+    await getPhysicalStore().insertSensorReading(reading);
     this.persistEvent({
       eventId: reading.eventId, type: "sensor.reading", sourceType: "sensor",
       sourceId: reading.sensorId, payload: reading, occurredAt: reading.measuredAt,
@@ -140,12 +131,12 @@ class WorkspaceRuntime {
   }
 
   private async evaluateRules(reading: SensorReading) {
-    for (const rule of listEnabledRules()) {
+    for (const rule of await listEnabledRules()) {
       if (!evaluateRule(rule, reading).matched) continue;
       const triggeredAt = new Date().toISOString();
       const correlationId = crypto.randomUUID();
       const ruleEventId = crypto.randomUUID();
-      markRuleTriggered(rule.id, triggeredAt);
+      await markRuleTriggered(rule.id, triggeredAt);
       this.persistEvent({
         eventId: ruleEventId, type: "rule.matched", sourceType: "rule", sourceId: rule.id,
         payload: {
@@ -166,11 +157,8 @@ class WorkspaceRuntime {
     }
   }
 
-  private persistEvent(event: { eventId: string; type: string; sourceType: string; sourceId: string; payload: unknown; occurredAt: string }) {
-    getDb().insert(events).values({
-      eventId: event.eventId, type: event.type, sourceType: event.sourceType,
-      sourceId: event.sourceId, payloadJson: JSON.stringify(event.payload), occurredAt: event.occurredAt,
-    }).run();
+  private persistEvent(event: NewWorkspaceEvent) {
+    void getEventStore().insertEvent(event);
   }
 }
 

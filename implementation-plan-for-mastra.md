@@ -580,11 +580,37 @@ Current state:
   - `sqliteTable`
   - sync query helpers such as `.get()`, `.all()`, `.run()`
 - Query logic is spread across:
-  - `lib/ontology.ts`
-  - `lib/rules.ts`
   - `runtime/workspace-runtime.ts`
-  - `lib/causal-trace.ts`
   - several API routes
+- Event history access now has a first store boundary:
+  - `lib/stores/events-store.ts`
+  - `app/api/events/route.ts` uses the event store.
+  - `app/api/events/stream/route.ts` uses the event store.
+  - `lib/causal-trace.ts` uses the event store and no longer imports `getDb()` or
+    `events` directly.
+  - `runtime/workspace-runtime.ts` uses the event store for event insertion and
+    event listing.
+- Rule access now has a store boundary:
+  - `lib/stores/rules-store.ts`
+  - `lib/rules.ts` keeps rule validation/cache/domain service behavior and calls
+    the store.
+  - Rule API routes use the async rule service methods.
+  - Rule execution in `runtime/workspace-runtime.ts` awaits the async rule
+    service boundary.
+- Ontology access now has a store boundary:
+  - `lib/stores/ontology-store.ts`
+  - `lib/ontology.ts` keeps semantic resolution behavior and calls the store.
+  - Class, property, and individual creation routes use ontology service/store
+    methods instead of importing `getDb()` directly.
+- Physical device/sensor persistence now has a store boundary:
+  - `lib/stores/physical-store.ts`
+  - `runtime/workspace-runtime.ts` uses the physical store for sensor reading
+    insertion and device state updates.
+- Database infrastructure operations now have a store boundary:
+  - `lib/stores/database-store.ts`
+  - `app/api/ready/route.ts` uses the database store for readiness checks.
+  - `runtime/retention.ts` uses the database store for batched cleanup
+    execution.
 
 Target state:
 
@@ -602,10 +628,11 @@ First introduce interfaces that hide SQLite-specific access patterns.
 
 Recommended store order:
 
-1. Event store
-2. Rule store
-3. Ontology store
-4. Device/sensor store if needed
+1. Event store. Completed.
+2. Rule store. Completed.
+3. Ontology store. Completed.
+4. Device/sensor store. Completed.
+5. Database infrastructure store. Completed.
 
 Start with Event store because Explain Why and Mastra causal trace depend on
 auditable event history.
@@ -629,7 +656,7 @@ Important:
 
 Minimal steps:
 
-1. Add `lib/stores/events-store.ts`.
+1. Add `lib/stores/events-store.ts`. Completed.
 2. Move event row parsing and event insert/read logic there.
 3. Update `runtime/workspace-runtime.ts`, `app/api/events/route.ts`,
    `app/api/events/stream/route.ts`, and `lib/causal-trace.ts` to use it.
@@ -745,6 +772,10 @@ Acceptance:
 - `lib/causal-trace.ts` no longer imports `getDb()` or `events` directly.
 - Event API/timeline behavior remains unchanged.
 - `npm run build`, `npm run lint`, and `npm test` pass.
+
+Status:
+
+- Completed.
 
 Only after A and B:
 

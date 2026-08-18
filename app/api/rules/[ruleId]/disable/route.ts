@@ -3,7 +3,7 @@ import { errorResponse } from "@/lib/validation";
 
 export async function POST(_request: Request, context: { params: Promise<{ ruleId: string }> }) {
   try {
-    const rule = setRuleEnabled((await context.params).ruleId, false);
+    const rule = await setRuleEnabled((await context.params).ruleId, false);
     return rule ? Response.json(rule) : Response.json({ error: "Rule not found" }, { status: 404 });
   } catch (error) { return errorResponse(error); }
 }

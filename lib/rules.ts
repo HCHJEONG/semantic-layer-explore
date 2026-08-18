@@ -1,51 +1,33 @@
 import "server-only";
 
-import { asc, eq } from "drizzle-orm";
-import { getDb } from "@/db";
-import { devices, rules, sensors } from "@/db/schema";
-import { ruleActionSchema, ruleConditionSchema, ruleInputSchema, type RuleInput, type RuleRecord } from "@/domain/rule";
+import { ruleInputSchema, type RuleInput, type RuleRecord } from "@/domain/rule";
+import { getRuleStore } from "@/lib/stores/rules-store";
 import { InputValidationError } from "@/lib/validation";
 
-type RuleRow = typeof rules.$inferSelect;
 let enabledRuleCache: RuleRecord[] | null = null;
 
 function invalidateEnabledRuleCache() {
   enabledRuleCache = null;
 }
 
-function toRuleRecord(row: RuleRow): RuleRecord {
-  return {
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    condition: ruleConditionSchema.parse(JSON.parse(row.conditionJson)),
-    action: ruleActionSchema.parse(JSON.parse(row.actionJson)),
-    enabled: row.enabled,
-    cooldownSeconds: row.cooldownSeconds,
-    lastTriggeredAt: row.lastTriggeredAt,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  };
+export async function listRules() {
+  return getRuleStore().listRules();
 }
 
-export function listRules() {
-  return getDb().select().from(rules).orderBy(asc(rules.createdAt)).all().map(toRuleRecord);
+export async function getRule(id: string) {
+  return getRuleStore().getRule(id);
 }
 
-export function getRule(id: string) {
-  const row = getDb().select().from(rules).where(eq(rules.id, id)).get();
-  return row ? toRuleRecord(row) : null;
-}
-
-export function listEnabledRules() {
-  enabledRuleCache ??= getDb().select().from(rules).where(eq(rules.enabled, true)).all().map(toRuleRecord);
+export async function listEnabledRules() {
+  enabledRuleCache ??= await getRuleStore().listEnabledRules();
   return enabledRuleCache;
 }
 
-export function validateRuleTargets(input: RuleInput) {
-  const db = getDb();
-  const sensor = db.select().from(sensors).where(eq(sensors.id, input.condition.sensorId)).get();
-  const device = db.select().from(devices).where(eq(devices.id, input.action.deviceId)).get();
+export async function validateRuleTargets(input: RuleInput) {
+  const [sensor, device] = await Promise.all([
+    getRuleStore().getSensor(input.condition.sensorId),
+    getRuleStore().getDevice(input.action.deviceId),
+  ]);
   if (!sensor || !sensor.enabled) throw new InputValidationError(`Unknown or disabled sensor: ${input.condition.sensorId}`);
   if (!device || !device.enabled) throw new InputValidationError(`Unknown or disabled device: ${input.action.deviceId}`);
   if (sensor.unit !== input.condition.unit) throw new InputValidationError(`Sensor ${sensor.id} uses ${sensor.unit}, not ${input.condition.unit}.`);
@@ -59,42 +41,33 @@ export function validateRuleTargets(input: RuleInput) {
   }
 }
 
-export function createRule(value: unknown) {
+export async function createRule(value: unknown) {
   const input = ruleInputSchema.parse(value);
-  validateRuleTargets(input);
+  await validateRuleTargets(input);
   const now = new Date().toISOString();
-  const row = getDb().insert(rules).values({
-    id: crypto.randomUUID(), name: input.name, description: input.description,
-    conditionJson: JSON.stringify(input.condition), actionJson: JSON.stringify(input.action),
-    enabled: input.enabled, cooldownSeconds: input.cooldownSeconds,
-    createdAt: now, updatedAt: now,
-  }).returning().get();
+  const rule = await getRuleStore().createRule({ id: crypto.randomUUID(), ...input, createdAt: now, updatedAt: now });
   invalidateEnabledRuleCache();
-  return toRuleRecord(row);
+  return rule;
 }
 
-export function updateRule(id: string, patch: Partial<RuleInput>) {
-  const current = getRule(id);
+export async function updateRule(id: string, patch: Partial<RuleInput>) {
+  const current = await getRule(id);
   if (!current) return null;
   const input = ruleInputSchema.parse({ ...current, ...patch });
-  validateRuleTargets(input);
-  const row = getDb().update(rules).set({
-    name: input.name, description: input.description,
-    conditionJson: JSON.stringify(input.condition), actionJson: JSON.stringify(input.action),
-    enabled: input.enabled, cooldownSeconds: input.cooldownSeconds, updatedAt: new Date().toISOString(),
-  }).where(eq(rules.id, id)).returning().get();
+  await validateRuleTargets(input);
+  const rule = await getRuleStore().updateRule(id, input, new Date().toISOString());
   invalidateEnabledRuleCache();
-  return row ? toRuleRecord(row) : null;
+  return rule;
 }
 
-export function setRuleEnabled(id: string, enabled: boolean) {
-  const row = getDb().update(rules).set({ enabled, updatedAt: new Date().toISOString() }).where(eq(rules.id, id)).returning().get();
+export async function setRuleEnabled(id: string, enabled: boolean) {
+  const rule = await getRuleStore().setRuleEnabled(id, enabled, new Date().toISOString());
   invalidateEnabledRuleCache();
-  return row ? toRuleRecord(row) : null;
+  return rule;
 }
 
-export function markRuleTriggered(id: string, triggeredAt: string) {
-  getDb().update(rules).set({ lastTriggeredAt: triggeredAt, updatedAt: triggeredAt }).where(eq(rules.id, id)).run();
+export async function markRuleTriggered(id: string, triggeredAt: string) {
+  await getRuleStore().markRuleTriggered(id, triggeredAt);
   const cachedRule = enabledRuleCache?.find((rule) => rule.id === id);
   if (cachedRule) {
     cachedRule.lastTriggeredAt = triggeredAt;
@@ -102,8 +75,8 @@ export function markRuleTriggered(id: string, triggeredAt: string) {
   }
 }
 
-export function deleteRule(id: string) {
-  const deleted = getDb().delete(rules).where(eq(rules.id, id)).run().changes > 0;
+export async function deleteRule(id: string) {
+  const deleted = await getRuleStore().deleteRule(id);
   if (deleted) invalidateEnabledRuleCache();
   return deleted;
 }

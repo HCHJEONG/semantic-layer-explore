@@ -1,14 +1,9 @@
 import "server-only";
 
-import { asc, eq } from "drizzle-orm";
-import { getDb } from "@/db";
-import { events } from "@/db/schema";
 import { deviceCommandSchema, sensorReadingSchema } from "@/domain/physical";
 import { ruleActionSchema, ruleConditionSchema } from "@/domain/rule";
+import { getEventStore, type WorkspaceEvent } from "@/lib/stores/events-store";
 import { InputValidationError } from "@/lib/validation";
-
-type EventRow = typeof events.$inferSelect;
-type WorkspaceEvent = Omit<EventRow, "payloadJson"> & { payload: unknown };
 
 export type EvidenceSupport = "proven" | "derived" | "insufficient";
 export type TraceCompleteness = "complete" | "partial" | "insufficient";
@@ -44,10 +39,6 @@ export type CausalTrace = {
 };
 
 const supportedActionEvents = new Set(["device.command.succeeded", "device.command.failed"]);
-
-function toWorkspaceEvent(row: EventRow): WorkspaceEvent {
-  return { ...row, payload: JSON.parse(row.payloadJson) as unknown };
-}
 
 function getPayloadObject(event: WorkspaceEvent | undefined) {
   return event?.payload && typeof event.payload === "object" ? event.payload as Record<string, unknown> : {};
@@ -88,11 +79,11 @@ function buildInsufficientTrace(eventId: string, selectedEvent?: WorkspaceEvent,
   };
 }
 
-export function buildCausalTrace(eventId: string): CausalTrace {
-  const selectedRow = getDb().select().from(events).where(eq(events.eventId, eventId)).get();
-  if (!selectedRow) throw new InputValidationError(`Unknown event: ${eventId}`);
+export async function buildCausalTrace(eventId: string): Promise<CausalTrace> {
+  const eventStore = getEventStore();
+  const selectedEvent = await eventStore.getEventByEventId(eventId);
+  if (!selectedEvent) throw new InputValidationError(`Unknown event: ${eventId}`);
 
-  const selectedEvent = toWorkspaceEvent(selectedRow);
   if (!supportedActionEvents.has(selectedEvent.type)) return buildInsufficientTrace(eventId, selectedEvent);
 
   const selectedPayload = getPayloadObject(selectedEvent);
@@ -101,7 +92,7 @@ export function buildCausalTrace(eventId: string): CausalTrace {
   if (!parsedCommand.success) return buildInsufficientTrace(eventId, selectedEvent, "The selected action event does not include a valid device command payload.");
 
   const command = parsedCommand.data;
-  const allRows = getDb().select().from(events).orderBy(asc(events.id)).all().map(toWorkspaceEvent);
+  const allRows = await eventStore.listEventsAscending(200);
   const causation = command.causation;
   const ruleEvent = causation
     ? allRows.find((event) => event.eventId === causation.ruleEventId)

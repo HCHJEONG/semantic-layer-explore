@@ -1,11 +1,4 @@
-import { asc } from "drizzle-orm";
-import { getDb } from "@/db";
-import { semanticClasses, semanticIndividuals, semanticProperties, semanticRelations } from "@/db/schema";
-
-type ClassRow = typeof semanticClasses.$inferSelect;
-type PropertyRow = typeof semanticProperties.$inferSelect;
-type IndividualRow = typeof semanticIndividuals.$inferSelect;
-type RelationRow = typeof semanticRelations.$inferSelect;
+import { getOntologyStore, type ClassRow, type IndividualRow, type PropertyRow, type RelationRow } from "@/lib/stores/ontology-store";
 
 function resolveProperties(rows: PropertyRow[], classRows: ClassRow[]) {
   const classNames = new Map(classRows.map((item) => [item.id, item.name]));
@@ -32,38 +25,36 @@ function resolveRelations(rows: RelationRow[], individualRows: IndividualRow[], 
   }));
 }
 
-export function getClasses() {
-  return getDb().select().from(semanticClasses).orderBy(asc(semanticClasses.id)).all();
+export async function getClasses() {
+  return getOntologyStore().listClasses();
 }
 
-export function getProperties() {
-  const db = getDb();
-  const classRows = db.select().from(semanticClasses).orderBy(asc(semanticClasses.id)).all();
-  const propertyRows = db.select().from(semanticProperties).orderBy(asc(semanticProperties.id)).all();
+export async function getProperties() {
+  const store = getOntologyStore();
+  const [classRows, propertyRows] = await Promise.all([store.listClasses(), store.listProperties()]);
   return resolveProperties(propertyRows, classRows);
 }
 
-export function getIndividuals() {
-  const db = getDb();
-  const classRows = db.select().from(semanticClasses).orderBy(asc(semanticClasses.id)).all();
-  const individualRows = db.select().from(semanticIndividuals).orderBy(asc(semanticIndividuals.id)).all();
+export async function getIndividuals() {
+  const store = getOntologyStore();
+  const [classRows, individualRows] = await Promise.all([store.listClasses(), store.listIndividuals()]);
   return resolveIndividuals(individualRows, classRows);
 }
 
-export function getRelations() {
-  const db = getDb();
-  const individualRows = db.select().from(semanticIndividuals).orderBy(asc(semanticIndividuals.id)).all();
-  const propertyRows = db.select().from(semanticProperties).orderBy(asc(semanticProperties.id)).all();
-  const relationRows = db.select().from(semanticRelations).orderBy(asc(semanticRelations.id)).all();
+export async function getRelations() {
+  const store = getOntologyStore();
+  const [individualRows, propertyRows, relationRows] = await Promise.all([store.listIndividuals(), store.listProperties(), store.listRelations()]);
   return resolveRelations(relationRows, individualRows, propertyRows);
 }
 
-export function getOntology() {
-  const db = getDb();
-  const classRows = db.select().from(semanticClasses).orderBy(asc(semanticClasses.id)).all();
-  const propertyRows = db.select().from(semanticProperties).orderBy(asc(semanticProperties.id)).all();
-  const individualRows = db.select().from(semanticIndividuals).orderBy(asc(semanticIndividuals.id)).all();
-  const relationRows = db.select().from(semanticRelations).orderBy(asc(semanticRelations.id)).all();
+export async function getOntology() {
+  const store = getOntologyStore();
+  const [classRows, propertyRows, individualRows, relationRows] = await Promise.all([
+    store.listClasses(),
+    store.listProperties(),
+    store.listIndividuals(),
+    store.listRelations(),
+  ]);
 
   return {
     classes: classRows,
@@ -71,4 +62,16 @@ export function getOntology() {
     individuals: resolveIndividuals(individualRows, classRows),
     relations: resolveRelations(relationRows, individualRows, propertyRows),
   };
+}
+
+export async function createClass(input: Parameters<ReturnType<typeof getOntologyStore>["createClass"]>[0]) {
+  return getOntologyStore().createClass(input);
+}
+
+export async function createProperty(input: Parameters<ReturnType<typeof getOntologyStore>["createProperty"]>[0]) {
+  return getOntologyStore().createProperty(input);
+}
+
+export async function createIndividual(input: Parameters<ReturnType<typeof getOntologyStore>["createIndividual"]>[0]) {
+  return getOntologyStore().createIndividual(input);
 }

@@ -67,7 +67,7 @@ Return only valid JSON matching this TypeScript shape:
       temperature: 0.1,
     });
     const proposal = ruleInputSchema.parse(normalizeProposal(rawProposal));
-    validateRuleTargets(proposal);
+    await validateRuleTargets(proposal);
     return Response.json({ proposal, trace, remaining: allowance.remaining }, { headers: aiResponseHeaders(allowance.remaining) });
   } catch (error) { return aiErrorResponse(error); }
 }

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { sql } from "drizzle-orm";
-import { getDb } from "@/db";
+import { getDatabaseStore } from "@/lib/stores/database-store";
 
 const DAY_MS = 86_400_000;
 
@@ -19,32 +19,23 @@ export function getRetentionConfiguration() {
   };
 }
 
-async function deleteInBatches(statement: (batchSize: number) => ReturnType<typeof sql>, batchSize: number) {
-  let deleted = 0;
-  while (true) {
-    const result = getDb().run(statement(batchSize));
-    deleted += result.changes;
-    if (result.changes < batchSize) return deleted;
-    await new Promise<void>((resolve) => setImmediate(resolve));
-  }
-}
-
 export async function runRetentionCleanup(now = new Date()) {
   const config = getRetentionConfiguration();
+  const databaseStore = getDatabaseStore();
   const readingCutoff = new Date(now.getTime() - config.readingDays * DAY_MS).toISOString();
   const auditCutoff = new Date(now.getTime() - config.auditEventDays * DAY_MS).toISOString();
 
-  const sensorReadings = await deleteInBatches((batchSize) => sql`
+  const sensorReadings = await databaseStore.deleteInBatches((batchSize) => sql`
     delete from sensor_readings where id in (
       select id from sensor_readings where measured_at < ${readingCutoff} order by measured_at limit ${batchSize}
     )
   `, config.batchSize);
-  const readingEvents = await deleteInBatches((batchSize) => sql`
+  const readingEvents = await databaseStore.deleteInBatches((batchSize) => sql`
     delete from events where id in (
       select id from events where type = 'sensor.reading' and occurred_at < ${readingCutoff} order by occurred_at limit ${batchSize}
     )
   `, config.batchSize);
-  const auditEvents = await deleteInBatches((batchSize) => sql`
+  const auditEvents = await databaseStore.deleteInBatches((batchSize) => sql`
     delete from events where id in (
       select id from events where type <> 'sensor.reading' and occurred_at < ${auditCutoff} order by occurred_at limit ${batchSize}
     )
