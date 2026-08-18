@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { getDatabasePath, getDb } from "@/db";
-import { getGeminiConfiguration } from "@/lib/gemini";
+import { getLlmProviderConfiguration } from "@/lib/llm/provider";
 import { getRetentionConfiguration } from "@/runtime/retention";
 
 export const dynamic = "force-dynamic";
@@ -8,16 +8,17 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     getDb().run(sql`select 1`);
-    const gemini = getGeminiConfiguration();
+    const llm = getLlmProviderConfiguration();
     return Response.json({
       status: "ready",
       database: { status: "ready", path: getDatabasePath() },
       physicalAdapter: process.env.PHYSICAL_ADAPTER || "simulator",
       retention: getRetentionConfiguration(),
+      llm,
       gemini: {
-        configured: gemini.configured,
-        model: gemini.model,
-        location: gemini.location,
+        configured: llm.configured,
+        model: llm.model,
+        location: llm.location,
       },
     });
   } catch (error) {

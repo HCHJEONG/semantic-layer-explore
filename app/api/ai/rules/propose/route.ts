@@ -1,30 +1,14 @@
-import { Type } from "@google/genai";
 import { z } from "zod";
 import { ruleInputSchema } from "@/domain/rule";
 import { callApplicationTool, getToolDeclaration } from "@/lib/ai-tool-layer";
 import { aiErrorResponse, aiResponseHeaders, enforceAiAllowance } from "@/lib/ai-http";
-import { getGeminiClient, getGeminiModel } from "@/lib/gemini";
+import { getLlmProvider, type LlmMessage } from "@/lib/llm/provider";
 import { validateRuleTargets } from "@/lib/rules";
 
 const SYSTEM_PROMPT = `You compile natural-language automation requests into one safe Physical Workspace rule.
 You propose a rule only; you never save or execute it.
 Never assume a database schema or invent sensor/device IDs. Inspect ontology, sensors, and devices through REST tools.
 Return exactly one condition and one action. Preserve the user's language in name and description.`;
-
-const responseSchema = {
-  type: Type.OBJECT,
-  required: ["name", "description", "condition", "action", "enabled", "cooldownSeconds"],
-  properties: {
-    name: { type: Type.STRING }, description: { type: Type.STRING }, enabled: { type: Type.BOOLEAN }, cooldownSeconds: { type: Type.INTEGER },
-    condition: { type: Type.OBJECT, required: ["sensorId", "operator", "value", "unit"], properties: {
-      sensorId: { type: Type.STRING }, operator: { type: Type.STRING, enum: ["gt", "gte", "lt", "lte", "eq"] },
-      value: { type: Type.STRING }, unit: { type: Type.STRING, enum: ["celsius", "lux", "centimeter", "boolean"] },
-    } },
-    action: { type: Type.OBJECT, required: ["deviceId", "command"], properties: {
-      deviceId: { type: Type.STRING }, command: { type: Type.STRING, enum: ["on", "off", "set-angle", "beep"] }, value: { type: Type.NUMBER },
-    } },
-  },
-};
 
 function normalizeProposal(value: unknown) {
   if (!value || typeof value !== "object") return value;
@@ -48,31 +32,41 @@ export async function POST(request: Request) {
     const { instruction } = z.object({ instruction: z.string().trim().min(3).max(500) }).parse(await request.json());
     const { allowance, response: limited } = await enforceAiAllowance(request);
     if (limited) return limited;
-    const ai = getGeminiClient();
-    const contents: Array<Record<string, unknown>> = [{ role: "user", parts: [{ text: instruction }] }];
+    const provider = getLlmProvider();
+    const messages: LlmMessage[] = [{ role: "user", content: instruction }];
     const trace: string[] = [];
 
     for (const toolName of ["getOntology", "getSensors", "getDevices"]) {
-      const result = await ai.models.generateContent({
-        model: getGeminiModel(), contents: contents as never,
-        config: {
-          systemInstruction: SYSTEM_PROMPT, tools: [{ functionDeclarations: [getToolDeclaration(toolName)] }],
-          toolConfig: { functionCallingConfig: { mode: "ANY" as never, allowedFunctionNames: [toolName] } },
-        },
+      const result = await provider.generateWithTools({
+        system: SYSTEM_PROMPT,
+        messages,
+        tools: [getToolDeclaration(toolName)],
+        toolChoice: { mode: "any", allowedToolNames: [toolName] },
       });
-      const call = result.functionCalls?.[0];
-      if (!call?.name) throw new Error(`Gemini did not request ${toolName}.`);
-      const modelContent = result.candidates?.[0]?.content;
-      if (modelContent) contents.push(modelContent as unknown as Record<string, unknown>);
+      const call = result.toolCalls[0];
+      if (!call?.name) throw new Error(`${provider.id} did not request ${toolName}.`);
+      if (result.assistantMessage) messages.push(result.assistantMessage);
       trace.push(call.name);
-      contents.push({ role: "user", parts: [{ functionResponse: { name: call.name, response: { result: await callApplicationTool(call.name) } } }] });
+      messages.push({ role: "user", toolResponses: [{ name: call.name, response: { result: await callApplicationTool(call.name) } }] });
     }
 
-    const result = await ai.models.generateContent({
-      model: getGeminiModel(), contents: contents as never,
-      config: { systemInstruction: SYSTEM_PROMPT, responseMimeType: "application/json", responseSchema },
+    const rawProposal = await provider.generateStructured({
+      system: `${SYSTEM_PROMPT}
+Return only valid JSON matching this TypeScript shape:
+{
+  "name": string,
+  "description": string,
+  "condition": { "sensorId": string, "operator": "gt" | "gte" | "lt" | "lte" | "eq", "value": number | boolean | string, "unit": "celsius" | "lux" | "centimeter" | "boolean" },
+  "action": { "deviceId": string, "command": "on" | "off" | "set-angle" | "beep", "value"?: number },
+  "enabled": boolean,
+  "cooldownSeconds": number
+}`,
+      messages,
+      schema: z.unknown(),
+      schemaName: "RuleInput",
+      temperature: 0.1,
     });
-    const proposal = ruleInputSchema.parse(normalizeProposal(JSON.parse(result.text || "{}")));
+    const proposal = ruleInputSchema.parse(normalizeProposal(rawProposal));
     validateRuleTargets(proposal);
     return Response.json({ proposal, trace, remaining: allowance.remaining }, { headers: aiResponseHeaders(allowance.remaining) });
   } catch (error) { return aiErrorResponse(error); }

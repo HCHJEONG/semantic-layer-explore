@@ -1,8 +1,7 @@
-import { Type } from "@google/genai";
 import { z } from "zod";
 import { consumeAskAllowance } from "@/lib/rate-limit";
-import { getGeminiClient, getGeminiModel } from "@/lib/gemini";
 import { getInternalApiUrl } from "@/lib/internal-api";
+import { getLlmProvider, type LlmMessage } from "@/lib/llm/provider";
 
 const SYSTEM_PROMPT = `You are an AI assistant that understands the Semantic Layer exposed by this application.
 Never assume a database schema. Never claim to access a database directly.
@@ -13,7 +12,7 @@ Answer only from tool results. Be concise and answer in the same language as the
 const declarations = ["getOntology", "getClasses", "getIndividuals", "getRelations"].map((name) => ({
   name,
   description: name === "getOntology" ? "Inspect the semantic layer before any other lookup." : `Fetch ${name.slice(3).toLowerCase()} through the REST API.`,
-  parameters: { type: Type.OBJECT, properties: {} },
+  parameters: { type: "OBJECT", properties: {} },
 }));
 
 async function callTool(name: string) {
@@ -34,43 +33,39 @@ export async function POST(request: Request) {
       { error: "Daily Ask AI limit reached. Please try again tomorrow." },
       { status: 429, headers: { "retry-after": String(allowance.resetSeconds), "x-ratelimit-limit": "10", "x-ratelimit-remaining": "0" } },
     );
-    const ai = getGeminiClient();
-    const model = getGeminiModel();
-    const contents: Array<Record<string, unknown>> = [{ role: "user", parts: [{ text: question }] }];
+    const provider = getLlmProvider();
+    const messages: LlmMessage[] = [{ role: "user", content: question }];
     const trace: string[] = [];
 
     for (let turn = 0; turn < 6; turn += 1) {
-      const response = await ai.models.generateContent({
-        model, contents: contents as never,
-        config: {
-          systemInstruction: SYSTEM_PROMPT,
-          tools: [{ functionDeclarations: turn === 0 ? [declarations[0]] : declarations }],
-          toolConfig: turn === 0 ? { functionCallingConfig: { mode: "ANY" as never, allowedFunctionNames: ["getOntology"] } } : undefined,
-        },
+      const response = await provider.generateWithTools({
+        system: SYSTEM_PROMPT,
+        messages,
+        tools: turn === 0 ? [declarations[0]] : declarations,
+        toolChoice: turn === 0 ? { mode: "any", allowedToolNames: ["getOntology"] } : undefined,
       });
-      const calls = response.functionCalls ?? [];
+      const calls = response.toolCalls;
       if (!calls.length) return Response.json(
         { answer: response.text || "I could not produce an answer from the semantic layer.", trace, remaining: allowance.remaining },
         { headers: { "x-ratelimit-limit": "10", "x-ratelimit-remaining": String(allowance.remaining) } },
       );
 
-      const modelContent = response.candidates?.[0]?.content;
-      if (modelContent) contents.push(modelContent as unknown as Record<string, unknown>);
-      const parts = [];
+      if (response.assistantMessage) messages.push(response.assistantMessage);
+      const toolResponses = [];
       for (const call of calls) {
-        if (!call.name || !declarations.some((item) => item.name === call.name)) throw new Error("Unsupported tool request");
+        if (!declarations.some((item) => item.name === call.name)) throw new Error("Unsupported tool request");
         trace.push(call.name);
         const result = await callTool(call.name);
-        parts.push({ functionResponse: { name: call.name, response: { result } } });
+        toolResponses.push({ name: call.name, response: { result } });
       }
-      contents.push({ role: "user", parts });
+      messages.push({ role: "user", toolResponses });
     }
-    throw new Error("Gemini exceeded the tool-call limit");
+    throw new Error(`${provider.id} exceeded the tool-call limit`);
   } catch (error) {
     console.error("Ontology AI request failed", error);
     const raw = error instanceof Error ? error.message : "Unable to answer";
     const message = raw.includes("credentials are unavailable")
-      ? "Gemini credentials are not available in this runtime."
+      ? "LLM credentials are not available in this runtime."
       : raw;
     return Response.json({ error: message }, { status: message.includes("Invalid") ? 400 : 500 });
   }

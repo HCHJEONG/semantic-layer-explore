@@ -42,6 +42,8 @@ The rule engine—not Gemini—evaluates approved rules and executes device comm
 
 The Workspace Dashboard also includes a minimal **Explain Why** flow for explainable action events. When a device command appears in the Event Timeline, the user can jump to Ask AI Explain Mode. The backend reconstructs the application-level causal trace from recorded events first, then runs a small Mastra workflow that reviews sensor, rule, and execution evidence before producing the structured explanation. This is read-only: it does not issue commands, change rules, or infer why the physical world produced a sensor reading.
 
+The LLM integration is being prepared behind a provider boundary. `lib/llm/provider.ts` defines the model-agnostic interface, while `lib/llm/gemini-provider.ts` adapts the existing Vertex Gemini client. This keeps the current Gemini 3.5 Flash Lite setup replaceable by a later provider without changing Mastra workflow code.
+
 The demo keeps deployment simple by using one SQLite file, but the schema separates the semantic metadata store from operational state. Ontology records live in `semantic_classes`, `semantic_properties`, `semantic_individuals`, and `semantic_relations`; runtime state lives in `sensors`, `devices`, `sensor_readings`, `events`, and `rules`.
 
 ```text

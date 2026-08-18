@@ -42,6 +42,8 @@ Simulator Sensor → Sensor Event → Rule Engine → Virtual Device
 
 Workspace Dashboard에는 설명 가능한 action event를 위한 최소 **Explain Why** 흐름도 포함됩니다. Event Timeline에 device command가 나타나면 사용자는 Ask AI Explain Mode로 이동할 수 있습니다. Backend는 먼저 기록된 event에서 application-level causal trace를 deterministic하게 재구성한 뒤, 작은 Mastra workflow로 sensor, rule, execution evidence를 검토하고 structured explanation을 생성합니다. 이 기능은 read-only입니다. Device command를 실행하거나 rule을 바꾸지 않으며, 물리 세계가 왜 특정 sensor reading을 만들었는지는 추론하지 않습니다.
 
+LLM 연동은 provider boundary 뒤에 준비하고 있습니다. `lib/llm/provider.ts`는 model-agnostic interface를 정의하고, `lib/llm/gemini-provider.ts`는 기존 Vertex Gemini client를 그 interface에 맞게 감쌉니다. 이 구조 덕분에 현재 Gemini 3.5 Flash Lite 설정을 유지하면서도 이후 다른 provider로 교체할 때 Mastra workflow code 변경을 줄일 수 있습니다.
+
 데모는 하나의 SQLite 파일을 사용해 배포를 단순하게 유지하지만, schema는 semantic metadata store와 operational state를 분리합니다. Ontology record는 `semantic_classes`, `semantic_properties`, `semantic_individuals`, `semantic_relations`에 저장되고, runtime state는 `sensors`, `devices`, `sensor_readings`, `events`, `rules`에 저장됩니다.
 
 ```text

@@ -262,6 +262,9 @@ Current implementation:
 - Ask AI renders workflow stages, prepared agent findings, evidence, and critic output.
 - `@mastra/core@1.59.0` is installed.
 - The first Mastra pass uses deterministic workflow steps, not live LLM agents.
+- `lib/llm/provider.ts` defines a model-agnostic LLM provider interface.
+- `lib/llm/gemini-provider.ts` adapts the existing `lib/gemini.ts` Vertex Gemini client to that interface.
+- Mastra does not call the LLM adapter yet; this is the preparation for the next step.
 
 This means Mastra should be introduced by replacing or wrapping the internals of
 `runExplainEventWorkflow`, not by changing the dashboard entry point or API
@@ -284,6 +287,12 @@ Current minimal Mastra workflow:
 
 Do not build a large multi-agent system until the deterministic workflow is
 stable.
+
+Next LLM step:
+
+- add Explain Why-specific review helpers that call `getLlmProvider()`;
+- guard live LLM review behind `EXPLAIN_LLM_REVIEW=enabled`;
+- keep deterministic review as the default test-safe fallback.
 
 Do not add three role-play agents unless there is a real bounded evidence split.
 
@@ -471,3 +480,273 @@ The feature is complete when:
 Avoid broad refactors.
 
 Prefer the smallest implementation that cleanly proves the flow end to end.
+
+==================================================
+17. NEXT ARCHITECTURE WORK: LLM, DB, MASTRA
+==================================================
+
+The next work should be planned around three related architecture tracks:
+
+1. LLM provider adapter
+2. DB/store interface boundary
+3. Mastra LLM evidence agents
+
+These should not be implemented in a random order. The safest order is:
+
+  LLM adapter consistency
+      ↓
+  DB/store boundary
+      ↓
+  Mastra LLM review agents
+
+Reason:
+
+- Mastra agents should not import Gemini directly.
+- Mastra causal trace steps should not depend on SQLite-specific query methods.
+- The deterministic causal trace must remain the source of truth even after LLM
+  review is added.
+- Basic tests must continue to run without live LLM credentials or network cost.
+
+==================================================
+18. LLM ADAPTER TRACK
+==================================================
+
+Current state:
+
+- `lib/gemini.ts` is a Gemini-specific low-level wrapper.
+- `lib/llm/provider.ts` defines a model-agnostic provider interface.
+- `lib/llm/gemini-provider.ts` adapts the existing Gemini wrapper.
+- Existing app routes no longer call `getGeminiClient()` or `getGeminiModel()` directly.
+- `app/api/ai/chat/route.ts` now uses `getLlmProvider().generateWithTools(...)`.
+- `app/api/ai/rules/propose/route.ts` now uses `getLlmProvider()` for forced tool calls and structured proposal generation.
+- `app/api/ask/route.ts` now uses `getLlmProvider().generateWithTools(...)`.
+- `app/api/ready/route.ts` now exposes provider-neutral `llm` readiness while preserving the legacy `gemini` field for compatibility.
+- `lib/ai-tool-layer.ts` now exposes provider-neutral JSON schema-like tool declarations instead of importing Gemini `Type`.
+- `lib/llm/gemini-provider.ts` normalizes those tool schemas into Gemini's expected function declaration shape internally.
+
+Target state:
+
+- Application AI code calls `getLlmProvider()`.
+- Gemini-specific request/response shapes stay inside `lib/llm/gemini-provider.ts`
+  or lower-level `lib/gemini.ts`.
+- Provider-neutral tool declarations stay outside Gemini-specific code.
+- Future providers can be added without changing Mastra workflow or route logic.
+
+Required provider capabilities:
+
+- `generateText(...)`
+- `generateStructured(...)`
+- `generateWithTools(...)`
+
+`generateWithTools(...)` is required before migrating existing Ask AI and Rule
+Compiler routes because they rely on function calling.
+
+Minimal steps:
+
+1. Extend `LlmProvider` with provider-neutral tool-call types.
+2. Implement `generateWithTools(...)` in the Gemini adapter using the existing
+   Gemini function-calling format.
+3. Migrate `app/api/ai/chat/route.ts` first because it already uses
+   `lib/ai-tool-layer.ts`. Completed.
+4. Migrate `app/api/ai/rules/propose/route.ts` next. Completed.
+5. Migrate legacy `app/api/ask/route.ts` last, or leave it as legacy if it is
+   intentionally retained only for comparison. Completed.
+6. Update `/api/ready` to expose provider-neutral readiness. Completed:
+
+   {
+     llm: {
+       provider: "gemini",
+       configured: true,
+       model: "gemini-3.5-flash-lite"
+     }
+   }
+
+Compatibility rule:
+
+- Do not remove existing Gemini helpers until all direct route imports are gone.
+- Preserve `GEMINI_MODEL` for the current provider.
+- Add `LLM_PROVIDER=gemini` as the default provider selector.
+
+==================================================
+19. DB / STORE BOUNDARY TRACK
+==================================================
+
+Current state:
+
+- DB connection is centralized in `db/index.ts`.
+- The implementation is still SQLite-specific:
+  - `better-sqlite3`
+  - `drizzle-orm/better-sqlite3`
+  - `sqliteTable`
+  - sync query helpers such as `.get()`, `.all()`, `.run()`
+- Query logic is spread across:
+  - `lib/ontology.ts`
+  - `lib/rules.ts`
+  - `runtime/workspace-runtime.ts`
+  - `lib/causal-trace.ts`
+  - several API routes
+
+Target state:
+
+  App / Runtime / Mastra
+      ↓
+  Store interfaces
+      ↓
+  Drizzle SQLite implementation now
+      ↓
+  Drizzle PostgreSQL implementation later
+
+Do not attempt a full SQLite to PostgreSQL migration yet.
+
+First introduce interfaces that hide SQLite-specific access patterns.
+
+Recommended store order:
+
+1. Event store
+2. Rule store
+3. Ontology store
+4. Device/sensor store if needed
+
+Start with Event store because Explain Why and Mastra causal trace depend on
+auditable event history.
+
+Minimal event store interface:
+
+  type EventStore = {
+    getEventByEventId(eventId: string): Promise<WorkspaceEvent | null>;
+    listEvents(limit: number): Promise<WorkspaceEvent[]>;
+    listEventsAfter(id: number, limit: number): Promise<WorkspaceEvent[]>;
+    insertEvent(event: NewWorkspaceEvent): Promise<void>;
+  };
+
+Important:
+
+- Use async store methods even while SQLite implementation is sync internally.
+- That makes PostgreSQL migration less invasive later.
+- Keep the SQLite implementation small and close to Drizzle.
+- Do not expose `.get()`, `.all()`, `.run()`, or Drizzle table details above the
+  store boundary once an area is migrated.
+
+Minimal steps:
+
+1. Add `lib/stores/events-store.ts`.
+2. Move event row parsing and event insert/read logic there.
+3. Update `runtime/workspace-runtime.ts`, `app/api/events/route.ts`,
+   `app/api/events/stream/route.ts`, and `lib/causal-trace.ts` to use it.
+4. Keep behavior identical.
+5. Add tests for event listing and causal trace behavior.
+
+Do not split `db/schema.ts` into PostgreSQL and SQLite schemas in the same step.
+That is a later migration step after store boundaries are stable.
+
+==================================================
+20. MASTRA LLM AGENT TRACK
+==================================================
+
+Current state:
+
+- `@mastra/core@1.59.0` is installed.
+- `lib/explain-workflow.ts` runs a real Mastra workflow.
+- The current Mastra steps are deterministic:
+
+  causal-trace
+      ↓
+  evidence-review-and-critic
+
+- The workflow does not call the LLM adapter yet.
+
+Target state:
+
+  causal-trace
+      ↓
+  parallel evidence review
+      ├─ sensor-review
+      ├─ rule-review
+      └─ execution-review
+      ↓
+  critic
+      ↓
+  final structured explanation
+
+LLM usage rule:
+
+- LLM review must be opt-in:
+
+  EXPLAIN_LLM_REVIEW=enabled
+
+- If this flag is absent, the workflow must use deterministic review only.
+- Default tests must not call a live LLM.
+
+Bounded evidence views:
+
+- Sensor reviewer receives only sensor-related trace/evidence.
+- Rule reviewer receives only rule condition/action/match evidence.
+- Execution reviewer receives only command/execution/resulting-state evidence.
+- Critic receives the deterministic trace plus structured reviewer findings.
+
+The LLM must not receive raw DB access, broad event dumps, or hardware access.
+
+Output validation:
+
+- All LLM outputs must be parsed with Zod.
+- Unsupported or malformed LLM output should fall back to deterministic findings
+  or return a controlled low-confidence/partial result.
+- Do not display hidden chain-of-thought.
+
+Minimal steps:
+
+1. Split the current `evidence-review-and-critic` Mastra step into:
+   - `sensor-review`
+   - `rule-review`
+   - `execution-review`
+   - `critic`
+2. Keep all four steps deterministic first.
+3. Use Mastra `.parallel()` for the three evidence review steps if it fits
+   cleanly.
+4. Add `lib/llm/explain-review.ts`.
+5. Behind `EXPLAIN_LLM_REVIEW=enabled`, call `getLlmProvider()` from the review
+   helpers.
+6. Keep deterministic fallback as the default path.
+
+==================================================
+21. RECOMMENDED NEXT TWO SMALL STEPS
+==================================================
+
+Next step A:
+
+Extend the LLM adapter with `generateWithTools(...)` and migrate only
+`app/api/ai/chat/route.ts` to use it.
+
+Why first:
+
+- It makes the LLM adapter real across the existing app, not only future Mastra
+  code.
+- It proves provider-neutral tool calling with the simplest current route.
+- It reduces direct Gemini coupling before adding more LLM usage.
+
+Acceptance:
+
+- `app/api/ai/chat/route.ts` no longer imports `getGeminiClient` or
+  `getGeminiModel`. Completed.
+- Existing chat behavior remains unchanged.
+- `npm run build`, `npm run lint`, and `npm test` pass.
+
+Next step B:
+
+Add the Event store boundary and migrate Explain Why event reads to it.
+
+Why second:
+
+- It reduces SQLite coupling exactly where Mastra depends on event history.
+- It prepares future PostgreSQL migration without changing the schema yet.
+
+Acceptance:
+
+- `lib/causal-trace.ts` no longer imports `getDb()` or `events` directly.
+- Event API/timeline behavior remains unchanged.
+- `npm run build`, `npm run lint`, and `npm test` pass.
+
+Only after A and B:
+
+- Split Mastra evidence steps.
+- Add optional LLM review behind `EXPLAIN_LLM_REVIEW=enabled`.

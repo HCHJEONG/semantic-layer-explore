@@ -1,15 +1,17 @@
 import "server-only";
 
-import { Type } from "@google/genai";
+import type { LlmToolDeclaration } from "@/lib/llm/provider";
 import { getInternalApiUrl } from "@/lib/internal-api";
 
-export const applicationToolDeclarations = [
-  { name: "getOntology", description: "Inspect the semantic layer before using operational data.", parameters: { type: Type.OBJECT, properties: {} } },
-  { name: "getCurrentState", description: "Fetch current sensors, readings, and device states through the REST API.", parameters: { type: Type.OBJECT, properties: {} } },
-  { name: "getSensors", description: "Fetch available sensors and their latest readings through the REST API.", parameters: { type: Type.OBJECT, properties: {} } },
-  { name: "getDevices", description: "Fetch available devices, types, commands, and states through the REST API.", parameters: { type: Type.OBJECT, properties: {} } },
-  { name: "getRecentEvents", description: "Fetch the recent auditable event timeline through the REST API.", parameters: { type: Type.OBJECT, properties: {} } },
-  { name: "getRules", description: "Fetch approved automation rules through the REST API.", parameters: { type: Type.OBJECT, properties: {} } },
+const emptyObjectParameters = { type: "object", properties: {}, additionalProperties: false };
+
+export const applicationToolDeclarations: LlmToolDeclaration[] = [
+  { name: "getOntology", description: "Inspect the semantic layer before using operational data.", parameters: emptyObjectParameters },
+  { name: "getCurrentState", description: "Fetch current sensors, readings, and device states through the REST API.", parameters: emptyObjectParameters },
+  { name: "getSensors", description: "Fetch available sensors and their latest readings through the REST API.", parameters: emptyObjectParameters },
+  { name: "getDevices", description: "Fetch available devices, types, commands, and states through the REST API.", parameters: emptyObjectParameters },
+  { name: "getRecentEvents", description: "Fetch the recent auditable event timeline through the REST API.", parameters: emptyObjectParameters },
+  { name: "getRules", description: "Fetch approved automation rules through the REST API.", parameters: emptyObjectParameters },
 ];
 
 const toolPaths: Record<string, string> = {
