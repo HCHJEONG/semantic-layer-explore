@@ -1,6 +1,6 @@
 import { rulePatchSchema } from "@/domain/rule";
-import { deleteRule, getRule, updateRule } from "@/lib/rules";
-import { errorResponse } from "@/lib/validation";
+import { deleteRule, getRule, updateRule } from "@/lib/services/rules";
+import { errorResponse } from "@/lib/server/validation";
 
 type Context = { params: Promise<{ ruleId: string }> };
 

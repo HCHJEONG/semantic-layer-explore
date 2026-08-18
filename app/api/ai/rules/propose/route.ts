@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { ruleInputSchema } from "@/domain/rule";
-import { callApplicationTool, getToolDeclaration } from "@/lib/ai-tool-layer";
-import { aiAllowanceHeaders, aiErrorResponse, enforceAiAllowance } from "@/lib/ai-http";
-import { getLlmProvider, type LlmMessage } from "@/lib/llm/provider";
-import { validateRuleTargets } from "@/lib/rules";
+import { callApplicationTool, getToolDeclaration } from "@/lib/ai/tool-layer";
+import { aiAllowanceHeaders, aiErrorResponse, enforceAiAllowance } from "@/lib/ai/http";
+import { getLlmProvider, type LlmMessage } from "@/lib/ai/llm/provider";
+import { validateRuleTargets } from "@/lib/services/rules";
 
 const SYSTEM_PROMPT = `You compile natural-language automation requests into one safe Physical Workspace rule.
 You propose a rule only; you never save or execute it.

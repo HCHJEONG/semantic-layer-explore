@@ -1,5 +1,5 @@
-import { individualInput, errorResponse } from "@/lib/validation";
-import { createIndividual, getIndividuals } from "@/lib/ontology";
+import { individualInput, errorResponse } from "@/lib/server/validation";
+import { createIndividual, getIndividuals } from "@/lib/services/ontology";
 
 export async function GET() { try { return Response.json(await getIndividuals()); } catch (error) { return errorResponse(error); } }
 export async function POST(request: Request) {

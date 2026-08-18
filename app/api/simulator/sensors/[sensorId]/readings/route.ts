@@ -1,6 +1,6 @@
 import { manualReadingSchema } from "@/domain/physical";
 import { getWorkspaceRuntime } from "@/runtime/workspace-runtime";
-import { errorResponse } from "@/lib/validation";
+import { errorResponse } from "@/lib/server/validation";
 
 export async function POST(request: Request, context: { params: Promise<{ sensorId: string }> }) {
   try {

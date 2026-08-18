@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { applicationToolDeclarations, callApplicationTool, getToolDeclaration } from "@/lib/ai-tool-layer";
-import { aiAllowanceHeaders, aiErrorResponse, enforceAiAllowance } from "@/lib/ai-http";
-import { getLlmProvider, type LlmMessage } from "@/lib/llm/provider";
+import { applicationToolDeclarations, callApplicationTool, getToolDeclaration } from "@/lib/ai/tool-layer";
+import { aiAllowanceHeaders, aiErrorResponse, enforceAiAllowance } from "@/lib/ai/http";
+import { getLlmProvider, type LlmMessage } from "@/lib/ai/llm/provider";
 
 const SYSTEM_PROMPT = `You are the state analyst for an AI Physical Workspace.
 Never assume or mention a database schema and never claim direct database or hardware access.

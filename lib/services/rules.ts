@@ -2,7 +2,7 @@ import "server-only";
 
 import { ruleInputSchema, type RuleInput, type RuleRecord } from "@/domain/rule";
 import { getRuleStore } from "@/lib/stores";
-import { InputValidationError } from "@/lib/validation";
+import { InputValidationError } from "@/lib/server/validation";
 
 let enabledRuleCache: RuleRecord[] | null = null;
 

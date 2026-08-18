@@ -1,4 +1,4 @@
-import { getLlmProviderConfiguration } from "@/lib/llm/provider";
+import { getLlmProviderConfiguration } from "@/lib/ai/llm/provider";
 import { getDatabaseStore } from "@/lib/stores";
 import { getRetentionConfiguration } from "@/runtime/retention";
 

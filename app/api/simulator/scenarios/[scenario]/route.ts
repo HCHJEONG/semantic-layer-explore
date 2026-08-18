@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getWorkspaceRuntime } from "@/runtime/workspace-runtime";
-import { errorResponse } from "@/lib/validation";
+import { errorResponse } from "@/lib/server/validation";
 
 const scenarioSchema = z.enum(["normal", "high-temperature", "dark-room", "object-approaching", "button-pressed", "sensor-disconnected"]);
 

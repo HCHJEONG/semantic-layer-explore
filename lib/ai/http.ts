@@ -1,8 +1,8 @@
 import "server-only";
 
 import { z } from "zod";
-import { consumeAskAllowance, consumeExplainAllowance } from "@/lib/rate-limit";
-import { InputValidationError } from "@/lib/validation";
+import { consumeAskAllowance, consumeExplainAllowance } from "@/lib/server/rate-limit";
+import { InputValidationError } from "@/lib/server/validation";
 
 type Allowance = Awaited<ReturnType<typeof consumeAskAllowance>>;
 

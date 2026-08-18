@@ -1,7 +1,7 @@
 import "server-only";
 
-import type { LlmToolDeclaration } from "@/lib/llm/provider";
-import { getInternalApiUrl } from "@/lib/internal-api";
+import type { LlmToolDeclaration } from "@/lib/ai/llm/provider";
+import { getInternalApiUrl } from "@/lib/server/internal-api";
 
 const emptyObjectParameters = { type: "object", properties: {}, additionalProperties: false };
 

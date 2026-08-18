@@ -1,8 +1,8 @@
 import "server-only";
 
 import { z } from "zod";
-import { getGeminiConfiguration } from "@/lib/gemini";
-import { createGeminiProvider } from "@/lib/llm/gemini-provider";
+import { getGeminiConfiguration } from "@/lib/ai/gemini";
+import { createGeminiProvider } from "@/lib/ai/llm/gemini-provider";
 
 export type LlmMessage = {
   role: "user" | "assistant";

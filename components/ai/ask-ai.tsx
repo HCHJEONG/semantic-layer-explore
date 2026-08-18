@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ExplainContext } from "@/app/client-app";
-import { loadOntologyPolicyCheck } from "@/lib/semantic-policy";
+import { loadOntologyPolicyCheck } from "@/lib/client/semantic-policy";
 
 const examples = ["현재 운영 상태 요약해줘.", "어떤 자동화가 방금 실행됐어?", "주의해야 할 센서 변화가 있어?", "Which assets need attention right now?"];
 

@@ -1,5 +1,5 @@
-import { setRuleEnabled } from "@/lib/rules";
-import { errorResponse } from "@/lib/validation";
+import { setRuleEnabled } from "@/lib/services/rules";
+import { errorResponse } from "@/lib/server/validation";
 
 export async function POST(_request: Request, context: { params: Promise<{ ruleId: string }> }) {
   try {

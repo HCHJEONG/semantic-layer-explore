@@ -1,5 +1,5 @@
 import { getWorkspaceRuntime } from "@/runtime/workspace-runtime";
-import { errorResponse } from "@/lib/validation";
+import { errorResponse } from "@/lib/server/validation";
 
 export const dynamic = "force-dynamic";
 

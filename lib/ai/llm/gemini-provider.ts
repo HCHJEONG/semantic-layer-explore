@@ -1,7 +1,7 @@
 import "server-only";
 
-import { getGeminiClient, getGeminiModel } from "@/lib/gemini";
-import type { GenerateTextInput, LlmMessage, LlmProvider, LlmToolDeclaration } from "@/lib/llm/provider";
+import { getGeminiClient, getGeminiModel } from "@/lib/ai/gemini";
+import type { GenerateTextInput, LlmMessage, LlmProvider, LlmToolDeclaration } from "@/lib/ai/llm/provider";
 
 function toGeminiContents(input: GenerateTextInput) {
   return input.messages

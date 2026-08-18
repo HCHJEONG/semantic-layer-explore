@@ -1,5 +1,5 @@
-import { classInput, errorResponse } from "@/lib/validation";
-import { createClass, getClasses } from "@/lib/ontology";
+import { classInput, errorResponse } from "@/lib/server/validation";
+import { createClass, getClasses } from "@/lib/services/ontology";
 
 export async function GET() { try { return Response.json(await getClasses()); } catch (error) { return errorResponse(error); } }
 export async function POST(request: Request) {

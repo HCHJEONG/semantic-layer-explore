@@ -1,8 +1,8 @@
 import "server-only";
 
 import { z } from "zod";
-import type { CausalTrace, EvidenceSupport } from "@/lib/causal-trace";
-import { getLlmProvider, getLlmProviderConfiguration } from "@/lib/llm/provider";
+import type { CausalTrace, EvidenceSupport } from "@/lib/explain/causal-trace";
+import { getLlmProvider, getLlmProviderConfiguration } from "@/lib/ai/llm/provider";
 
 export const evidenceFindingSchema = z.object({
   claim: z.string().min(1),

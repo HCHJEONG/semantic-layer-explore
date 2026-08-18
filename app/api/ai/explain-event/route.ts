@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { runExplainEventWorkflow } from "@/lib/explain-workflow";
-import { aiAllowanceHeaders, enforceExplainAllowance } from "@/lib/ai-http";
-import { isLlmExplainReviewActive } from "@/lib/llm/explain-review";
-import { errorResponse } from "@/lib/validation";
+import { runExplainEventWorkflow } from "@/lib/explain/workflow";
+import { aiAllowanceHeaders, enforceExplainAllowance } from "@/lib/ai/http";
+import { isLlmExplainReviewActive } from "@/lib/ai/llm/explain-review";
+import { errorResponse } from "@/lib/server/validation";
 
 export const dynamic = "force-dynamic";
 

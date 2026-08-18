@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { deviceCommandNameSchema } from "@/domain/physical";
 import { getWorkspaceRuntime } from "@/runtime/workspace-runtime";
-import { errorResponse } from "@/lib/validation";
+import { errorResponse } from "@/lib/server/validation";
 
 const commandInputSchema = z.object({ command: deviceCommandNameSchema, value: z.number().optional() });
 

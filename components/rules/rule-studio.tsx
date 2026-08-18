@@ -6,7 +6,7 @@ import type { RuleInput, RuleRecord } from "@/domain/rule";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { loadOntologyPolicyCheck, type SemanticAction } from "@/lib/semantic-policy";
+import { loadOntologyPolicyCheck, type SemanticAction } from "@/lib/client/semantic-policy";
 
 const examples = ["온도가 30도를 넘으면 팬을 켜.", "조도가 100 lux보다 낮으면 LED를 켜.", "버튼을 누르면 부저를 울려."];
 

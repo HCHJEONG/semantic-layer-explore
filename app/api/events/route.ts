@@ -1,5 +1,5 @@
 import { getEventStore } from "@/lib/stores";
-import { errorResponse } from "@/lib/validation";
+import { errorResponse } from "@/lib/server/validation";
 
 export const dynamic = "force-dynamic";
 

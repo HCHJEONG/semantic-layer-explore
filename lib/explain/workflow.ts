@@ -2,7 +2,7 @@ import "server-only";
 
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
-import { buildCausalTrace, type CausalTrace } from "@/lib/causal-trace";
+import { buildCausalTrace, type CausalTrace } from "@/lib/explain/causal-trace";
 import {
   criticReviewSchema,
   evidenceReviewSchema,
@@ -11,7 +11,7 @@ import {
   reviewEvidenceWithOptionalLlm,
   type CriticReview,
   type EvidenceReview,
-} from "@/lib/llm/explain-review";
+} from "@/lib/ai/llm/explain-review";
 
 export type ExplainEventWorkflowResult = CausalTrace & {
   workflow: {
