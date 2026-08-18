@@ -7,7 +7,9 @@ function toGeminiContents(input: GenerateTextInput) {
   return input.messages
     .map((message) => ({
       role: message.role === "assistant" ? "model" : "user",
-      parts: message.toolCalls?.length
+      parts: message.providerParts?.length
+        ? message.providerParts
+        : message.toolCalls?.length
         ? message.toolCalls.map((toolCall) => ({
             functionCall: { name: toolCall.name, args: toolCall.args },
           }))
@@ -30,6 +32,7 @@ function fromGeminiAssistantMessage(content: { role?: string; parts?: Array<Reco
     role: "assistant",
     ...(text ? { content: text } : {}),
     ...(toolCalls.length ? { toolCalls } : {}),
+    ...(content.parts?.length ? { providerParts: content.parts } : {}),
   };
 }
 

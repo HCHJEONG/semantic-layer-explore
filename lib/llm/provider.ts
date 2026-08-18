@@ -12,6 +12,7 @@ export type LlmMessage = {
     name: string;
     response: unknown;
   }>;
+  providerParts?: Array<Record<string, unknown>>;
 };
 
 export type GenerateTextInput = {

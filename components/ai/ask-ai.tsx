@@ -39,6 +39,16 @@ export function AskAi({ explainContext, onBackToWorkspace }: { explainContext: E
   const [remaining, setRemaining] = useState<number | null>(null);
   const [error, setError] = useState("");
 
+  const confirmInspectionTeamQuery = useCallback(async () => {
+    setSemanticTrace(["Starting semantic role policy check…"]);
+    const check = await loadOntologyPolicyCheck("copilot.query");
+    setSemanticTrace([check.policy.title, ...check.steps]);
+    if (!check.individualFound || !check.relationFound) throw new Error(`Semantic role policy failed: ${check.steps.join(" / ")}`);
+    const confirmed = window.confirm(check.policy.prompt);
+    setSemanticTrace((current) => [...current, confirmed ? `User confirmed ${check.policy.requiredIndividual}.` : `User cancelled ${check.policy.requiredIndividual} confirmation.`]);
+    return confirmed;
+  }, []);
+
   useEffect(() => {
     if (!explainContext) return;
     let cancelled = false;
@@ -46,6 +56,8 @@ export function AskAi({ explainContext, onBackToWorkspace }: { explainContext: E
     async function explain() {
       setExplainLoading(true); setExplainResult(null); setAnswer(""); setTrace([]); setError("");
       try {
+        const approved = await confirmInspectionTeamQuery();
+        if (!approved) return;
         const response = await fetch("/api/ai/explain-event", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -62,17 +74,7 @@ export function AskAi({ explainContext, onBackToWorkspace }: { explainContext: E
     }
     void explain();
     return () => { cancelled = true; };
-  }, [explainContext]);
-
-  const confirmInspectionTeamQuery = useCallback(async () => {
-    setSemanticTrace(["Starting semantic role policy check…"]);
-    const check = await loadOntologyPolicyCheck("copilot.query");
-    setSemanticTrace([check.policy.title, ...check.steps]);
-    if (!check.individualFound || !check.relationFound) throw new Error(`Semantic role policy failed: ${check.steps.join(" / ")}`);
-    const confirmed = window.confirm(check.policy.prompt);
-    setSemanticTrace((current) => [...current, confirmed ? `User confirmed ${check.policy.requiredIndividual}.` : `User cancelled ${check.policy.requiredIndividual} confirmation.`]);
-    return confirmed;
-  }, []);
+  }, [confirmInspectionTeamQuery, explainContext]);
 
   const ask = useCallback(async () => {
     if (!question.trim() || loading) return;
