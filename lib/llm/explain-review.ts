@@ -35,6 +35,10 @@ export function isLlmExplainReviewEnabled() {
   return process.env.EXPLAIN_LLM_REVIEW?.trim().toLowerCase() === "enabled";
 }
 
+export function isLlmExplainReviewActive() {
+  return isLlmExplainReviewEnabled() && getLlmProviderConfiguration().configured;
+}
+
 function boundedEvidence(trace: CausalTrace, agent: EvidenceReviewer) {
   const idsByAgent: Record<EvidenceReviewer, string[]> = {
     sensor: ["trigger-reading"],

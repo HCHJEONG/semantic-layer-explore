@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { applicationToolDeclarations, callApplicationTool, getToolDeclaration } from "@/lib/ai-tool-layer";
-import { aiErrorResponse, aiResponseHeaders, enforceAiAllowance } from "@/lib/ai-http";
+import { aiAllowanceHeaders, aiErrorResponse, enforceAiAllowance } from "@/lib/ai-http";
 import { getLlmProvider, type LlmMessage } from "@/lib/llm/provider";
 
 const SYSTEM_PROMPT = `You are the state analyst for an AI Physical Workspace.
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       const calls = result.toolCalls;
       if (!calls.length) return Response.json(
         { answer: result.text || "I could not explain the workspace state from the available evidence.", trace, remaining: allowance.remaining },
-        { headers: aiResponseHeaders(allowance.remaining) },
+        { headers: aiAllowanceHeaders(allowance) },
       );
       if (result.assistantMessage) messages.push(result.assistantMessage);
       const toolResponses = [];

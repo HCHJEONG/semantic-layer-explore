@@ -1,23 +1,37 @@
 import "server-only";
 
 import { z } from "zod";
-import { consumeAskAllowance } from "@/lib/rate-limit";
+import { consumeAskAllowance, consumeExplainAllowance } from "@/lib/rate-limit";
 import { InputValidationError } from "@/lib/validation";
 
-export async function enforceAiAllowance(request: Request) {
-  const allowance = await consumeAskAllowance(request);
+type Allowance = Awaited<ReturnType<typeof consumeAskAllowance>>;
+
+function rateLimitHeaders(limit: number, remaining: number) {
+  return { "x-ratelimit-limit": String(limit), "x-ratelimit-remaining": String(remaining) };
+}
+
+async function enforceAllowance(request: Request, consume: (request: Request) => Promise<Allowance>, message: string) {
+  const allowance = await consume(request);
   if (allowance.allowed) return { allowance, response: null };
   return {
     allowance,
     response: Response.json(
-      { error: "Daily AI limit reached. Please try again tomorrow." },
-      { status: 429, headers: { "retry-after": String(allowance.resetSeconds), "x-ratelimit-limit": "10", "x-ratelimit-remaining": "0" } },
+      { error: message },
+      { status: 429, headers: { "retry-after": String(allowance.resetSeconds), ...rateLimitHeaders(allowance.limit, 0) } },
     ),
   };
 }
 
-export function aiResponseHeaders(remaining: number) {
-  return { "x-ratelimit-limit": "10", "x-ratelimit-remaining": String(remaining) };
+export async function enforceAiAllowance(request: Request) {
+  return enforceAllowance(request, consumeAskAllowance, "Daily AI limit reached. Please try again tomorrow.");
+}
+
+export async function enforceExplainAllowance(request: Request) {
+  return enforceAllowance(request, consumeExplainAllowance, "Daily Explain Why LLM review limit reached. Please try again tomorrow.");
+}
+
+export function aiAllowanceHeaders(allowance: Pick<Allowance, "limit" | "remaining">) {
+  return rateLimitHeaders(allowance.limit, allowance.remaining);
 }
 
 export function aiErrorResponse(error: unknown) {

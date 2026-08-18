@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ruleInputSchema } from "@/domain/rule";
 import { callApplicationTool, getToolDeclaration } from "@/lib/ai-tool-layer";
-import { aiErrorResponse, aiResponseHeaders, enforceAiAllowance } from "@/lib/ai-http";
+import { aiAllowanceHeaders, aiErrorResponse, enforceAiAllowance } from "@/lib/ai-http";
 import { getLlmProvider, type LlmMessage } from "@/lib/llm/provider";
 import { validateRuleTargets } from "@/lib/rules";
 
@@ -68,6 +68,6 @@ Return only valid JSON matching this TypeScript shape:
     });
     const proposal = ruleInputSchema.parse(normalizeProposal(rawProposal));
     await validateRuleTargets(proposal);
-    return Response.json({ proposal, trace, remaining: allowance.remaining }, { headers: aiResponseHeaders(allowance.remaining) });
+    return Response.json({ proposal, trace, remaining: allowance.remaining }, { headers: aiAllowanceHeaders(allowance) });
   } catch (error) { return aiErrorResponse(error); }
 }
