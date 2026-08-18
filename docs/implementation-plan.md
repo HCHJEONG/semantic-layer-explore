@@ -93,6 +93,13 @@ Core boundaries:
 - Rule execution is deterministic and does not depend on the LLM.
 - UI and AI access go through application APIs and store/service boundaries.
 - All explainable actions must be grounded in auditable events.
+- The event stream intentionally favors a simple demo architecture over
+  sub-second realtime delivery: simulator readings are pushed into the runtime
+  by callback and persisted immediately, while SSE clients receive events via
+  server-side polling of the event store with cursor replay and heartbeats. A
+  future runtime event bus could publish newly persisted events directly to SSE
+  subscribers, but that extra subscriber lifecycle and multi-instance broadcast
+  complexity is not needed for the current portfolio demo.
 
 ## 5. Completed Implementation
 

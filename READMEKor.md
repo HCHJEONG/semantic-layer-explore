@@ -78,6 +78,7 @@ LLM 연동은 provider boundary 뒤에 준비하고 있습니다. `lib/llm/provi
 - 외부 입력은 runtime boundary에서 검증하고, 가능하면 같은 schema에서 TypeScript type을 추론합니다.
 - 빠른 UI rendering을 위해 current state snapshot을 제공하고, 설명과 debugging을 위해 auditable event history를 남깁니다.
 - 실시간 운영 update는 WebSocket 없이 cursor 기반 SSE와 heartbeat로 stream합니다.
+- 현재 event stream은 demo deployment 단순성을 위해 server-side DB polling 후 SSE로 전달합니다. Simulator에서 reading이 발생할 때마다 runtime이 callback으로 저장하지만, SSE client에 즉시 publish하는 in-memory event bus는 아직 두지 않았습니다. 이 선택은 sub-second realtime보다 reconnect/replay가 쉬운 auditable demo 흐름을 우선한 compromise입니다.
 - Rule evaluation은 pure하게 유지하고, runtime orchestration이 persistence, event, device command를 담당합니다.
 - Ontology-first AI tool calling은 prompt만이 아니라 code로 강제하고, AI tool은 database/hardware 직접 접근 대신 REST API를 통하게 합니다.
 - AI는 automation을 propose할 수 있지만, approval과 mutation은 별도의 human-controlled action으로 유지합니다.

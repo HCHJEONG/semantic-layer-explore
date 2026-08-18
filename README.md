@@ -78,6 +78,7 @@ The same plan also preserves a few reusable architecture patterns:
 - Validate external input at runtime boundaries, and infer TypeScript types from the same schemas where useful.
 - Use a current state snapshot for fast UI rendering, plus an auditable event history for explanation and debugging.
 - Stream live operational updates with cursor-based SSE and heartbeats instead of requiring WebSockets.
+- The current event stream is a deliberate demo compromise: simulator readings are pushed into the runtime by callback and persisted immediately, while SSE clients receive events through server-side polling of the event store. This keeps cursor replay and reconnect behavior simple; a future runtime event bus could publish newly persisted events directly when sub-second realtime delivery matters.
 - Keep rule evaluation pure, while runtime orchestration handles persistence, events, and device commands.
 - Force ontology-first AI tool calling in code, not only in prompts, and expose AI tools through REST APIs rather than direct database or hardware access.
 - Let AI propose automation, but keep approval and mutation as separate human-controlled actions.
