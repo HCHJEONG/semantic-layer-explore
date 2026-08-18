@@ -212,7 +212,7 @@ function WorkflowGraph({ result }: { result: ExplainResult }) {
 
   return <div className="workflow-graph" aria-label="Mastra workflow graph">
     <strong><GitBranch size={14} /> Mastra Graph</strong>
-    <div className="workflow-flow">
+    <div className="workflow-flow" style={{ height: 260 }}>
       <ReactFlow nodes={graph.nodes} edges={graph.edges} nodeTypes={workflowNodeTypes} fitView nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} panOnDrag={false} zoomOnScroll={false} zoomOnPinch={false} zoomOnDoubleClick={false} proOptions={{ hideAttribution: true }}>
         <Background color="#ddd6e8" gap={24} />
       </ReactFlow>
