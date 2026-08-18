@@ -1,276 +1,358 @@
 # Implementation Plan
 
-## Goal
+## 1. Source Of Truth
 
-Build a compact prototype that demonstrates how a manually defined domain contract can be expanded into a working semantic physical workspace. The prototype should make the full path visible: domain model, database schema, runtime orchestration, REST APIs, UI, and AI tool access.
+The FDE-authored schemas in `domain/` are the source of truth.
 
-The core handoff principle is:
+All other layers are derived from, constrained by, or validated against those
+domain schemas:
 
-> The `domain/` folder is the human-authored source of truth. The rest of the implementation should follow that contract.
+- database schema and seed data
+- runtime validation and orchestration
+- simulator and future hardware adapters
+- REST API request and response contracts
+- UI data contracts
+- LLM tool declarations and structured outputs
+- Mastra workflows and evidence reviews
+- tests and evaluation fixtures
 
-## Human-authored domain contract
+Implementation may add infrastructure boundaries, adapters, stores, workflows,
+and UI views, but those layers must not invent domain concepts independently of
+`domain/`.
 
-The first implementation step is to manually define the files under `domain/`.
+## 2. Project Goal
 
-### `domain/physical.ts`
+Build a compact semantic physical workspace that makes the full path visible:
 
-Define the physical workspace vocabulary:
+```text
+FDE domain schema
+    -> database schema
+    -> runtime / adapter
+    -> REST API
+    -> UI
+    -> LLM tools
+    -> Mastra explanation workflow
+```
 
-- supported sensor types
-- supported sensor units
-- supported device types
-- supported device commands
-- the shape of a sensor reading
-- the shape of a device command
-- device state, command result, connection status, simulator scenario, and workspace state
+The first version uses a simulator instead of real Arduino/MQTT hardware. Later,
+an MQTT or hardware adapter should be able to replace the simulator without
+changing the dashboard, rule engine, LLM tools, or Mastra workflow contracts.
 
-This file answers:
+## 3. Domain Contract
 
-- What is a sensor?
-- What is a device?
-- What is the minimum shared contract for readings and commands?
+`domain/physical.ts` defines:
 
-### `domain/rule.ts`
+- sensor types and units
+- device types and commands
+- sensor reading shape
+- device command shape
+- device state, command result, connection status, simulator scenario, and
+  workspace state
 
-Define the automation rule contract:
+`domain/rule.ts` defines:
 
 - supported condition operators
-- rule condition shape
-- rule action shape
-- rule input validation
-- rule patch validation
+- rule condition and action shape
+- rule input and patch validation
 - persisted rule record shape
 
-This file answers:
-
-- Which readings can be evaluated as conditions?
-- Which device actions can be executed?
-- What must be validated before a rule becomes approved automation?
-
-### `domain/ontology.ts`
-
-Define the semantic layer contract:
-
-- classes
-- properties
-- individuals
-- relations
-- ontology responses
-- ontology item selections
-
-This file answers:
-
-- How should the workspace be described semantically?
-- Which concepts and relationships should AI tools inspect before answering or proposing actions?
-
-## Build order after the domain contract
-
-### 1. Database schema
-
-Create `db/schema.ts` from the domain model.
-
-The schema should separate semantic metadata from operational state:
+`domain/ontology.ts` defines:
 
 - semantic classes
 - semantic properties
 - semantic individuals
 - semantic relations
-- sensors
-- devices
-- sensor readings
-- auditable events
-- automation rules
+- ontology responses and UI selection contracts
 
-The database design should persist the domain concepts without becoming the place where those concepts are invented.
+These files should remain more stable than any database, LLM, deployment target,
+or physical adapter.
 
-### 2. Seed data and database access
+## 4. Current Architecture
 
-Create the database initialization and seed path.
+```mermaid
+flowchart LR
+  Domain["domain schemas"] --> DB["Drizzle SQLite schema"]
+  Domain --> Runtime["Workspace Runtime"]
+  Runtime --> Adapter["Simulator Adapter"]
+  Runtime --> Rules["Deterministic Rule Engine"]
+  Runtime --> Stores["Store Interfaces"]
+  Stores --> SQLite["SQLite implementation"]
+  API["REST APIs"] --> Runtime
+  API --> Stores
+  UI["Dashboard / Ask AI"] --> API
+  LLM["LLM Provider Adapter"] --> Gemini["Gemini provider"]
+  AskAI["Ask AI / Rule Proposal"] --> LLM
+  Mastra["Mastra Explain Workflow"] --> Stores
+  Mastra --> LLM
+```
 
-Seed data should provide:
+Core boundaries:
 
-- a small business ontology
-- physical workspace individuals connected to runtime IDs
-- simulator sensors
-- simulator devices
-- example approved rules when useful for the demo
+- LLMs must not access SQLite or hardware directly.
+- LLMs must not execute device commands.
+- Rule execution is deterministic and does not depend on the LLM.
+- UI and AI access go through application APIs and store/service boundaries.
+- All explainable actions must be grounded in auditable events.
 
-### 3. Runtime and adapter boundary
+## 5. Completed Implementation
 
-Implement a runtime layer that coordinates physical workspace behavior.
+Implemented runtime and simulator:
 
-The runtime should:
+- simulator adapter with four sensor types and four virtual device types
+- workspace runtime for state, readings, device commands, scenarios, rules, and
+  event persistence
+- retention cleanup for high-volume sensor readings and events
 
-- start and stop the active physical adapter
-- expose current workspace state
-- persist sensor readings
-- persist auditable events
-- evaluate enabled rules against incoming readings
-- execute device commands when rules match
-- keep AI and UI layers away from direct hardware or database access
+Implemented semantic and operational APIs:
 
-Implement a simulator adapter first. The adapter should produce deterministic sensor readings and virtual device states while preserving the boundary needed for a future MQTT or hardware adapter.
+- ontology APIs
+- class, property, individual, and relation APIs
+- state, sensor, device, simulator, event, event stream, and rule APIs
+- readiness and health endpoints
 
-The same replaceability principle should apply to other infrastructure choices:
+Implemented rule automation:
 
-- physical input/output should be replaceable through an adapter boundary, such as simulator now and MQTT or hardware later
-- persistence should be isolated behind database access modules so SQLite can be replaced by another database with limited impact
-- LLM access should be isolated behind provider helpers so Gemini can be replaced or supplemented by another model provider
+- deterministic rule evaluator
+- rule validation against known sensors, devices, units, and commands
+- rule CRUD and enable/disable flows
+- event logging for rule matches and device command outcomes
 
-The domain contract should remain more stable than any one adapter, database, or LLM model.
+Implemented LLM adapter:
 
-### 4. Rule engine and rule storage
+- `lib/llm/provider.ts` defines provider-neutral LLM capabilities
+- `lib/llm/gemini-provider.ts` adapts Gemini behind that interface
+- app routes use `getLlmProvider()` instead of direct Gemini model/client calls
+- provider-neutral tool declarations are used outside Gemini-specific code
 
-Implement rule behavior in two parts:
+Implemented DB/store boundary:
 
-- a pure evaluator that decides whether one rule matches one reading
-- a persistence/helper module that creates, updates, enables, disables, deletes, validates, and caches rules
+- `lib/stores/events-store.ts`
+- `lib/stores/rules-store.ts`
+- `lib/stores/ontology-store.ts`
+- `lib/stores/physical-store.ts`
+- `lib/stores/database-store.ts`
+- `lib/stores/index.ts`
 
-Validation should ensure that a rule targets real enabled sensors and devices, uses the correct unit, and only requests commands supported by the target device type.
+`getDb()` is intentionally contained in store implementations. App routes,
+runtime modules, domain services, LLM code, and Mastra workflows should import
+store factories from `@/lib/stores`, not individual SQLite details.
 
-### 5. REST API
+Implemented Explain Why:
 
-Expose the domain and runtime through REST endpoints.
+- rule-triggered device commands include causation metadata
+- deterministic causal trace builder reconstructs explainable action chains
+- `/api/ai/explain-event` returns structured explanation data
+- event timeline exposes Explain Why only for eligible action events
+- Ask AI has an Explain Mode for causal trace, evidence, missing evidence,
+  reviewer findings, and critic output
 
-The minimum API surface should include:
+Implemented Mastra workflow:
 
-- ontology read API
-- class/property/individual/relation APIs
-- current workspace state API
-- sensors API
-- devices API
-- device command API
-- simulator control API
-- event timeline API
-- event stream API
-- rule CRUD API
-- AI chat and AI rule proposal APIs
+```mermaid
+flowchart TD
+  A["causal-trace"] --> B{"parallel evidence review"}
+  B --> C["sensor-review optional LLM"]
+  B --> D["rule-review optional LLM"]
+  B --> E["execution-review optional LLM"]
+  C --> F["critic optional LLM"]
+  D --> F
+  E --> F
+  F --> G["final-verifier deterministic"]
+```
 
-REST APIs are the boundary for UI and AI access. Gemini or other AI tools should not access the database directly.
+- `@mastra/core` is installed
+- `lib/explain-workflow.ts` runs a real Mastra workflow
+- reviewer steps run in parallel
+- reviewer and critic LLM calls are opt-in through `EXPLAIN_LLM_REVIEW=enabled`
+- deterministic fallback remains the default path
+- LLM reviewer and critic claims are constrained by available evidence IDs
+- Ask AI renders the Mastra graph with `@xyflow/react`
 
-For live operational updates, expose an event stream endpoint using Server-Sent Events. The stream should:
+## 6. Explain Why Rules
 
-- send an initial connection comment
-- support a cursor such as `after` or `Last-Event-ID`
-- periodically send heartbeats
-- query only events newer than the last delivered event ID
-- serialize each workspace event as an auditable stream message
-- close cleanly when the client aborts the request
+Explain Why answers:
 
-This gives the UI a simple real-time pattern without requiring WebSockets.
+```text
+Why did this application action happen?
+```
 
-### 6. UI
+Eligible events:
 
-Build a compact interface that makes the architecture inspectable.
+- device command success/failure events
+- rule-triggered device action events
+- future system action events with enough provenance
 
-The UI should show:
+Ineligible events:
 
-- ontology browser
-- relationship graph
-- current sensor readings
-- virtual device states and controls
-- simulator scenarios
-- event timeline
-- approved automation rules
-- AI rule proposal flow with human approval
-- AI chat grounded in ontology, current state, rules, and events
+- raw sensor readings
 
-### 7. AI tool layer
+Reason: the application may know why it turned on a device, but it usually does
+not know why the physical world produced a raw sensor reading.
 
-Implement an AI tool layer that exposes only safe application-level tools.
+The deterministic causal trace is the source of truth. It may return:
 
-Keep model-provider details behind a small LLM access layer. The application should depend on domain contracts, REST tools, and structured outputs rather than on Gemini-specific code throughout the codebase. This makes it easier to change models while preserving the ontology-first tool calling behavior.
+- `complete`
+- `partial`
+- `insufficient`
 
-The AI should be able to call:
+Evidence support values:
 
-- `getOntology`
-- `getCurrentState`
-- `getSensors`
-- `getDevices`
-- `getRecentEvents`
-- `getRules`
+- `proven`
+- `derived`
+- `insufficient`
 
-The AI should inspect ontology first, use REST tool results as evidence, and never claim direct database or hardware access. Rule generation should propose a validated rule only; saving or executing the rule should remain a separate human-approved action.
+The workflow must never fabricate missing evidence.
 
-The ontology-first behavior should be enforced by the implementation, not left only as a prompt convention:
+## 7. LLM Provider Strategy
 
-- declare application tools in a dedicated tool layer
-- map each tool to an internal REST endpoint
-- on the first AI turn, allow only `getOntology`
-- after ontology inspection, allow the remaining read-only tools
-- record a tool-call trace for auditability and debugging
-- keep mutation tools out of the chat agent
-- make rule proposal return structured JSON that is validated against `domain/rule.ts`
+Current provider:
 
-This keeps AI behavior grounded in the semantic model while preserving the application boundary.
+```dotenv
+LLM_PROVIDER=gemini
+GEMINI_MODEL=gemini-3.5-flash-lite
+GOOGLE_CLOUD_LOCATION=global
+GOOGLE_APPLICATION_CREDENTIALS=path/to/gcp-key.json
+```
 
-## Core design patterns
+Required provider capabilities:
 
-The implementation should preserve these architectural patterns:
+- `generateText(...)`
+- `generateStructured(...)`
+- `generateWithTools(...)`
 
-- Domain-first development: manually define `domain/` before database, runtime, API, UI, or AI implementation.
-- Schema-backed contracts: use runtime validation schemas as the source of truth and infer TypeScript types from them where useful.
-- Runtime validation at boundaries: validate external input at API routes, simulator injection, device command execution, and AI proposal parsing.
-- Adapter boundary: keep physical workspace access behind a simulator/MQTT-ready adapter interface.
-- Replaceable infrastructure: isolate physical adapters, database access, and LLM provider access so each can evolve without rewriting the domain model.
-- Runtime orchestration: centralize reading persistence, event persistence, rule evaluation, and device command execution.
-- Auditable events: record sensor readings, scenario changes, rule matches, command outcomes, and failures as events.
-- Failure as event: persist rule or command failures as events so operational explanations include errors, not only successful paths.
-- State snapshot plus event history: expose the current workspace state for fast UI rendering and the event timeline for explanation and audit.
-- SSE event stream: expose the event log as a cursor-based Server-Sent Events stream with heartbeats.
-- Pure rule evaluation: keep condition matching separate from rule persistence and command execution.
-- Bounded async queue: keep rule evaluation from building an unbounded backlog when sensor readings arrive faster than commands can execute.
-- Thin route handlers: keep API route files focused on request parsing, validation, helper calls, and response formatting.
-- Human-approved automation: AI may propose rules, but approved rule creation remains a separate action.
-- Ontology-first tool calling: force AI to inspect the ontology before accessing operational state.
-- Prompt as policy, code as enforcement: express desired AI behavior in prompts but enforce critical constraints through tool availability, schemas, and API boundaries.
-- REST-only AI access: AI tools call application APIs, never SQLite or hardware directly.
-- Health and readiness split: expose lightweight process health separately from database and runtime readiness.
-- Deterministic simulator seed: make simulator behavior reproducible enough for tests, demos, and interviews.
+Rules:
 
-### 8. Verification
+- application code should call `getLlmProvider()`
+- Gemini request/response details stay inside `lib/llm/gemini-provider.ts` or
+  lower-level `lib/gemini.ts`
+- structured outputs must be validated with Zod
+- tool calling must use provider-neutral declarations above the provider layer
+- live Explain Why LLM review is disabled unless
+  `EXPLAIN_LLM_REVIEW=enabled`
 
-Verify the prototype with:
+## 8. DB Store Strategy
 
-- production build
-- focused rule-engine tests
-- API validation tests where useful
-- manual simulator scenarios
-- manual AI rule proposal and chat checks
+Current provider:
 
-## Acceptance criteria
+```dotenv
+DB_PROVIDER=sqlite
+DATABASE_PATH=./data/ai-workspace.sqlite
+```
 
-The prototype is complete when:
+`DB_PROVIDER` is currently documented as `sqlite` only. It reserves the provider
+selection setting for a future PostgreSQL or MariaDB implementation.
 
-- the domain contract is the source of truth for shared physical, rule, and ontology concepts
-- the database schema persists those concepts cleanly
-- the simulator emits sensor readings and updates workspace state
-- readings create auditable events
-- rule and command failures are persisted as auditable events
-- enabled rules are evaluated against readings
-- matched rules execute virtual device commands
-- REST APIs expose state, events, devices, simulator controls, rules, and ontology
-- the event stream exposes auditable workspace events through a cursor-based SSE pattern
-- route handlers remain thin and delegate business behavior to domain, runtime, and helper modules
-- AI chat answers only through ontology-first REST tools
-- AI rule proposal returns a validated preview without saving it automatically
-- AI tool calls are traceable and ontology inspection is enforced on the first turn
-- the UI makes the full domain-to-runtime-to-AI flow visible
+Do not implement PostgreSQL or MariaDB until the target database is selected.
+When that work begins:
 
-## Non-goals
+- keep store interfaces stable where possible
+- add provider-specific store implementations behind `@/lib/stores`
+- avoid exposing Drizzle dialect-specific APIs above the store boundary
+- keep `domain/` schemas as the source of truth
+- add migration and seed strategy for the selected database
 
-This prototype should not attempt to implement:
+## 9. Deployment Notes
 
-- a full OWL/RDF ontology system
-- SPARQL querying
-- graph database storage
-- enterprise permissions
-- production hardware control
-- direct AI access to SQLite or hardware
-- fully autonomous rule approval
+Current deployment assumptions inherited from the physical AI plan:
 
-## Handoff note
+- public URL: `https://physicalai.penvot.com`
+- runtime: Next.js on the existing private AWS EC2 instance
+- container mapping: private EC2 `3010` to container `3000`
+- ingress: existing internet-facing ALB with host-header routing
+- health check: `/api/health`
+- production SQLite path: `/app/data/ai-workspace.sqlite`
+- production sensor reading retention: `READING_RETENTION_DAYS=1`
+- GCP credential source on EC2: `/home/ubuntu/gcp-key.json`
+- container credential mount: `/app/gcp-key.json:ro`
 
-For this style of project, the most important FDE deliverable is the manually authored `domain/` folder. Once that contract is clear, a PE, PM, or coding agent can expand it into database schema, runtime behavior, APIs, UI, and AI tools with much less ambiguity.
+Environment-file policy:
 
-Note: this document is written retrospectively as the implementation plan that could have guided this repository, not as a claim that the project was originally built from this exact file.
+- `.env.local` is for local development and must remain untracked
+- `.env.example` is the tracked reference
+- real credential files must not be committed or baked into Docker images
+- production credentials should be mounted read-only at runtime
+
+## 10. Testing Strategy
+
+Current verification command set:
+
+```bash
+npm run build
+npm run lint
+npm test
+```
+
+Coverage should protect:
+
+- domain validation
+- ontology API regression
+- simulator state and readings
+- device command validation and event persistence
+- rule CRUD, validation, enable/disable, and execution
+- event timeline and event stream behavior
+- Explain Why complete and partial traces
+- LLM routes without requiring live LLM calls in default tests
+- Mastra workflow output shape
+
+UI changes that affect graph rendering should be checked with browser or
+Playwright screenshots when practical.
+
+## 11. Remaining Work
+
+Recommended next work:
+
+1. Add focused tests for LLM reviewer/critic constraint behavior without calling
+   a live model.
+2. Decide whether Explain Why should expose whether each reviewer/critic result
+   came from deterministic fallback or live LLM review.
+3. Improve Mastra graph UI metadata such as evidence counts, confidence, and
+   fallback/LLM badges.
+4. Add an MQTT adapter only after the simulator contract is stable.
+5. Implement PostgreSQL or MariaDB provider only after the target database is
+   selected.
+6. Add deployment scripts or update existing deployment automation only after
+   the app-level architecture is stable.
+
+## 12. Non-Goals And Future Work
+
+Current non-goals:
+
+- actual Arduino firmware
+- live MQTT broker operation
+- camera or video analysis
+- voice commands
+- Raspberry Pi or ROS2 integration
+- MCP server
+- complex user permission system
+- graph database
+- OWL, RDF, SPARQL, or reasoner integration
+- broad database provider migration before a target DB is chosen
+
+Potential future work:
+
+- MQTT adapter behind the physical workspace adapter contract
+- PostgreSQL or MariaDB store provider
+- richer Mastra workflow observability
+- explainability evaluation harness
+- deployment backup and rollback procedures
+- hysteresis support for noisy threshold rules
+
+## 13. Risks
+
+| Risk | Response |
+| --- | --- |
+| LLM selects the wrong device or rule | Ontology-first tool use, allowlists, Zod validation, and human approval |
+| LLM invents causal evidence | Deterministic trace source of truth and evidence ID constraints |
+| Threshold rules repeatedly fire | Cooldown now, hysteresis later |
+| Simulator coupling leaks into app code | Physical adapter boundary and common domain contracts |
+| SQLite lock contention | WAL, busy timeout, short writes, retention batching |
+| Production DB loss | Mounted data volume and future backup plan |
+| Credentials leak into image or Git | `.env.example` only, credential mounts, ignored real env files |
+| Model provider changes | LLM adapter boundary and provider-neutral schemas |
+| DB provider changes | Store boundary and reserved `DB_PROVIDER` setting |
+
+## 14. Handoff Note
+
+When continuing work, inspect the current repository before editing. The plan is
+a guide, but the code is the current implementation state and `domain/` is the
+contract that all generated layers must follow.
