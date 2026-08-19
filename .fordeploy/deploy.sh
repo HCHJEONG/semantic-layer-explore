@@ -2,7 +2,7 @@
 set -euo pipefail
 
 IMAGE_REPOSITORY="ai-physical-workspace"
-IMAGE_TAG="${IMAGE_REPOSITORY}:aws$(date +'%Y%m%d%H%M')"
+IMAGE_TAG="${IMAGE_REPOSITORY}:aws$(date +'%Y%m%d%H%M%S')"
 CONTAINER_NAME="ai-physical-workspace"
 HOST_PORT="3010"
 CONTAINER_PORT="3000"
@@ -11,12 +11,13 @@ PRIVATE_HOST="${PRIVATE_HOST:-ubuntu@172.31.76.194}"
 LOCAL_SSH_KEY="${LOCAL_SSH_KEY:-$HOME/.ssh/penvotkeypair1.pem}"
 BASTION_SSH_KEY="${BASTION_SSH_KEY:-/home/ubuntu/.ssh/penvotkeypair1.pem}"
 REMOTE_DIR="/home/ubuntu"
-DATA_DIR="/home/ubuntu/ai-workspace-data"
-GCP_KEY="/home/ubuntu/gcp-key.json"
+APP_DIR="/home/ubuntu/semantic-layer-explore"
+DATA_DIR="${APP_DIR}/data"
+ENV_FILE="${APP_DIR}/.env.local"
+GCP_KEY="${APP_DIR}/gcp-key.json"
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DEPLOY_ASSETS_DIR="${SCRIPT_DIR}/ai-workspace-aws"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 ARCHIVE_PATH="$(mktemp "${TMPDIR:-/tmp}/ai-workspace-source.XXXXXX.tar.gz")"
 ARCHIVE_NAME="$(basename "${ARCHIVE_PATH}")"
 
@@ -26,7 +27,6 @@ cleanup() {
 trap cleanup EXIT
 
 test -f "${LOCAL_SSH_KEY}" || { echo "Missing local SSH key: ${LOCAL_SSH_KEY}"; exit 1; }
-test -f "${DEPLOY_ASSETS_DIR}/.env" || cp "/mnt/j/VSCodeProjects/semantic-layer-explore/.fordeploy/ai-workspace-aws/.env" "${DEPLOY_ASSETS_DIR}/.env"
 
 tar --exclude=.git --exclude=node_modules --exclude=.next --exclude=data -C "${ROOT_DIR}" -czf "${ARCHIVE_PATH}" .
 scp -o StrictHostKeyChecking=accept-new -i "${LOCAL_SSH_KEY}" "${ARCHIVE_PATH}" "${BASTION_HOST}:${REMOTE_DIR}/${ARCHIVE_NAME}"
@@ -34,19 +34,21 @@ scp -o StrictHostKeyChecking=accept-new -i "${LOCAL_SSH_KEY}" "${ARCHIVE_PATH}" 
 ssh -o StrictHostKeyChecking=accept-new -i "${LOCAL_SSH_KEY}" "${BASTION_HOST}" \
   PRIVATE_HOST="${PRIVATE_HOST}" BASTION_SSH_KEY="${BASTION_SSH_KEY}" REMOTE_DIR="${REMOTE_DIR}" \
   ARCHIVE_NAME="${ARCHIVE_NAME}" IMAGE_REPOSITORY="${IMAGE_REPOSITORY}" IMAGE_TAG="${IMAGE_TAG}" CONTAINER_NAME="${CONTAINER_NAME}" \
-  HOST_PORT="${HOST_PORT}" CONTAINER_PORT="${CONTAINER_PORT}" DATA_DIR="${DATA_DIR}" GCP_KEY="${GCP_KEY}" bash -s <<'BASTION'
+  HOST_PORT="${HOST_PORT}" CONTAINER_PORT="${CONTAINER_PORT}" APP_DIR="${APP_DIR}" DATA_DIR="${DATA_DIR}" ENV_FILE="${ENV_FILE}" GCP_KEY="${GCP_KEY}" bash -s <<'BASTION'
 set -euo pipefail
 test -f "${BASTION_SSH_KEY}" || { echo "Missing bastion SSH key: ${BASTION_SSH_KEY}"; exit 1; }
 scp -o StrictHostKeyChecking=accept-new -i "${BASTION_SSH_KEY}" "${REMOTE_DIR}/${ARCHIVE_NAME}" "${PRIVATE_HOST}:${REMOTE_DIR}/${ARCHIVE_NAME}"
 ssh -o StrictHostKeyChecking=accept-new -i "${BASTION_SSH_KEY}" "${PRIVATE_HOST}" \
   REMOTE_DIR="${REMOTE_DIR}" ARCHIVE_NAME="${ARCHIVE_NAME}" IMAGE_REPOSITORY="${IMAGE_REPOSITORY}" IMAGE_TAG="${IMAGE_TAG}" \
   CONTAINER_NAME="${CONTAINER_NAME}" HOST_PORT="${HOST_PORT}" CONTAINER_PORT="${CONTAINER_PORT}" \
-  DATA_DIR="${DATA_DIR}" GCP_KEY="${GCP_KEY}" bash -s <<'PRIVATE'
+  APP_DIR="${APP_DIR}" DATA_DIR="${DATA_DIR}" ENV_FILE="${ENV_FILE}" GCP_KEY="${GCP_KEY}" bash -s <<'PRIVATE'
 set -euo pipefail
 BUILD_DIR="$(mktemp -d /home/ubuntu/ai-workspace-build.XXXXXX)"
 cleanup_private() { sudo rm -rf -- "${BUILD_DIR}"; }
 trap cleanup_private EXIT
 
+test -d "${APP_DIR}" || { echo "Missing app dir: ${APP_DIR}"; exit 1; }
+test -f "${ENV_FILE}" || { echo "Missing env file: ${ENV_FILE}"; exit 1; }
 test -f "${GCP_KEY}" || { echo "Missing GCP key: ${GCP_KEY}"; exit 1; }
 tar -xzf "${REMOTE_DIR}/${ARCHIVE_NAME}" -C "${BUILD_DIR}"
 sudo docker build -f "${BUILD_DIR}/.fordeploy/ai-workspace-aws/Dockerfile" -t "${IMAGE_TAG}" "${BUILD_DIR}"
@@ -54,6 +56,7 @@ sudo install -d -o 1001 -g 1001 "${DATA_DIR}"
 sudo docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 sudo docker run -d --restart unless-stopped \
   --name "${CONTAINER_NAME}" -p "${HOST_PORT}:${CONTAINER_PORT}" \
+  --env-file "${ENV_FILE}" \
   -v "${DATA_DIR}:/app/data" -v "${GCP_KEY}:/app/gcp-key.json:ro" "${IMAGE_TAG}"
 
 for attempt in {1..30}; do
