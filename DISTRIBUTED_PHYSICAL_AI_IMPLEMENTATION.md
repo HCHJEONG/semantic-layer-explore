@@ -10,12 +10,18 @@
 
 ```text
 Next.js
-  + Go API/Gateway × 1
+  + Go API/Protocol Gateway × 1 (HTTP·WebSocket·SSH·MQTT)
   + MQTT Broker
   + Kafka
   + NestJS/Mastra Worker × 2 이상
   + PostgreSQL
+  + Rust Graph Projection Worker × 1
+  + Neo4j semantic read model
 ```
+
+배포 대상은 운영 서버 `aws-prod`가 아니라 실험 서버 `aws-demo`다. `aws-prod`는 현재 운영 서비스를 위해 `t3a.medium`으로 유지하고, `aws-demo`를 `t3a.small`에서 `t3a.medium`으로 변경한 뒤 이 프로젝트를 배포한다. 애플리케이션 이미지는 EC2에서 빌드하지 않는다. 로컬 WSL에서 `linux/amd64` image를 빌드하고 tar 압축본으로 전송한다.
+
+Spring Boot는 이 버전의 구성에 추가하지 않는다. 동기 API와 장기 연결 protocol은 Go가 담당하고, 기존 TypeScript/Mastra 코드는 NestJS worker에서 재사용한다. 향후 World·Policy·Ledger처럼 복잡한 transactional domain core가 실제로 필요해질 때 Spring 도입을 별도 ADR로 검토한다.
 
 중간에 `Next.js + Go + PostgreSQL`만 동작하는 별도 완성 단계를 만들지 않는다. 대량 telemetry의 정상 처리 경로는 처음부터 끝까지 반드시 다음을 통과해야 한다.
 
@@ -36,6 +42,8 @@ MQTT → Go API → Kafka → NestJS/Mastra Worker × N → PostgreSQL
 - Kafka topic·partition·consumer group
 - 동일 NestJS worker image의 수평 확장
 - 기존 TypeScript Mastra agent·tool·workflow 재사용
+- Rust 기반 Kafka graph projection worker
+- Neo4j 기반 ontology/semantic relation 조회
 - 결정론적 처리와 AI Agent 처리의 경계
 - at-least-once 환경의 idempotency
 - 장치별 ordering
@@ -52,6 +60,10 @@ MQTT → Go API → Kafka → NestJS/Mastra Worker × N → PostgreSQL
 4. 같은 장치의 이벤트 순서는 어디까지 보장되는가?
 5. Mastra/LLM 호출이 느리거나 실패해도 다른 작업이 계속 처리되는가?
 6. 병목은 API, Kafka, worker, PostgreSQL 중 어디에서 발생하는가?
+7. PostgreSQL의 관계 변경이 transactional outbox를 거쳐 Neo4j에 언제, 어떻게 투영되는가?
+8. Neo4j projection이 유실되거나 삭제되어도 원본에서 재구축할 수 있는가?
+9. 동일한 World action을 Next.js와 SSH에서 실행했을 때 같은 application rule과 결과를 사용하는가?
+10. 동기 조회와 비동기 분산 작업의 경계가 명확하며 Kafka를 불필요한 RPC bus로 사용하지 않는가?
 
 ---
 
@@ -70,8 +82,13 @@ MQTT → Go API → Kafka → NestJS/Mastra Worker × N → PostgreSQL
 11. `container_name`을 worker에 지정하지 않는다.
 12. exactly-once를 주장하지 않는다. at-least-once와 idempotency를 구현한다.
 13. 모든 telemetry에 LLM을 호출하지 않는다.
-14. 테스트하지 않은 사항을 완료했다고 보고하지 않는다.
-15. 실제 저장소와 이 문서의 가정이 다르면 실제 코드를 우선하되, 아키텍처 핵심을 바꿔야 할 경우 먼저 보고한다.
+14. Neo4j에 raw telemetry 전체를 저장하지 않는다.
+15. Rust worker를 NestJS telemetry worker와 같은 consumer group에 섞지 않는다.
+16. 테스트하지 않은 사항을 완료했다고 보고하지 않는다.
+17. 실제 저장소와 이 문서의 가정이 다르면 실제 코드를 우선하되, 아키텍처 핵심을 바꿔야 할 경우 먼저 보고한다.
+18. Spring Boot를 단순한 Next.js용 중간 backend로 추가하지 않는다.
+19. SSH listener를 수평 확장되는 NestJS worker에 넣지 않는다.
+20. 실제 OS shell을 외부에 노출하지 않는다. SSH는 application-controlled terminal session만 제공한다.
 
 ---
 
@@ -128,6 +145,9 @@ MQTT → Go API → Kafka → NestJS/Mastra Worker × N → PostgreSQL
 - volume과 backup
 - health check
 - 현재 container별 CPU/RSS
+- `aws-demo`의 기존 container와 port 충돌
+- 로컬 WSL Docker build 환경과 서버 CPU architecture
+- image tar 압축·전송·rollback 방식
 
 조사 완료 전 대규모 파일 이동이나 dependency 교체를 시작하지 않는다.
 
@@ -145,12 +165,15 @@ Virtual Devices
       ▼
 Go API/Gateway × 1
   ├── REST API for Next.js
+  ├── WebSocket/SSE session delivery
+  ├── SSH server and ANSI terminal sessions
   ├── MQTT inbound/outbound adapter
   ├── schema validation
   ├── Kafka producer
   ├── configuration command handling
   ├── PostgreSQL query adapter
-  └── SSE/WebSocket result delivery
+  ├── Scene IR session routing
+  └── ANSI renderer for SSH
       │
       ▼
 Kafka
@@ -174,17 +197,47 @@ NestJS Worker 1    NestJS Worker 2 ... N
            │
            ▼
       PostgreSQL
-           │
-           ▼
-      Go Query API
-           │
-           ▼
-        Next.js
+       │       │
+       │       └── outbox_event
+       │                 │
+       │                 ▼
+       │            Outbox Relay
+       │                 │
+       │       semantic.graph.rebuild
+       │       semantic.relation.changed
+       │                 │
+       │                 ▼
+       │       Rust Graph Worker × 1
+       │                 │
+       │                 ▼
+       │               Neo4j
+       │
+       ▼
+  Go Query API ───────────────▶ Neo4j Query
+       │
+       ├── JSON/Scene IR ──▶ Next.js React renderer
+       └── ANSI stream ────▶ SSH terminal
 ```
+
+동기 경로와 비동기 경로를 구분한다.
+
+```text
+조회·인증·세션·가벼운 명령
+Next.js/SSH → Go → PostgreSQL → 즉시 응답
+
+AI·대량 telemetry·재시도 가능한 장기 작업
+Next.js/SSH/MQTT → Go → Kafka → Worker × N → PostgreSQL
+                                      └→ result event → Go session → client
+```
+
+Kafka는 모든 화면 요청을 통과시키는 message RPC가 아니다. 즉시 응답이 필요한 조회와 세션 처리는 Go가 직접 수행한다.
 
 ### 4.1 Go API 책임
 
 - HTTP API와 ingress
+- WebSocket/SSE session lifecycle
+- SSH server, public-key authentication, PTY metadata, resize, keyboard/mouse escape sequence 처리
+- application-controlled cinematic terminal과 ANSI byte streaming
 - MQTT 연결과 장치 통신
 - payload envelope 기본 검증
 - 인증·인가·rate limit 경계
@@ -193,8 +246,12 @@ NestJS Worker 1    NestJS Worker 2 ... N
 - 처리 결과 조회
 - actuator command 발행
 - SSE 또는 WebSocket delivery
+- `sessionId`·`correlationId` 기반 비동기 결과 routing
+- Scene IR을 Next.js용 JSON과 SSH용 ANSI로 전달
 
 Go API는 Mastra workflow를 실행하지 않는다.
+
+SSH는 Go process의 별도 inbound adapter로 구현하되 HTTP와 동일한 application service/port interface를 호출한다. 네트워크 listener는 HTTP와 분리해 기본 `:2222`를 사용한다. `/bin/bash` 등 실제 OS shell을 spawn하지 않는다. host private key는 secret/file mount로 주입하고 source와 image에 포함하지 않는다. 초기 인증은 password보다 public key를 우선한다.
 
 ### 4.2 NestJS/Mastra Worker 책임
 
@@ -227,6 +284,34 @@ Go와 worker 모두 PostgreSQL adapter를 가질 수 있지만 쓰기 책임을 
 
 Go API는 `telemetry.raw`를 Kafka에 발행한 후 같은 telemetry를 PostgreSQL에 직접 저장하지 않는다.
 
+### 4.4 Neo4j의 지위
+
+PostgreSQL은 authoritative operational store다. Neo4j는 ontology와 semantic relation을 조회하기 위한 **재생성 가능한 read model/projection**이다.
+
+- PostgreSQL: Factory, Device, Rule, Responsibility, Audit 등 원본 상태
+- Neo4j: `LOCATED_IN`, `ATTACHED_TO`, `RESPONSIBLE_FOR`, `DEPENDS_ON`, `APPLIES_TO` 등의 관계
+- Neo4j 손실 시 PostgreSQL/ontology와 rebuild event로 재구축 가능해야 함
+- PostgreSQL과 Neo4j에 application-level dual-write 금지
+- graph projection은 eventual consistency를 명시적으로 허용
+- raw·고빈도 telemetry는 PostgreSQL/Kafka에 유지
+
+### 4.5 Next.js와 SSH의 지위
+
+Next.js와 SSH는 같은 World Runtime을 사용하는 동등한 presentation adapter다.
+
+| Client | Transport | 표현 |
+|---|---|---|
+| Next.js | REST + WebSocket/SSE | React, Canvas/SVG/3D, Scene IR, 운영 dashboard |
+| SSH | SSH channel | ANSI, Unicode text-art, cinematic timing, keyboard/mouse |
+| External agent | REST/WebSocket | 구조화 JSON action/result |
+
+Scene IR에는 ANSI color code나 React component 이름을 넣지 않는다. `WARNING`, `SYSTEM`, `DIALOGUE` 같은 semantic style과 timeline을 기술하고 renderer가 client capability에 맞게 변환한다.
+
+Next.js 최소 화면은 다음 두 개다.
+
+1. `/terminal`: SSH와 같은 장면을 Scene IR 기반 웹 cinematic terminal로 재생
+2. `/operations`: Kafka lag, worker assignment, MQTT device, DLQ, processing latency, PostgreSQL/Neo4j projection 상태 표시
+
 ---
 
 ## 5. 확정 Monorepo 구조
@@ -249,6 +334,10 @@ physicalai/
 │   ├── internal/
 │   │   ├── config/
 │   │   ├── http/
+│   │   ├── websocket/
+│   │   ├── ssh/
+│   │   ├── session/
+│   │   ├── render/
 │   │   ├── mqtt/
 │   │   ├── kafka/
 │   │   ├── command/
@@ -277,19 +366,36 @@ physicalai/
 │   ├── tsconfig.json
 │   └── Dockerfile
 │
+├── graph-worker/                 # Rust semantic graph projector
+│   ├── src/
+│   │   ├── main.rs
+│   │   ├── consumer.rs
+│   │   ├── projection.rs
+│   │   └── neo4j.rs
+│   ├── Cargo.toml
+│   ├── Cargo.lock
+│   └── Dockerfile
+│
 ├── contracts/                    # 언어 중립 계약
 │   ├── telemetry.schema.json
 │   ├── command.schema.json
 │   ├── command-result.schema.json
 │   ├── agent-result.schema.json
-│   └── audit-event.schema.json
+│   ├── audit-event.schema.json
+│   ├── semantic-relation.schema.json
+│   ├── graph-rebuild.schema.json
+│   ├── scene-ir.schema.json
+│   ├── action-request.schema.json
+│   └── session-result.schema.json
 │
 ├── infra/
 │   ├── postgres/
 │   │   └── migrations/
 │   ├── kafka/
 │   │   └── config/
-│   └── mosquitto/
+│   ├── mosquitto/
+│   │   └── config/
+│   └── neo4j/
 │       └── config/
 │
 ├── loadtest/
@@ -308,10 +414,22 @@ physicalai/
 - root Dockerfile: Next.js만 build
 - `api/Dockerfile`: Go API만 build
 - `worker/Dockerfile`: NestJS/Mastra worker만 build
+- `graph-worker/Dockerfile`: Rust graph projector만 build
 - Kafka, PostgreSQL, MQTT를 application image에 포함하지 않음
 - root `compose.yaml`이 조합
 - root `.dockerignore`에서 `api/`, `worker/`, DB volume, build output 제외 검토
 - 각 하위 build context에 맞는 `.dockerignore` 추가 가능
+- 모든 application image는 `linux/amd64`를 target으로 로컬 WSL에서 build
+
+Rust graph worker는 다음 library를 우선 검토한다.
+
+- `tokio`: async runtime
+- `rdkafka`: Kafka consumer
+- `serde`, `serde_json`: contract parsing
+- `neo4rs`: Neo4j Bolt client
+- `tracing`: structured logging
+- `thiserror`: error classification
+- `uuid`, `chrono`: identifier와 timestamp
 
 ### 5.2 Database migration 소유권
 
@@ -367,13 +485,24 @@ Go와 TypeScript가 source type을 공유할 수 없으므로 JSON Schema를 sou
 
 ```text
 telemetry.raw
+action.requested
+scene.generated
 command.result
 agent.result
 audit.event
 dead-letter
+semantic.graph.rebuild
+semantic.relation.changed
+semantic.graph.dead-letter
 ```
 
-초기 핵심은 `telemetry.raw`와 `dead-letter`다. 필요하지 않은 topic을 형식적으로 만들지 않는다.
+초기 핵심은 `telemetry.raw`와 `dead-letter`다. Graph 기능의 초기 핵심은 현재 semantic model이 고정 ontology인지 동적 관계인지에 따라 달라진다.
+
+- 고정 OWL/semantic model을 import하는 단계: `semantic.graph.rebuild`
+- API/UI에서 관계를 실제 변경하는 단계: `semantic.relation.changed`
+- graph projection 실패 격리: `semantic.graph.dead-letter`
+
+Topic은 Kafka initialization에서 생성하지만, event는 해당 business change가 실제 발생할 때만 발행한다. 관계 변경 기능이 아직 없는데 빈 형식만 맞추기 위해 relation event를 만들지 않는다.
 
 ### 7.2 Partition
 
@@ -392,7 +521,7 @@ group.id = physicalai-telemetry-workers
 동일 worker image를 최소 2개 실행한다.
 
 ```bash
-docker compose up --build --scale worker=2
+docker compose up -d --scale worker=2
 ```
 
 확장 실험:
@@ -428,6 +557,35 @@ DB commit 이후 offset commit 전에 죽으면 재전달된다. `eventId` uniqu
 - DLQ message에 original topic, partition, offset, error type, attempts 포함
 - poison message가 partition을 영구 정지시키지 않게 함
 
+### 7.6 Topic 생성과 event 발행 시점
+
+Topic 자체는 Compose의 Kafka init service 또는 idempotent initialization script가 생성한다.
+
+```bash
+kafka-topics.sh \
+  --bootstrap-server kafka:9092 \
+  --create \
+  --if-not-exists \
+  --topic semantic.relation.changed \
+  --partitions 6 \
+  --replication-factor 1
+```
+
+`semantic.relation.changed` event는 다음과 같은 구조적 관계가 실제로 생성·변경·삭제될 때 발행한다.
+
+| Business change | Relation example | 최초 처리 주체 |
+|---|---|---|
+| Device 공장 배치 | `Device-[:LOCATED_IN]->Factory` | Go API |
+| Sensor 부착 | `Sensor-[:ATTACHED_TO]->Device` | Go API |
+| 담당자 지정 | `Actor-[:RESPONSIBLE_FOR]->Device` | Go API |
+| Rule 적용 | `Rule-[:APPLIES_TO]->Device` | Go API |
+| Device 의존관계 | `Device-[:DEPENDS_ON]->Device` | Go API 또는 Worker |
+| Mastra 관계 제안 승인 | 승인된 관계 | Go API 또는 Worker |
+
+센서 값이 매번 바뀌는 것은 semantic relation change가 아니다. raw temperature, vibration, distance 같은 관측값마다 graph event를 발행하지 않는다.
+
+현재 semantic map이 고정 OWL 파일을 읽는 수준이라면 최초 Rust worker는 `semantic.graph.rebuild`만 처리한다. 이후 관계 mutation API가 생겼을 때 `semantic.relation.changed`를 활성화한다.
+
 ---
 
 ## 8. MQTT 설계
@@ -454,9 +612,120 @@ physicalai/v1/factories/{factoryId}/devices/{deviceId}/command-results
 
 ---
 
-## 9. NestJS/Mastra Worker 설계
+## 9. Neo4j와 Rust Graph Projection
 
-### 9.1 Worker runtime
+### 9.1 저장소 역할
+
+Neo4j는 operational source of truth가 아니다. 다음처럼 비교적 안정적인 구조·책임·의존 관계를 조회하는 semantic projection이다.
+
+```text
+(:Device)-[:LOCATED_IN]->(:Factory)
+(:Sensor)-[:ATTACHED_TO]->(:Device)
+(:Device)-[:DEPENDS_ON]->(:Device)
+(:Actor)-[:RESPONSIBLE_FOR]->(:Device)
+(:Actor)-[:HAS_CAPABILITY]->(:Capability)
+(:Rule)-[:APPLIES_TO]->(:Device)
+```
+
+Mastra worker는 이상 이벤트를 해석할 때 Neo4j에서 담당자, 영향받는 장치, 적용 rule, capability 등의 semantic context를 조회할 수 있다.
+
+### 9.2 Transactional Outbox
+
+Go API나 NestJS worker가 PostgreSQL과 Neo4j에 동시에 쓰지 않는다. PostgreSQL state와 outbox event를 같은 transaction에 기록한다.
+
+```sql
+CREATE TABLE outbox_event (
+    event_id        uuid PRIMARY KEY,
+    event_type      varchar(120) NOT NULL,
+    aggregate_type  varchar(80) NOT NULL,
+    aggregate_id    varchar(200) NOT NULL,
+    payload         jsonb NOT NULL,
+    occurred_at     timestamptz NOT NULL,
+    published_at    timestamptz,
+    attempts        integer NOT NULL DEFAULT 0,
+    last_error      text
+);
+```
+
+```text
+PostgreSQL transaction
+├── operational state 변경
+└── outbox_event insert
+        ↓
+Outbox Relay
+        ↓
+Kafka semantic topic
+        ↓
+Rust Graph Worker
+        ↓
+Neo4j
+```
+
+Outbox Relay는 초기에는 단일 Go API process의 background component로 구현할 수 있다. 이후 API를 여러 개 띄우면 `FOR UPDATE SKIP LOCKED` 또는 별도 relay service로 중복 claim을 제어한다. 발행 실패 event는 PostgreSQL에 남아 재시도 가능해야 한다.
+
+### 9.3 Rust worker 책임
+
+- `semantic.graph.rebuild`와 `semantic.relation.changed` 소비
+- JSON Schema validation
+- `eventId` 기반 projection idempotency
+- node/relationship upsert 또는 delete
+- Neo4j transaction
+- batch projection
+- retry·DLQ
+- projection lag metric
+- 전체 graph rebuild
+
+Rust worker의 consumer group은 NestJS worker와 분리한다.
+
+```text
+NestJS: physicalai-telemetry-workers
+Rust:   physicalai-graph-projectors
+```
+
+같은 consumer group에 서로 다른 의미의 worker를 섞으면 partition에 따라 처리 결과가 달라지므로 금지한다.
+
+### 9.4 Relation event 예시
+
+```json
+{
+  "schemaVersion": 1,
+  "eventId": "019...",
+  "occurredAt": "2026-08-23T14:20:00Z",
+  "operation": "UPSERT_RELATION",
+  "subject": { "type": "Actor", "id": "inspection-team" },
+  "predicate": "RESPONSIBLE_FOR",
+  "object": { "type": "Device", "id": "motor-042" },
+  "attributes": { "basis": "manual-assignment" }
+}
+```
+
+삭제는 `DELETE_RELATION`으로 표현한다. Rust worker는 `MERGE`와 명시적 relationship key를 이용해 재처리에 안전하게 투영한다.
+
+### 9.5 Rebuild
+
+현재 ontology가 고정 파일이라면 다음 흐름부터 구현한다.
+
+```text
+Ontology import/rebuild 요청
+  → PostgreSQL/outbox 또는 관리 command
+  → semantic.graph.rebuild
+  → Rust Graph Worker
+  → Neo4j projection 재구축
+```
+
+Rebuild는 기존 graph를 즉시 삭제한 뒤 장시간 비워두는 방식보다 staging/version 전략을 우선 검토한다. 작은 데모에서는 단순 rebuild를 허용하되 downtime을 문서화한다.
+
+### 9.6 Graph query 경계
+
+- Go API: UI용 graph query endpoint 제공 가능
+- NestJS/Mastra worker: semantic context query port 사용
+- Neo4j Cypher를 domain/Mastra tool 여러 곳에 흩어놓지 않음
+- graph query timeout과 result size 제한
+- variable-length traversal 깊이 제한
+
+## 10. NestJS/Mastra Worker 설계
+
+### 10.1 Worker runtime
 
 Worker는 일반 HTTP API server가 아니다. Kafka consumer 중심의 standalone/microservice runtime으로 실행한다.
 
@@ -473,7 +742,7 @@ async function bootstrap() {
 
 health와 metric이 필요하면 별도 management endpoint 또는 process-level health check를 제공한다.
 
-### 9.2 기존 Mastra 코드 이동
+### 10.2 기존 Mastra 코드 이동
 
 1. 기존 Mastra agent/tool/workflow inventory
 2. Next.js server action과 route 종속성 제거
@@ -496,7 +765,7 @@ export interface EventPublisher {
 }
 ```
 
-### 9.3 모든 이벤트에 Mastra를 호출하지 않기
+### 10.3 모든 이벤트에 Mastra를 호출하지 않기
 
 ```text
 telemetry event
@@ -514,7 +783,7 @@ telemetry event
 - automation proposal 생성
 - 자연어 설명 또는 operator recommendation 필요
 
-### 9.4 Mastra 실패 격리
+### 10.4 Mastra 실패 격리
 
 - timeout 필수
 - retry 횟수 제한
@@ -527,11 +796,11 @@ telemetry event
 
 ---
 
-## 10. PostgreSQL의 DynamoDB식 연습
+## 11. PostgreSQL의 DynamoDB식 연습
 
 PostgreSQL을 DynamoDB emulator로 주장하지 않는다. 다만 access-pattern-first 모델을 사용해 향후 DynamoDB adapter로 옮기기 쉽게 한다.
 
-### 10.1 Operational item
+### 11.1 Operational item
 
 ```sql
 CREATE TABLE operational_item (
@@ -565,7 +834,7 @@ CREATE INDEX operational_item_gsi2
 
 모든 데이터를 억지로 한 테이블에 넣지 않는다. migration, outbox, processed-event lock처럼 lifecycle이 다른 데이터는 별도 테이블을 허용한다.
 
-### 10.2 Key convention
+### 11.2 Key convention
 
 ```text
 PK = FACTORY#{factoryId}
@@ -581,7 +850,7 @@ PK = SUBJECT#{subjectType}#{subjectId}#DATE#{yyyy-MM-dd}
 SK = AUDIT#{occurredAt}#{eventId}
 ```
 
-### 10.3 Idempotency
+### 11.3 Idempotency
 
 ```sql
 CREATE TABLE processed_event (
@@ -595,21 +864,21 @@ CREATE TABLE processed_event (
 
 처리 결과와 `processed_event` insert는 같은 transaction에 포함한다.
 
-### 10.4 Conditional write
+### 11.4 Conditional write
 
 - `INSERT ... ON CONFLICT DO NOTHING`
 - `UPDATE ... WHERE version = :expectedVersion`
 - 영향받은 행 수로 conflict 판단
 - `SELECT 후 INSERT`만으로 중복 방지 금지
 
-### 10.5 Pagination과 TTL
+### 11.5 Pagination과 TTL
 
 - offset pagination 대신 keyset cursor
 - raw telemetry 보관 기간 환경변수
 - TTL cleanup은 작은 batch
 - audit evidence에는 raw telemetry와 같은 TTL을 적용하지 않음
 
-### 10.6 DynamoDB로 재현할 수 없는 부분
+### 11.6 DynamoDB로 재현할 수 없는 부분
 
 - 실제 physical partition
 - adaptive capacity
@@ -621,7 +890,7 @@ CREATE TABLE processed_event (
 
 ---
 
-## 11. Next.js 전환
+## 12. Next.js 전환
 
 Next.js는 presentation layer로 유지한다.
 
@@ -633,14 +902,32 @@ Next.js는 presentation layer로 유지한다.
 - loading/empty/degraded/error 상태 표시
 - Go API가 Kafka event를 수락하면 `202 Accepted`와 tracking ID 반환 가능
 - 장시간 작업 상태 조회 endpoint 제공
+- `/terminal`은 Scene IR을 React/xterm-compatible renderer로 재생
+- `/operations`는 worker, partition, lag, retry, DLQ, MQTT 상태를 표시
+- Next.js와 SSH action은 동일한 Go application service를 호출
+- server component의 단순 조회는 Go REST API를 사용
+- 실시간 장면·진행상태는 WebSocket/SSE를 사용
 
 SQLite는 신규 경로가 검증된 뒤 제거한다. 장기간 dual-write하지 않는다.
 
+권장 API 경계:
+
+```text
+GET  /api/worlds/{worldId}
+GET  /api/scenes/{sceneId}
+POST /api/actions
+GET  /api/operations/summary
+WS   /ws/sessions/{sessionId}
+SSH  :2222
+```
+
+`POST /api/actions`가 비동기 작업을 발생시키면 `202 Accepted`와 `correlationId`를 반환한다. worker 결과 event는 `sessionId`, `actorId`, `correlationId`를 포함하며 Go가 연결된 WebSocket 또는 SSH session으로 전달한다.
+
 ---
 
-## 12. Docker Compose
+## 13. Docker Compose
 
-### 12.1 필수 service
+### 13.1 필수 service
 
 ```text
 frontend
@@ -650,9 +937,11 @@ kafka
 postgres
 mosquitto
 migrate
+graph-worker × 1             # graph profile
+neo4j                        # graph profile
 ```
 
-### 12.2 Compose 원칙
+### 13.2 Compose 원칙
 
 - 각 runtime은 별도 container
 - worker는 하나의 service 정의만 사용
@@ -663,13 +952,23 @@ migrate
 - health check
 - graceful shutdown
 - secret은 `.env.example`에 실제 값 없이 이름만 제공
+- SSH host key와 authorized key는 read-only secret/file mount
+- SSH port는 기본 `2222`; ALB HTTP listener를 경유하지 않고 EC2 security group 또는 필요 시 NLB TCP listener 사용
 - 기본 명령은 repository root에서 실행
 
 ```bash
-docker compose up --build --scale worker=2
+docker compose up -d --scale worker=2
 ```
 
-### 12.3 Worker scale 검증
+Graph projection 포함 실행:
+
+```bash
+docker compose --profile graph up -d \
+  --scale worker=2 \
+  --scale graph-worker=1
+```
+
+### 13.3 Worker scale 검증
 
 ```bash
 docker compose up --scale worker=1
@@ -679,7 +978,7 @@ docker compose up --scale worker=4
 
 worker container 이름은 Compose가 자동 생성한다. instance ID, assigned partitions, consumer group generation을 structured log에 기록한다.
 
-### 12.4 Kafka broker profile
+### 13.4 Kafka broker profile
 
 상시 데모에서는 단일 Kafka broker를 허용한다. 이는 consumer application의 분산처리를 보여주지만 Kafka broker 자체의 고가용성을 의미하지 않는다.
 
@@ -690,49 +989,109 @@ worker container 이름은 Compose가 자동 생성한다. instance ID, assigned
 분산 실험: Kafka broker 3 + Worker 2~4
 ```
 
+### 13.5 Graph profile
+
+Neo4j는 메모리 사용량이 크므로 기본 `t3a.medium` runtime에 무조건 포함하지 않는다.
+
+```yaml
+services:
+  neo4j:
+    profiles: ["graph"]
+
+  graph-worker:
+    profiles: ["graph"]
+```
+
+`graph-worker`는 동일 Rust image를 scale할 수 있게 정의하고 `container_name`을 사용하지 않는다.
+
 ---
 
-## 13. `t3a.small` 메모리 전략
+## 14. AWS 배치와 `t3a.medium` 메모리 전략
 
-2 vCPU, 2 GiB에서 다음 전체 구성이 항상 안정적이라고 가정하지 않는다. 먼저 제한하고 측정한다.
+### 14.1 확정 배치
 
-대략적 목표:
+| Host | Instance | 역할 |
+|---|---|---|
+| `aws-prod` | `t3a.medium` 유지 | 기존 운영 사이트 전용; 실험 스택 배포 금지 |
+| `aws-demo` | `t3a.small → t3a.medium` | Physical AI 분산처리 실험과 데모 |
+| `aws-bastion` | 현 상태 유지 | AWS CLI와 관리 진입점 |
+
+측정 당시 `aws-prod`는 container 약 1.25 GiB, host memory used 약 2.0 GiB, swap 약 481 MiB를 사용했으므로 small로 축소하지 않는다. `aws-demo` small은 container 약 531 MiB, available 약 875 MiB였지만 swap 약 1 GiB를 사용했다. 현재 memory PSI는 0이고 지속 swap-out은 없었으나, Kafka·복수 worker 실험을 추가할 공간은 부족하므로 medium으로 변경한다.
+
+서울 리전 Linux On-Demand 기준 small과 medium의 compute 차이는 약 `$17.08/month`이며 환율과 부가세에 따라 대략 월 2.5~2.8만 원이다. EBS와 공인 IPv4 등 공통 비용은 instance type 변경으로 줄거나 늘지 않는다.
+
+### 14.2 Runtime memory budget
+
+2 vCPU, 4 GiB에서도 모든 optional service가 항상 안정적이라고 가정하지 않는다. 다음은 목표 범위이며 실제 RSS와 PSI를 측정해 조정한다.
 
 ```text
-Next.js             200~300 MiB
+기존 demo containers 약 530 MiB
+Next.js             150~300 MiB
 Go API               50~120 MiB
 NestJS Worker × 2   200~500 MiB
-Kafka               450~650 MiB
+Kafka               450~768 MiB
 PostgreSQL          200~350 MiB
 Mosquitto            30~80 MiB
+Neo4j               512~768 MiB, graph profile에서만
+Rust Graph Worker     20~100 MiB
 OS/Docker           나머지
 ```
 
 요구사항:
 
-- production build만 서버에서 실행
-- 로컬에서 image build 후 배포 가능
+- EC2에서 application image build 금지
+- 로컬 WSL에서 `linux/amd64` image build 후 tar 전송
 - worker에 `NODE_OPTIONS=--max-old-space-size=...` 제한
 - worker별 DB pool 최소화
 - Kafka heap 제한
 - PostgreSQL connection 제한
-- 불필요한 Kafka UI, Prometheus, Grafana 상시 금지
+- 불필요한 Kafka UI, Prometheus, Grafana 상시 실행 금지; `/operations`와 CLI metric 우선
 - swap은 OOM 완화용일 뿐 정상 메모리로 계산하지 않음
-- OOM, sustained swap, CPU credit exhaustion 측정
+- OOM, sustained swap, memory PSI, CPU credit exhaustion 측정
 
-상시 구성이 2 GiB를 넘으면 결과를 숨기지 않는다. 다음 중 하나를 선택하고 문서화한다.
+상시 구성이 medium의 안전 범위를 넘으면 결과를 숨기지 않는다. 다음 중 하나를 선택하고 문서화한다.
 
 1. 상시 데모에서 traffic을 낮춤
-2. 실험할 때만 instance를 확대
+2. 사용하지 않는 기존 demo container를 중지
 3. Kafka cluster/관측 도구를 실험 profile로 분리
+4. Neo4j와 Rust graph worker를 `graph` profile로 분리
 
 최종 분산 실험에서는 worker 2개 이상 실행이 필수다.
 
+### 14.3 로컬 build와 tar 배포
+
+application image만 로컬에서 빌드한다. Kafka, PostgreSQL, Mosquitto, Neo4j는 version을 고정한 official image를 사용하고 서버에 이미 존재하면 재전송하지 않는다.
+
+```bash
+# Local WSL
+docker compose build
+docker save \
+  physicalai-web:${VERSION} \
+  physicalai-api:${VERSION} \
+  physicalai-worker:${VERSION} \
+  physicalai-graph-worker:${VERSION} \
+| zstd -T0 -10 -o physicalai-images-${VERSION}.tar.zst
+
+scp physicalai-images-${VERSION}.tar.zst aws-demo:/tmp/
+scp compose.yaml .env.production aws-demo:/opt/physicalai/
+```
+
+`.env.production`에는 secret 값을 commit하지 않는다. SSH host private key, DB password 등은 서버에 별도로 배치한다.
+
+```bash
+# aws-demo
+zstd -dc /tmp/physicalai-images-${VERSION}.tar.zst | sudo docker load
+cd /opt/physicalai
+sudo docker compose up -d --scale worker=2 --remove-orphans
+```
+
+rollback을 위해 직전 image tag와 compose/env 조합을 보존한다. `latest` tag에만 의존하지 않는다.
+
 ---
 
-## 14. 테스트
+## 15. 테스트
 
-### 14.1 Contract test
+### 15.1 Contract test
 
 - Go validator와 TypeScript validator가 같은 fixture를 동일하게 판정
 - schema version
@@ -741,7 +1100,7 @@ OS/Docker           나머지
 - unknown field 정책
 - payload size
 
-### 14.2 Go API test
+### 15.2 Go API test
 
 - MQTT message → Kafka produce
 - Kafka unavailable
@@ -750,8 +1109,12 @@ OS/Docker           나머지
 - PostgreSQL query
 - command publish
 - SSE disconnect cleanup
+- SSH public-key authentication
+- SSH PTY/resize/session cleanup
+- SSH input → 동일 action service → ANSI result
+- `sessionId`/`correlationId` routing
 
-### 14.3 Worker unit test
+### 15.3 Worker unit test
 
 - idempotency
 - ordering/sequence gap
@@ -762,7 +1125,7 @@ OS/Docker           나머지
 - retry classification
 - state transition
 
-### 14.4 Integration test
+### 15.4 Integration test
 
 - Kafka + Worker 2개
 - PostgreSQL migration
@@ -772,8 +1135,15 @@ OS/Docker           나머지
 - DLQ
 - MQTT reconnect
 - Next → Go → Kafka → Worker → PostgreSQL E2E
+- SSH → Go → Kafka → Worker → PostgreSQL → ANSI response E2E
+- 동기 조회가 Kafka 없이 Go → PostgreSQL로 응답하는 E2E
+- PostgreSQL state + outbox atomic commit
+- outbox publish 실패 후 재시도
+- `semantic.graph.rebuild` → Rust worker → Neo4j
+- relation event 중복 소비 후 edge 중복 없음
+- Neo4j 중단 후 projection 재개
 
-### 14.5 핵심 E2E
+### 15.5 핵심 E2E
 
 ```text
 Simulator publishes MQTT telemetry
@@ -783,45 +1153,45 @@ Simulator publishes MQTT telemetry
 → qualifying event invokes Mastra
 → worker persists result and audit
 → Go API exposes result
-→ Next.js updates UI
+→ Next.js WebSocket 또는 SSH session이 같은 Scene IR 결과를 수신
 ```
 
 ---
 
-## 15. 필수 분산시스템 실험
+## 16. 필수 분산시스템 실험
 
-### 15.1 Partition 분배
+### 16.1 Partition 분배
 
 - Worker 2개 시작
 - 각 worker assigned partition 기록
 - 같은 event가 두 worker에서 정상 처리되지 않음을 확인
 
-### 15.2 Rebalance
+### 16.2 Rebalance
 
 - 처리 중 Worker 1 강제 종료
 - consumer group rebalance 확인
 - 남은 worker의 partition 재할당 확인
 - 처리 유실 여부 확인
 
-### 15.3 Duplicate delivery
+### 16.3 Duplicate delivery
 
 - 동일 `eventId` 반복 발행
 - DB side effect 한 번만 발생
 - duplicate metric 증가
 
-### 15.4 Crash window
+### 16.4 Crash window
 
 - DB commit 이후 offset commit 전에 worker 종료를 재현
 - 재전달 확인
 - idempotency로 중복 effect 방지
 
-### 15.5 Ordering
+### 16.5 Ordering
 
 - 같은 device의 sequence event 발행
 - 같은 partition 배치 확인
 - out-of-order/late event 정책 확인
 
-### 15.6 Scale-out
+### 16.6 Scale-out
 
 다음 결과를 비교한다.
 
@@ -833,7 +1203,7 @@ Simulator publishes MQTT telemetry
 
 worker 증가에도 처리량이 늘지 않으면 PostgreSQL, partition 수, producer, CPU 중 병목을 조사한다.
 
-### 15.7 Mastra failure
+### 16.7 Mastra failure
 
 - LLM timeout
 - invalid structured output
@@ -844,7 +1214,7 @@ worker 증가에도 처리량이 늘지 않으면 PostgreSQL, partition 수, pro
 
 ---
 
-## 16. Load test 목표
+## 17. Load test 목표
 
 등록 장치 수와 실제 event rate를 구분한다.
 
@@ -881,7 +1251,7 @@ Load stage 3: 1,000 events/sec
 
 ---
 
-## 17. 구현 Milestone
+## 18. 구현 Milestone
 
 별도 Phase 1 제품은 만들지 않는다. 다음은 최종 구조를 완성하기 위한 내부 작업 순서다.
 
@@ -901,6 +1271,7 @@ Load stage 3: 1,000 events/sec
 - Kafka/PostgreSQL/MQTT Compose
 - migration service
 - Worker 2개 기동
+- Go SSH listener와 session skeleton
 
 완료 조건:
 
@@ -947,6 +1318,9 @@ MQTT → Go → Kafka → Worker × 2 → PostgreSQL
 - Next.js API client 변경
 - seed/data migration
 - 회귀 후 SQLite 제거
+- `/terminal`, `/operations`
+- Scene IR React renderer
+- SSH ANSI renderer와 동일 action contract
 
 완료 조건:
 
@@ -962,18 +1336,37 @@ MQTT → Go → Kafka → Worker × 2 → PostgreSQL
 - Worker 1/2/4 비교
 - 문서와 결과표
 
-### Milestone 6 — 운영 배포
+### Milestone 6 — Rust/Neo4j semantic projection
 
-- production images
+- 기존 ontology와 relation mutation 현황 확인
+- 고정 ontology이면 `semantic.graph.rebuild` 우선 구현
+- 동적 관계가 있으면 transactional outbox 구현
+- `semantic.relation.changed` 발행
+- Rust graph worker
+- Neo4j projection
+- duplicate/retry/rebuild test
+- `graph` Compose profile
+
+완료 조건:
+
+- Rust worker가 NestJS worker와 다른 consumer group 사용
+- PostgreSQL/ontology에서 Neo4j projection 재구축 가능
+- 관계 변경 발생 전에는 가짜 relation event를 발행하지 않음
+
+### Milestone 7 — Demo 배포
+
+- local WSL `linux/amd64` production image build
+- versioned image tar/zstd 전송과 `docker load`
 - health/readiness
 - memory limit
 - backup/restore
-- t3a.small smoke test
+- `aws-demo` t3a.medium smoke/load test
+- 기존 demo container와 합산 memory/PSI/swap 측정
 - 배포 rollback 문서
 
 ---
 
-## 18. 금지되는 구현
+## 19. 금지되는 구현
 
 ```text
 Go API ─┬→ Kafka
@@ -988,14 +1381,22 @@ Go API ─┬→ Kafka
 - retry 무한 반복
 - poison message로 partition 영구 정지
 - Next.js에서 DB/Kafka/MQTT 직접 접근
+- 모든 Next.js/SSH 요청을 Kafka에 강제로 통과시키기
+- NestJS worker container에 SSH listener 포함
+- SSH에서 실제 OS shell 노출
+- 단순한 Next.js backend 역할로 Spring 추가
 - Go와 TypeScript가 서로 다른 message schema 사용
+- PostgreSQL과 Neo4j application-level dual-write
+- raw telemetry 전체를 Neo4j에 저장
+- NestJS telemetry worker와 Rust graph worker를 같은 consumer group에 배치
+- 관계 변경이 없는데 `semantic.relation.changed` event를 임의 생성
 - container 안에 여러 runtime 강제 결합
 - 단일 broker를 Kafka 고가용성이라고 표현
 - PostgreSQL 모델을 실제 DynamoDB와 동일하다고 표현
 
 ---
 
-## 19. 문서 산출물
+## 20. 문서 산출물
 
 ```text
 README.md
@@ -1006,17 +1407,25 @@ docs/kafka-partitioning.md
 docs/failure-semantics.md
 docs/mastra-worker.md
 docs/postgresql-access-patterns.md
+docs/semantic-graph-projection.md
+docs/neo4j-rebuild.md
 docs/load-test.md
 docs/deployment.md
+docs/ssh-terminal.md
+docs/scene-ir.md
 docs/adr/001-go-ingestion-nest-worker.md
 docs/adr/002-at-least-once-idempotency.md
 docs/adr/003-postgresql-dynamodb-shaped-access.md
+docs/adr/004-neo4j-as-semantic-read-model.md
+docs/adr/005-rust-graph-projector.md
+docs/adr/006-go-protocol-gateway.md
+docs/adr/007-sync-api-vs-kafka-boundary.md
 ```
 
 README에는 최소 다음 명령을 포함한다.
 
 ```bash
-docker compose up --build --scale worker=2
+docker compose up -d --scale worker=2
 docker compose ps
 docker compose logs -f api worker kafka
 docker compose up --scale worker=4
@@ -1024,12 +1433,12 @@ docker compose up --scale worker=4
 
 ---
 
-## 20. 최종 완료 기준
+## 21. 최종 완료 기준
 
 다음을 모두 만족해야 완료다.
 
 1. 기존 Next.js 주요 UI가 유지된다.
-2. Go API가 HTTP와 MQTT ingress를 담당한다.
+2. Go API가 HTTP, WebSocket/SSE, SSH, MQTT ingress를 담당한다.
 3. 대량 telemetry가 Go→Kafka→Worker→PostgreSQL 경로만 사용한다.
 4. NestJS/Mastra worker가 동일 image로 최소 2개 실행된다.
 5. Kafka topic이 최소 6 partitions를 가진다.
@@ -1044,14 +1453,26 @@ docker compose up --scale worker=4
 14. Go와 TypeScript contract test가 통과한다.
 15. Next.js가 PostgreSQL·Kafka·MQTT에 직접 접근하지 않는다.
 16. SQLite runtime dependency가 제거된다.
-17. `docker compose up --build --scale worker=2`로 재현된다.
+17. 로컬에서 빌드한 versioned image를 tar로 전송한 뒤 `docker compose up -d --scale worker=2`로 재현된다.
 18. Worker 1/2/4개의 성능 비교 결과가 있다.
 19. Mastra timeout과 invalid output 장애 시험이 있다.
-20. `t3a.small` 결과와 메모리 한계를 실제 측정값으로 기록한다.
+20. `aws-demo` t3a.medium에서 기존 container를 포함한 메모리, swap, PSI와 한계를 실제 측정값으로 기록한다.
+21. Rust graph worker가 `physicalai-graph-projectors` consumer group으로 실행된다.
+22. Neo4j가 PostgreSQL 원본에서 분리된 재생성 가능한 semantic read model이다.
+23. 고정 ontology 단계에서는 `semantic.graph.rebuild`가 동작한다.
+24. 관계 mutation이 존재하면 outbox를 통해 `semantic.relation.changed`가 발행된다.
+25. PostgreSQL state와 outbox insert가 같은 transaction에 포함된다.
+26. relation event 중복 소비가 Neo4j edge 중복을 만들지 않는다.
+27. `graph` profile에서 Rust worker와 Neo4j E2E test가 통과한다.
+28. Next.js와 SSH가 동일한 action/application service를 사용한다.
+29. Next.js `/terminal`과 SSH가 동일 Scene IR의 의미와 timeline을 일관되게 표현한다.
+30. 동기 조회는 Kafka 없이 응답하고, AI·대량·재처리 작업만 Kafka 경로를 사용한다.
+31. SSH는 public-key 인증, session timeout, resize, disconnect cleanup을 지원하며 OS shell을 노출하지 않는다.
+32. Spring Boot가 중복 backend로 추가되지 않는다.
 
 ---
 
-## 21. Codex 최종 보고 형식
+## 22. Codex 최종 보고 형식
 
 1. 구현 결과
 2. 최종 아키텍처
@@ -1063,14 +1484,15 @@ docker compose up --scale worker=4
 8. Worker 1/2/4 부하 비교
 9. 메모리 사용량
 10. Mastra 호출·실패 결과
-11. 남은 위험과 범위 밖 문제
-12. 다음 권장 작업 한 가지
+11. Outbox 발행과 graph projection 결과
+12. Neo4j rebuild와 Rust worker retry 결과
+13. 남은 위험과 범위 밖 문제
+14. 다음 권장 작업 한 가지
 
 테스트하지 않은 내용은 테스트했다고 표현하지 않는다.
 
 ---
 
-## 22. Codex 즉시 착수 명령
+## 23. Codex 즉시 착수 명령
 
-> 저장소의 지침과 현재 Next.js·SQLite·MQTT·Mastra 구현을 먼저 조사하라. `docs/current-state.md`를 작성하고 기존 기능 baseline을 검증하라. 그다음 기존 Next.js root 구조를 유지한 채 `api/` Go gateway, `worker/` NestJS/Mastra consumer, `contracts/`, Kafka, PostgreSQL, MQTT Compose skeleton을 추가하라. 초기부터 worker 두 개를 같은 Kafka consumer group으로 실행하고, telemetry의 정상 쓰기 경로가 반드시 MQTT→Go→Kafka→NestJS Worker→PostgreSQL을 통과하도록 구현하라.
-
+> 저장소의 지침과 현재 Next.js·SQLite·MQTT·Mastra·ontology 구현을 먼저 조사하라. `docs/current-state.md`를 작성하고 기존 기능 baseline을 검증하라. 그다음 기존 Next.js root 구조를 유지한 채 `api/` Go protocol gateway(HTTP·WebSocket·SSH·MQTT), `worker/` NestJS/Mastra consumer, `contracts/`, Kafka, PostgreSQL, MQTT Compose skeleton을 추가하라. Spring을 중복 backend로 추가하지 말라. 동기 조회와 session 처리는 Kafka를 우회하고, AI·대량·재처리 작업만 Kafka로 보낸다. 초기부터 worker 두 개를 같은 Kafka telemetry consumer group으로 실행하고, telemetry의 정상 쓰기 경로가 반드시 MQTT→Go→Kafka→NestJS Worker→PostgreSQL을 통과하도록 구현하라. Next.js `/terminal`과 SSH는 동일 action contract와 Scene IR을 사용하되 각각 React와 ANSI로 렌더링한다. 핵심 telemetry 경로가 검증된 뒤 `graph-worker/` Rust projector와 Neo4j `graph` profile을 추가하라. 현재 semantic model이 고정 ontology이면 `semantic.graph.rebuild`부터 구현하고, 실제 관계 mutation 기능이 확인된 경우에만 PostgreSQL transactional outbox를 통해 `semantic.relation.changed`를 발행하라. application image는 로컬 WSL에서 `linux/amd64`로 빌드하고 versioned tar.zst로 `aws-demo` t3a.medium에 전송하며 EC2에서는 빌드하지 않는다.
