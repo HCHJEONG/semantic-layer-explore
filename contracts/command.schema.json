@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bestai.com/contracts/command.schema.json",
+  "title": "Command",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "commandId", "deviceId", "command", "issuedAt"],
+  "properties": {
+    "schemaVersion": { "const": "command.v1" },
+    "commandId": { "type": "string", "minLength": 1 },
+    "deviceId": { "type": "string", "minLength": 1 },
+    "command": { "enum": ["on", "off", "toggle", "set-angle", "beep"] },
+    "value": { "type": ["number", "boolean", "string", "null"] },
+    "issuedBy": { "type": "string", "default": "api" },
+    "issuedAt": { "type": "string", "format": "date-time" },
+    "correlationId": { "type": "string" },
+    "sessionId": { "type": "string" }
+  }
+}

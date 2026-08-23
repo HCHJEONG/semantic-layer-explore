@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bestai.com/contracts/scene-ir.schema.json",
+  "title": "SceneIR",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sceneId", "frames"],
+  "properties": {
+    "schemaVersion": { "const": "scene-ir.v1" },
+    "sceneId": { "type": "string", "minLength": 1 },
+    "frames": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["atMs", "style", "text"],
+        "properties": {
+          "atMs": { "type": "integer", "minimum": 0 },
+          "style": { "enum": ["SYSTEM", "WARNING", "DIALOGUE", "SUCCESS", "MUTED"] },
+          "text": { "type": "string" }
+        }
+      }
+    }
+  }
+}

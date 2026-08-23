@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bestai.com/contracts/semantic-relation.schema.json",
+  "title": "SemanticRelationChanged",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "relationId", "operation", "subject", "predicate", "object", "occurredAt"],
+  "properties": {
+    "schemaVersion": { "const": "semantic-relation.v1" },
+    "relationId": { "type": "string", "minLength": 1 },
+    "operation": { "enum": ["upsert", "delete"] },
+    "subject": { "type": "string", "minLength": 1 },
+    "predicate": { "type": "string", "minLength": 1 },
+    "object": { "type": "string", "minLength": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" }
+  }
+}

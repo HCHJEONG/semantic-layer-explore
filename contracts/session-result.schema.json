@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bestai.com/contracts/session-result.schema.json",
+  "title": "SessionResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sessionId", "status", "createdAt"],
+  "properties": {
+    "schemaVersion": { "const": "session-result.v1" },
+    "sessionId": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["accepted", "completed", "failed", "pending"] },
+    "scene": { "$ref": "scene-ir.schema.json" },
+    "payload": { "type": "object" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "correlationId": { "type": "string" }
+  }
+}

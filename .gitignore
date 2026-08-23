@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+**/node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -12,6 +13,7 @@
 
 # testing
 /coverage
+**/coverage/
 
 # next.js
 /.next/
@@ -45,6 +47,8 @@ gcp-key.json
 *.p12
 *.tar
 *.tar.gz
+*.tar.zst
+*.zst
 
 # vercel
 .vercel
@@ -52,6 +56,10 @@ gcp-key.json
 # typescript
 next-env.d.ts
 /dist/
+**/dist/
+
+# compiled language artifacts
+**/target/
 /.wrangler/
 /outputs/
 /work/

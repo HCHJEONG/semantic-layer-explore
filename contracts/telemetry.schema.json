@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bestai.com/contracts/telemetry.schema.json",
+  "title": "TelemetryEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "eventId", "deviceId", "sensorId", "sequence", "measuredAt", "payload"],
+  "properties": {
+    "schemaVersion": { "const": "telemetry.v1" },
+    "eventId": { "type": "string", "minLength": 1 },
+    "deviceId": { "type": "string", "minLength": 1 },
+    "sensorId": { "type": "string", "minLength": 1 },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "measuredAt": { "type": "string", "format": "date-time" },
+    "source": { "type": "string", "default": "mqtt" },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value", "unit"],
+      "properties": {
+        "kind": { "enum": ["temperature", "light", "distance", "button"] },
+        "value": { "type": ["number", "boolean"] },
+        "unit": { "type": "string", "minLength": 1 }
+      }
+    },
+    "correlationId": { "type": "string" },
+    "sessionId": { "type": "string" }
+  }
+}

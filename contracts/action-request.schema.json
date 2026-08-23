@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bestai.com/contracts/action-request.schema.json",
+  "title": "ActionRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "actionId", "action", "requestedAt"],
+  "properties": {
+    "schemaVersion": { "const": "action-request.v1" },
+    "actionId": { "type": "string", "minLength": 1 },
+    "action": { "type": "string", "minLength": 1 },
+    "parameters": { "type": "object" },
+    "requestedAt": { "type": "string", "format": "date-time" },
+    "sessionId": { "type": "string" },
+    "correlationId": { "type": "string" }
+  }
+}

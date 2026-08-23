@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bestai.com/contracts/graph-rebuild.schema.json",
+  "title": "GraphRebuild",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "rebuildId", "requestedAt"],
+  "properties": {
+    "schemaVersion": { "const": "graph-rebuild.v1" },
+    "rebuildId": { "type": "string", "minLength": 1 },
+    "requestedAt": { "type": "string", "format": "date-time" },
+    "scope": { "enum": ["all", "ontology", "operations"], "default": "all" }
+  }
+}
