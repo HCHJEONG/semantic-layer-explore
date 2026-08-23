@@ -131,6 +131,21 @@ services:
       - mosquitto-data:/mosquitto/data
     restart: unless-stopped
 
+  telemetry-simulator:
+    image: physicalai-telemetry-simulator:${PHYSICALAI_VERSION:?set PHYSICALAI_VERSION}
+    profiles: ["simulator"]
+    environment:
+      SIMULATOR_MQTT_URL: mqtt://mosquitto:1883
+      SIMULATOR_TOPIC_PREFIX: devices
+      SIMULATOR_DEVICE_ID: ${SIMULATOR_DEVICE_ID:-workspace-simulator-01}
+      SIMULATOR_EVENTS_PER_HOUR: ${SIMULATOR_EVENTS_PER_HOUR:-60}
+      SIMULATOR_SEED: ${SIMULATOR_SEED:-20260804}
+      SIMULATOR_SCENARIO: ${SIMULATOR_SCENARIO:-normal}
+    restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_started
+
   neo4j:
     image: neo4j:5-community
     profiles: ["graph"]

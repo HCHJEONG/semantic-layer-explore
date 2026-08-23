@@ -58,6 +58,7 @@ APPLICATION_IMAGES=(
   "physicalai-api:${VERSION}"
   "physicalai-worker:${VERSION}"
   "physicalai-graph-worker:${VERSION}"
+  "physicalai-telemetry-simulator:${VERSION}"
 )
 INFRASTRUCTURE_IMAGES=(
   "postgres:16-alpine"
@@ -157,8 +158,9 @@ echo "[local] building from clean clone ${CLEAN_CLONE_DIR} at ${BUILD_COMMIT}"
 export PHYSICALAI_VERSION="${VERSION}"
 export DOCKER_DEFAULT_PLATFORM="linux/amd64"
 
-echo "[local] building 4 application images for linux/amd64"
-docker compose -f "${CLEAN_CLONE_DIR}/compose.yaml" --profile graph build frontend api worker graph-worker
+echo "[local] building 5 application images for linux/amd64"
+docker compose -f "${CLEAN_CLONE_DIR}/compose.yaml" --profile graph --profile simulator build \
+  frontend api worker graph-worker telemetry-simulator
 
 echo "[local] pulling 4 official infrastructure images for linux/amd64"
 for image in "${INFRASTRUCTURE_IMAGES[@]}"; do
@@ -167,7 +169,7 @@ done
 
 ALL_IMAGES=("${APPLICATION_IMAGES[@]}" "${INFRASTRUCTURE_IMAGES[@]}")
 docker image inspect "${ALL_IMAGES[@]}" >/dev/null
-echo "[local] saving 8 unique images used by 11 Compose containers"
+echo "[local] saving 9 unique images used by 12 Compose containers"
 docker save "${ALL_IMAGES[@]}" | gzip -1 >"${IMAGE_ARCHIVE}"
 
 tar -C "${CLEAN_CLONE_DIR}" -czf "${BUNDLE_ARCHIVE}" \
@@ -253,7 +255,7 @@ API_HTTP_HOST_PORT=${API_HTTP_HOST_PORT}
 EOF
 
 COMPOSE_FILE="${RELEASE_DIR}/.fordeploy/compose.aws-demo.yaml"
-COMPOSE=(sudo docker compose --env-file "${ENV_FILE_ON_PRIVATE}" --env-file "${RELEASE_DIR}/.deployment.env" -p "${PROJECT_NAME}" -f "${COMPOSE_FILE}" --profile graph)
+COMPOSE=(sudo docker compose --env-file "${ENV_FILE_ON_PRIVATE}" --env-file "${RELEASE_DIR}/.deployment.env" -p "${PROJECT_NAME}" -f "${COMPOSE_FILE}" --profile graph --profile simulator)
 "${COMPOSE[@]}" config --quiet
 
 # Stop the legacy single-container deployment only after all images and config
@@ -276,7 +278,7 @@ rollback() {
     "${COMPOSE[@]}" down --remove-orphans || true
     sudo docker start "${LEGACY_CONTAINER}" >/dev/null || true
   fi
-  for repository in physicalai-web physicalai-api physicalai-worker physicalai-graph-worker; do
+  for repository in physicalai-web physicalai-api physicalai-worker physicalai-graph-worker physicalai-telemetry-simulator; do
     sudo docker image rm "${repository}:${VERSION}" >/dev/null 2>&1 || true
   done
 }
@@ -324,7 +326,7 @@ PREVIOUS_VERSION=""
 if [ -n "${PREVIOUS_RELEASE}" ] && [ -f "${PREVIOUS_RELEASE}/.deployment.env" ]; then
   PREVIOUS_VERSION="$(sed -n 's/^PHYSICALAI_VERSION=//p' "${PREVIOUS_RELEASE}/.deployment.env" | head -n 1)"
 fi
-for repository in physicalai-web physicalai-api physicalai-worker physicalai-graph-worker; do
+for repository in physicalai-web physicalai-api physicalai-worker physicalai-graph-worker physicalai-telemetry-simulator; do
   while IFS= read -r image_ref; do
     [ -n "${image_ref}" ] || continue
     [ "${image_ref}" = "${repository}:${VERSION}" ] && continue

@@ -49,13 +49,19 @@ Python telemetry-simulator
   -> PostgreSQL telemetry_event
 ```
 
-The simulator is opt-in:
+In local Compose, the simulator is opt-in:
 
 ```bash
 docker compose --profile simulator up -d --scale worker=2
 ```
 
 Graph remains separately controlled by the `graph` profile.
+
+The AWS demo deployment script enables both `graph` and `simulator` profiles.
+With `worker=2`, that deployment shape uses five custom application images
+plus four official infrastructure images. It creates 12 containers, with
+`migrate` and `kafka-init` exiting after success and 10 long-running containers
+remaining.
 
 ## Environment
 
