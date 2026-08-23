@@ -12,6 +12,7 @@ export type RelationRow = typeof semanticRelations.$inferSelect;
 export type NewClass = typeof semanticClasses.$inferInsert;
 export type NewProperty = typeof semanticProperties.$inferInsert;
 export type NewIndividual = typeof semanticIndividuals.$inferInsert;
+export type NewRelation = typeof semanticRelations.$inferInsert;
 
 export type OntologyStore = {
   listClasses(): Promise<ClassRow[]>;
@@ -21,6 +22,7 @@ export type OntologyStore = {
   createClass(input: NewClass): Promise<ClassRow>;
   createProperty(input: NewProperty): Promise<PropertyRow>;
   createIndividual(input: NewIndividual): Promise<IndividualRow>;
+  createRelation(input: NewRelation): Promise<RelationRow>;
 };
 
 export function getOntologyStore(): OntologyStore {
@@ -45,6 +47,9 @@ export function getOntologyStore(): OntologyStore {
     },
     async createIndividual(input) {
       return getDb().insert(semanticIndividuals).values(input).returning().get();
+    },
+    async createRelation(input) {
+      return getDb().insert(semanticRelations).values(input).returning().get();
     },
   };
 }

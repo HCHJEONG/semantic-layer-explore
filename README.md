@@ -342,6 +342,7 @@ GEMINI_MODEL=gemini-3.5-flash-lite
 GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
 DATABASE_PATH=./data/ai-workspace.sqlite
 DB_PROVIDER=sqlite
+ONTOLOGY_BACKEND=sqlite
 EXPLAIN_LLM_REVIEW=disabled
 READING_RETENTION_DAYS=1
 AUDIT_EVENT_RETENTION_DAYS=30
@@ -351,7 +352,7 @@ RETENTION_BATCH_SIZE=5000
 
 The Google Cloud project is read from the service account JSON's `project_id`; `GOOGLE_CLOUD_PROJECT` remains an optional override. The Gemini model has one configuration source: `GEMINI_MODEL`, with `gemini-3.5-flash-lite` as the default.
 
-`DB_PROVIDER` is currently documented as `sqlite`; it reserves the configuration name for a future PostgreSQL or MariaDB store provider without adding a second implementation yet. `EXPLAIN_LLM_REVIEW=enabled` opts the Mastra evidence review steps into live LLM review through the app-level LLM adapter.
+In the distributed Compose runtime, PostgreSQL is the authoritative ontology store and the Next.js ontology routes proxy the Go Gateway. `ONTOLOGY_BACKEND=sqlite` is reserved for the legacy standalone Next.js mode and its regression tests. `DB_PROVIDER` still controls the remaining Next.js operational store. `EXPLAIN_LLM_REVIEW=enabled` opts the Mastra evidence review steps into live LLM review through the app-level LLM adapter.
 
 The runtime retains high-volume sensor readings and matching `sensor.reading` events for 7 days, while lower-volume audit events are retained for 30 days. Cleanup runs at startup and hourly in bounded batches so it does not monopolize SQLite. Deleted pages are reused by SQLite; the scheduler intentionally does not run `VACUUM`, which could block live traffic. Rule evaluation is serialized and keeps at most the newest pending reading per sensor, preventing an unbounded async backlog when device execution is slow.
 
@@ -394,7 +395,7 @@ source of truth. The educational purpose remains to make **Semantic Layer → AP
 
 ## Future work
 
-OWL import, RDF export, reasoners, a completed Neo4j projection/query workflow,
+OWL import, RDF export, reasoners, richer Neo4j projection queries,
 Palantir-style ontology modeling, an MCP server, enterprise semantic layers,
 natural-language workflows, and role-based actions remain explicit future
 directions rather than hidden scope.

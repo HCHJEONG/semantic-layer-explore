@@ -75,3 +75,10 @@ export async function createProperty(input: Parameters<ReturnType<typeof getOnto
 export async function createIndividual(input: Parameters<ReturnType<typeof getOntologyStore>["createIndividual"]>[0]) {
   return getOntologyStore().createIndividual(input);
 }
+
+export async function createRelation(input: Parameters<ReturnType<typeof getOntologyStore>["createRelation"]>[0]) {
+  const store = getOntologyStore();
+  const created = await store.createRelation(input);
+  const [individualRows, propertyRows] = await Promise.all([store.listIndividuals(), store.listProperties()]);
+  return resolveRelations([created], individualRows, propertyRows)[0];
+}

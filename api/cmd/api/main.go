@@ -14,6 +14,7 @@ import (
 	"semantic-layer-explore/api/internal/httpapi"
 	"semantic-layer-explore/api/internal/kafka"
 	"semantic-layer-explore/api/internal/mqtt"
+	"semantic-layer-explore/api/internal/outbox"
 	"semantic-layer-explore/api/internal/persistence"
 	"semantic-layer-explore/api/internal/ssh"
 )
@@ -51,6 +52,7 @@ func main() {
 
 	go ssh.Listen(ctx, cfg, logger)
 	go mqtt.Listen(ctx, cfg, producer, logger)
+	go outbox.New(store, producer, cfg.GraphRebuildTopic, logger).Run(ctx)
 
 	<-ctx.Done()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

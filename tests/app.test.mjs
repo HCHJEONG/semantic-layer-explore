@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -31,6 +31,7 @@ test.before(async () => {
     env: {
       ...process.env,
       DATABASE_PATH: path.join(tempDirectory, "ontology.sqlite"),
+      ONTOLOGY_BACKEND: "sqlite",
       PHYSICAL_ADAPTER: "simulator",
       PORT: String(port),
       HOSTNAME: "127.0.0.1",
@@ -131,6 +132,16 @@ test("Physical AI endpoints reject invalid requests before invoking Gemini", asy
   assert.equal(chatResponse.status, 400);
   assert.equal(proposalResponse.status, 400);
   assert.equal(explainResponse.status, 400);
+});
+
+test("Ask AI and Rule Proposal keep ontology-first tool calling", async () => {
+  const root = fileURLToPath(new URL("../", import.meta.url));
+  const [chatRoute, proposalRoute] = await Promise.all([
+    readFile(path.join(root, "app/api/ai/chat/route.ts"), "utf8"),
+    readFile(path.join(root, "app/api/ai/rules/propose/route.ts"), "utf8"),
+  ]);
+  assert.match(chatRoute, /allowedToolNames:\s*\["getOntology"\]/);
+  assert.match(proposalRoute, /\["getOntology",\s*"getSensors",\s*"getDevices"\]/);
 });
 
 test("simulator exposes four sensors and four virtual devices", async () => {

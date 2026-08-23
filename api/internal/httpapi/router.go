@@ -34,6 +34,15 @@ func NewRouter(cfg config.Config, producer *kafka.Producer, store *persistence.S
 	mux.HandleFunc("GET /graph/projection/status", router.graphProjectionStatus)
 	mux.HandleFunc("POST /graph/projection/rebuild", router.graphProjectionRebuild)
 	mux.HandleFunc("GET /graph/ontology", router.graphOntology)
+	mux.HandleFunc("GET /semantic/classes", router.semanticClasses)
+	mux.HandleFunc("POST /semantic/classes", router.semanticClasses)
+	mux.HandleFunc("GET /semantic/properties", router.semanticProperties)
+	mux.HandleFunc("POST /semantic/properties", router.semanticProperties)
+	mux.HandleFunc("GET /semantic/individuals", router.semanticIndividuals)
+	mux.HandleFunc("POST /semantic/individuals", router.semanticIndividuals)
+	mux.HandleFunc("GET /semantic/relations", router.semanticRelations)
+	mux.HandleFunc("POST /semantic/relations", router.semanticRelations)
+	mux.HandleFunc("GET /semantic/ontology", router.semanticOntology)
 	return mux
 }
 
@@ -108,17 +117,28 @@ func (r *Router) graphProjectionStatus(w http.ResponseWriter, req *http.Request)
 }
 
 func (r *Router) graphProjectionRebuild(w http.ResponseWriter, req *http.Request) {
-	random := make([]byte, 12)
-	if _, err := rand.Read(random); err != nil {
+	event, err := newGraphRebuild()
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create rebuild id"})
 		return
 	}
-	event := kafka.GraphRebuild{SchemaVersion: "graph-rebuild.v1", RebuildID: "rebuild-" + hex.EncodeToString(random), RequestedAt: time.Now().UTC().Format(time.RFC3339), Scope: "ontology"}
-	if err := r.producer.PublishGraphRebuild(req.Context(), event); err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "graph rebuild publish failed"})
+	if err := r.store.EnqueueOutbox(req.Context(), r.rebuildOutbox(event)); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "graph rebuild enqueue failed"})
 		return
 	}
 	writeJSON(w, http.StatusAccepted, event)
+}
+
+func newGraphRebuild() (kafka.GraphRebuild, error) {
+	random := make([]byte, 12)
+	if _, err := rand.Read(random); err != nil {
+		return kafka.GraphRebuild{}, err
+	}
+	return kafka.GraphRebuild{SchemaVersion: "graph-rebuild.v1", RebuildID: "rebuild-" + hex.EncodeToString(random), RequestedAt: time.Now().UTC().Format(time.RFC3339), Scope: "ontology"}, nil
+}
+
+func (r *Router) rebuildOutbox(event kafka.GraphRebuild) persistence.RebuildOutbox {
+	return persistence.RebuildOutbox{EventID: event.RebuildID, Topic: r.cfg.GraphRebuildTopic, Key: event.RebuildID, Payload: event}
 }
 
 func (r *Router) graphOntology(w http.ResponseWriter, req *http.Request) {
