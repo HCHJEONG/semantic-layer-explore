@@ -123,6 +123,23 @@ services:
       - ./infra/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto-data:/mosquitto/data
 
+  telemetry-simulator:
+    image: physicalai-telemetry-simulator:${PHYSICALAI_VERSION:-local}
+    build:
+      context: ./telemetry-simulator
+      dockerfile: Dockerfile
+    profiles: ["simulator"]
+    environment:
+      SIMULATOR_MQTT_URL: mqtt://mosquitto:1883
+      SIMULATOR_TOPIC_PREFIX: devices
+      SIMULATOR_DEVICE_ID: workspace-simulator-01
+      SIMULATOR_EVENTS_PER_HOUR: ${SIMULATOR_EVENTS_PER_HOUR:-60}
+      SIMULATOR_SEED: ${SIMULATOR_SEED:-20260804}
+      SIMULATOR_SCENARIO: ${SIMULATOR_SCENARIO:-normal}
+    depends_on:
+      mosquitto:
+        condition: service_started
+
   neo4j:
     image: neo4j:5-community
     profiles: ["graph"]
