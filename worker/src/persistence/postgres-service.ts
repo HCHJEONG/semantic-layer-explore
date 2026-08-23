@@ -41,6 +41,39 @@ export class PostgresService implements OnModuleDestroy {
     }
   }
 
+  async insertDeadLetter(event: {
+    deadLetterId: string;
+    sourceTopic: string;
+    sourcePartition: number;
+    sourceOffset: string;
+    key?: string;
+    reason: string;
+    errorMessage: string;
+    payload?: string;
+    payloadJson?: unknown;
+    failedAt: string;
+  }) {
+    const result = await this.pool.query(
+      `insert into dead_letter_event
+        (dead_letter_id, source_topic, source_partition, source_offset, key, reason, error_message, payload, payload_json, failed_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+       on conflict (source_topic, source_partition, source_offset) do nothing`,
+      [
+        event.deadLetterId,
+        event.sourceTopic,
+        event.sourcePartition,
+        event.sourceOffset,
+        event.key ?? null,
+        event.reason,
+        event.errorMessage,
+        event.payload ?? null,
+        event.payloadJson === undefined ? null : JSON.stringify(event.payloadJson),
+        event.failedAt,
+      ],
+    );
+    return { duplicate: result.rowCount === 0 };
+  }
+
   async onModuleDestroy() {
     await this.pool.end();
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, BellRing, Fan, Gauge, HelpCircle, Lightbulb, Play, Radio, RefreshCw, Ruler, ShieldCheck, Thermometer, ToggleLeft, UserCheck, Zap } from "lucide-react";
+import { Activity, AlertTriangle, BellRing, Database, Fan, Gauge, HelpCircle, Lightbulb, Play, Radio, RefreshCw, Ruler, ShieldCheck, Thermometer, ToggleLeft, UserCheck, Zap } from "lucide-react";
 import type { SensorReading, SimulatorScenario, WorkspaceState } from "@/domain/physical";
 import type { RuleRecord } from "@/domain/rule";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,14 @@ type WorkspaceEvent = {
   sourceId: string;
   payload: unknown;
   occurredAt: string;
+};
+
+type OperationsSummary = {
+  telemetryCount: number;
+  deadLetterCount: number;
+  latestTelemetry?: { eventId: string; deviceId: string; sensorId: string; processedAt: string };
+  latestDeadLetter?: { deadLetterId: string; reason: string; errorMessage: string; failedAt: string };
+  checkedAt: string;
 };
 
 const scenarios: Array<{ id: SimulatorScenario; label: string }> = [
@@ -71,6 +79,7 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
   const [state, setState] = useState<WorkspaceState | null>(null);
   const [events, setEvents] = useState<WorkspaceEvent[]>([]);
   const [rules, setRules] = useState<RuleRecord[]>([]);
+  const [operations, setOperations] = useState<OperationsSummary | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<BusyState>(null);
   const bufferedEventsRef = useRef<WorkspaceEvent[]>([]);
@@ -91,14 +100,16 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
 
   const refresh = useCallback(async () => {
     try {
-      const [stateResponse, eventsResponse, rulesResponse] = await Promise.all([
+      const [stateResponse, eventsResponse, rulesResponse, operationsResponse] = await Promise.all([
         fetch("/api/state", { cache: "no-store" }),
         fetch("/api/events?limit=40", { cache: "no-store" }),
         fetch("/api/rules", { cache: "no-store" }),
+        fetch("/api/operations/summary", { cache: "no-store" }),
       ]);
       if (!stateResponse.ok || !eventsResponse.ok || !rulesResponse.ok) throw new Error("Workspace runtime is unavailable.");
       const [nextState, nextEvents, nextRules] = await Promise.all([stateResponse.json(), eventsResponse.json(), rulesResponse.json()]);
       setState(nextState); setEvents(nextEvents); setRules(nextRules); setError("");
+      if (operationsResponse.ok) setOperations(await operationsResponse.json());
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Workspace runtime is unavailable."); }
   }, []);
 
@@ -229,6 +240,14 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
         <Card className="metric">
           <RefreshCw />
           <span>Rule matches<strong>{matchedEvents.length} recent</strong></span>
+        </Card>
+        <Card className="metric">
+          <Database />
+          <span>MQTT stored<strong>{operations?.telemetryCount ?? "—"}</strong></span>
+        </Card>
+        <Card className="metric">
+          <AlertTriangle />
+          <span>Dead letters<strong>{operations?.deadLetterCount ?? "—"}</strong></span>
         </Card>
       </div>
 

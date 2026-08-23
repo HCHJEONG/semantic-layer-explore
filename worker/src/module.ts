@@ -4,8 +4,9 @@ import { TelemetryService } from "./telemetry/telemetry-service.js";
 import { PostgresService } from "./persistence/postgres-service.js";
 import { AuditService } from "./audit/audit-service.js";
 import { MastraDecisionService } from "./mastra/mastra-decision-service.js";
+import { DeadLetterService } from "./dead-letter/dead-letter-service.js";
 
 @Module({
-  providers: [TelemetryConsumer, TelemetryService, PostgresService, AuditService, MastraDecisionService],
+  providers: [TelemetryConsumer, TelemetryService, PostgresService, AuditService, MastraDecisionService, DeadLetterService],
 })
 export class AppModule {}

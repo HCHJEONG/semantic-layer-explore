@@ -14,6 +14,7 @@ import (
 	"semantic-layer-explore/api/internal/httpapi"
 	"semantic-layer-explore/api/internal/kafka"
 	"semantic-layer-explore/api/internal/mqtt"
+	"semantic-layer-explore/api/internal/persistence"
 	"semantic-layer-explore/api/internal/ssh"
 )
 
@@ -26,9 +27,16 @@ func main() {
 	producer := kafka.NewProducer(cfg.KafkaBrokers, cfg.TelemetryTopic, logger)
 	defer producer.Close()
 
+	store, err := persistence.NewStore(ctx, cfg.DatabaseURL)
+	if err != nil {
+		logger.Error("postgres connection failed", "error", err)
+		os.Exit(1)
+	}
+	defer store.Close()
+
 	server := &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      httpapi.NewRouter(cfg, producer, logger),
+		Handler:      httpapi.NewRouter(cfg, producer, store, logger),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}

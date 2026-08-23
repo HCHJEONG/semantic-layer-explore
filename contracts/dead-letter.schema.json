@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bestai.com/contracts/dead-letter.schema.json",
+  "title": "DeadLetterEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "deadLetterId", "sourceTopic", "sourcePartition", "sourceOffset", "reason", "errorMessage", "failedAt"],
+  "properties": {
+    "schemaVersion": { "const": "dead-letter.v1" },
+    "deadLetterId": { "type": "string", "minLength": 1 },
+    "sourceTopic": { "type": "string", "minLength": 1 },
+    "sourcePartition": { "type": "integer", "minimum": 0 },
+    "sourceOffset": { "type": "string", "minLength": 1 },
+    "key": { "type": "string" },
+    "reason": { "type": "string", "minLength": 1 },
+    "errorMessage": { "type": "string", "minLength": 1 },
+    "payload": { "type": "string" },
+    "payloadJson": {},
+    "failedAt": { "type": "string", "format": "date-time" }
+  }
+}

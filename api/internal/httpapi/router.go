@@ -7,26 +7,39 @@ import (
 
 	"semantic-layer-explore/api/internal/config"
 	"semantic-layer-explore/api/internal/kafka"
+	"semantic-layer-explore/api/internal/persistence"
 )
 
 type Router struct {
 	cfg      config.Config
 	producer *kafka.Producer
+	store    *persistence.Store
 	logger   *slog.Logger
 }
 
-func NewRouter(cfg config.Config, producer *kafka.Producer, logger *slog.Logger) http.Handler {
-	router := &Router{cfg: cfg, producer: producer, logger: logger}
+func NewRouter(cfg config.Config, producer *kafka.Producer, store *persistence.Store, logger *slog.Logger) http.Handler {
+	router := &Router{cfg: cfg, producer: producer, store: store, logger: logger}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", router.health)
 	mux.HandleFunc("GET /ready", router.ready)
 	mux.HandleFunc("POST /telemetry", router.telemetry)
+	mux.HandleFunc("GET /operations/summary", router.operationsSummary)
 	mux.HandleFunc("GET /graph/projection/status", router.graphProjectionStatus)
 	return mux
 }
 
 func (r *Router) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "go-gateway"})
+}
+
+func (r *Router) operationsSummary(w http.ResponseWriter, req *http.Request) {
+	summary, err := r.store.OperationsSummary(req.Context())
+	if err != nil {
+		r.logger.Error("operations summary failed", "error", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "operations summary unavailable"})
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
 }
 
 func (r *Router) ready(w http.ResponseWriter, _ *http.Request) {
