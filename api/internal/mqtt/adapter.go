@@ -86,14 +86,27 @@ func (a *Adapter) dispatchLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			a.publishTimeouts(ctx)
-			commands, err := a.store.DispatchableCommands(ctx, 20)
+			a.publishExhaustedFailures(ctx)
+			commands, err := a.store.ClaimDispatchableCommands(ctx, 20)
 			if err != nil {
 				a.logger.Warn("command dispatch query failed", "error", err)
 				continue
 			}
 			for _, command := range commands {
 				if err := a.PublishCommand(ctx, command.CommandID, command.DeviceID, command.Payload); err != nil {
-					a.store.MarkCommandPublishFailed(ctx, command.CommandID, err)
+					if command.PublishAttempts >= a.cfg.CommandMaxPublishAttempts {
+						if markErr := a.store.MarkCommandPublishExhausted(ctx, command.CommandID, err); markErr != nil {
+							a.logger.Warn("command publish exhaustion update failed", "commandId", command.CommandID, "error", markErr)
+						}
+					} else {
+						delay := a.cfg.CommandRetryInitial << (command.PublishAttempts - 1)
+						if delay > a.cfg.CommandRetryMax {
+							delay = a.cfg.CommandRetryMax
+						}
+						if retryErr := a.store.ScheduleCommandRetry(ctx, command, err, time.Now().Add(delay), a.cfg.CommandMaxPublishAttempts); retryErr != nil {
+							a.logger.Warn("command retry scheduling failed", "commandId", command.CommandID, "error", retryErr)
+						}
+					}
 					continue
 				}
 				if err := a.store.MarkCommandPublished(ctx, command.CommandID); err != nil {
@@ -104,6 +117,23 @@ func (a *Adapter) dispatchLoop(ctx context.Context) {
 	}
 }
 
+func (a *Adapter) publishExhaustedFailures(ctx context.Context) {
+	commands, err := a.store.CommandsAwaitingFailureResult(ctx, 20)
+	if err != nil {
+		a.logger.Warn("exhausted command query failed", "error", err)
+		return
+	}
+	for _, command := range commands {
+		result := map[string]any{"schemaVersion": "command-result.v1", "commandId": command.CommandID, "deviceId": command.DeviceID, "success": false, "error": command.LastError, "failureCode": "mqtt.publish.exhausted", "publishAttempts": command.PublishAttempts, "occurredAt": time.Now().UTC().Format(time.RFC3339Nano)}
+		body, _ := json.Marshal(result)
+		if err := a.producer.PublishCommandResult(ctx, command.DeviceID, body); err != nil {
+			a.logger.Warn("exhausted command result publish failed", "commandId", command.CommandID, "error", err)
+			continue
+		}
+		_ = a.store.DelayCommandFailureResult(ctx, command.CommandID)
+	}
+}
+
 func (a *Adapter) publishTimeouts(ctx context.Context) {
 	commands, err := a.store.TimedOutCommands(ctx, a.cfg.CommandAckTimeout, 20)
 	if err != nil {
@@ -111,7 +141,7 @@ func (a *Adapter) publishTimeouts(ctx context.Context) {
 		return
 	}
 	for _, command := range commands {
-		result := map[string]any{"schemaVersion": "command-result.v1", "commandId": command.CommandID, "deviceId": command.DeviceID, "success": false, "error": "device acknowledgement timeout", "occurredAt": time.Now().UTC().Format(time.RFC3339Nano)}
+		result := map[string]any{"schemaVersion": "command-result.v1", "commandId": command.CommandID, "deviceId": command.DeviceID, "success": false, "error": "device acknowledgement timeout", "failureCode": "device.ack.timeout", "publishAttempts": command.PublishAttempts, "occurredAt": time.Now().UTC().Format(time.RFC3339Nano)}
 		body, _ := json.Marshal(result)
 		if err := a.producer.PublishCommandResult(ctx, command.DeviceID, body); err != nil {
 			a.logger.Warn("command timeout publish failed", "commandId", command.CommandID, "error", err)

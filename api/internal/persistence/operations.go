@@ -14,12 +14,18 @@ type Sensor struct {
 	LatestReading any    `json:"latestReading"`
 }
 type Device struct {
-	ID            string         `json:"id"`
-	Name          string         `json:"name"`
-	Type          string         `json:"type"`
-	State         map[string]any `json:"state"`
-	CommandStatus string         `json:"commandStatus,omitempty"`
-	CommandID     string         `json:"commandId,omitempty"`
+	ID                        string         `json:"id"`
+	Name                      string         `json:"name"`
+	Type                      string         `json:"type"`
+	State                     map[string]any `json:"state"`
+	CommandStatus             string         `json:"commandStatus,omitempty"`
+	CommandID                 string         `json:"commandId,omitempty"`
+	CommandPublishAttempts    int            `json:"commandPublishAttempts,omitempty"`
+	CommandError              string         `json:"commandError,omitempty"`
+	CommandFailureCode        string         `json:"commandFailureCode,omitempty"`
+	CommandLastAttemptAt      string         `json:"commandLastAttemptAt,omitempty"`
+	CommandNextAttemptAt      string         `json:"commandNextAttemptAt,omitempty"`
+	CommandMaxPublishAttempts int            `json:"commandMaxPublishAttempts,omitempty"`
 }
 type Rule struct {
 	ID              string         `json:"id"`
@@ -61,7 +67,7 @@ func (store *Store) ListSensors(ctx context.Context) ([]Sensor, error) {
 }
 
 func (store *Store) ListDevices(ctx context.Context) ([]Device, error) {
-	rows, err := store.pool.Query(ctx, `select d.id,d.name,d.type,d.state,coalesce(c.status,''),coalesce(c.command_id,'') from devices d left join lateral (select command_id,status from device_command where device_id=d.id order by requested_at desc limit 1) c on true where d.enabled order by case d.type when 'led' then 1 when 'servo' then 2 when 'buzzer' then 3 when 'relay' then 4 else 5 end,d.id`)
+	rows, err := store.pool.Query(ctx, `select d.id,d.name,d.type,d.state,coalesce(c.status,''),coalesce(c.command_id,''),coalesce(c.publish_attempts,0),coalesce(c.last_error,''),coalesce(c.failure_code,''),coalesce(c.last_attempt_at::text,''),coalesce(c.next_attempt_at::text,'') from devices d left join lateral (select command_id,status,publish_attempts,last_error,failure_code,last_attempt_at,next_attempt_at from device_command where device_id=d.id order by requested_at desc limit 1) c on true where d.enabled order by case d.type when 'led' then 1 when 'servo' then 2 when 'buzzer' then 3 when 'relay' then 4 else 5 end,d.id`)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +76,7 @@ func (store *Store) ListDevices(ctx context.Context) ([]Device, error) {
 	for rows.Next() {
 		var item Device
 		var state []byte
-		if err := rows.Scan(&item.ID, &item.Name, &item.Type, &state, &item.CommandStatus, &item.CommandID); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.Type, &state, &item.CommandStatus, &item.CommandID, &item.CommandPublishAttempts, &item.CommandError, &item.CommandFailureCode, &item.CommandLastAttemptAt, &item.CommandNextAttemptAt); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(state, &item.State); err != nil {

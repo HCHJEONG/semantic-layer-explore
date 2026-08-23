@@ -66,16 +66,27 @@ function readingLabel(reading: SensorReading | undefined) {
 function eventDescription(event: WorkspaceEvent, rules: RuleRecord[]) {
   if (event.type === "sensor.reading") return `${event.sourceId} reported a new reading`;
   if (event.type === "rule.matched") return `${rules.find((rule) => rule.id === event.sourceId)?.name ?? "Automation rule"} matched`;
-  if (event.type === "device.command.pending") return `${event.sourceId} is awaiting device acknowledgement`;
+  if (event.type === "device.command.pending") return `${event.sourceId} command queued`;
+  if (event.type === "device.command.publish-retrying") {
+    const payload = event.payload as { attempt?: number; maxAttempts?: number };
+    return `${event.sourceId} MQTT publish retry ${payload.attempt ?? "?"}/${payload.maxAttempts ?? "?"}`;
+  }
   if (event.type === "device.command.succeeded") return `${event.sourceId} accepted a device command`;
-  if (event.type === "device.command.failed") return `${event.sourceId} rejected a device command`;
+  if (event.type === "device.command.failed") {
+    const payload = event.payload as { result?: { failureCode?: string } };
+    return payload.result?.failureCode === "mqtt.publish.exhausted" ? `${event.sourceId} MQTT command publish failed` : `${event.sourceId} device command failed`;
+  }
   if (event.type === "simulator.scenario") return `Scenario changed to ${event.sourceId}`;
   if (event.type === "rule.execution.failed") return `Rule evaluation failed for ${event.sourceId}`;
   return event.type.replaceAll(".", " ");
 }
 
 function deviceStateLabel(device: WorkspaceState["devices"][number]) {
-  if (device.commandStatus === "pending" || device.commandStatus === "published") return "Pending ACK";
+  if (device.commandStatus === "pending") return "Queued";
+  if (device.commandStatus === "publishing") return "Publishing";
+  if (device.commandStatus === "retrying") return `Retrying ${device.commandPublishAttempts ?? "?"}/${device.commandMaxPublishAttempts ?? "?"}`;
+  if (device.commandStatus === "published") return "Awaiting ACK";
+  if (device.commandStatus === "finalizing") return "Failed";
   if (device.commandStatus === "failed") return "Failed";
   if (device.type === "servo") return `${device.state.angle ?? 90}°`;
   if (device.type === "buzzer") return "Beep";
@@ -438,13 +449,15 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
               <div className="device-grid">
                 {state?.devices.map((device) => {
                   const Icon = deviceIcons[device.type];
+                  const commandActive = ["pending", "publishing", "retrying", "published", "finalizing"].includes(device.commandStatus ?? "");
 
                   return (
                     <Button
                       key={device.id}
                       variant="outline"
-                      className={`device-card ${device.state.status}`}
-                      disabled={(busy?.type === "device" && busy.id === device.id) || device.type === "servo"}
+                      className={`device-card ${device.state.status} ${device.commandStatus ?? ""}`}
+                      title={device.commandError || undefined}
+                      disabled={(busy?.type === "device" && busy.id === device.id) || device.type === "servo" || commandActive}
                       onClick={() => void toggleDevice(device)}
                     >
                       <Icon />

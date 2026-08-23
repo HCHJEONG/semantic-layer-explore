@@ -5,6 +5,8 @@ export type CommandResult = {
   success: boolean;
   state?: Record<string, unknown>;
   error?: string;
+  failureCode?: string;
+  publishAttempts?: number;
   occurredAt: string;
   correlationId?: string;
   sessionId?: string;
@@ -20,5 +22,7 @@ export function parseCommandResult(value: Buffer): CommandResult {
   }
   if (item.state !== undefined && (!item.state || typeof item.state !== "object" || Array.isArray(item.state))) throw new Error("Invalid command result state");
   if (item.error !== undefined && typeof item.error !== "string") throw new Error("Invalid command result error");
+  if (item.failureCode !== undefined && (typeof item.failureCode !== "string" || !item.failureCode)) throw new Error("Invalid command result failure code");
+  if (item.publishAttempts !== undefined && (!Number.isInteger(item.publishAttempts) || (item.publishAttempts as number) < 0)) throw new Error("Invalid command result publish attempts");
   return item as CommandResult;
 }

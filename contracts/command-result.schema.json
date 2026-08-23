@@ -12,6 +12,8 @@
     "success": { "type": "boolean" },
     "state": { "type": "object" },
     "error": { "type": "string" },
+    "failureCode": { "type": "string", "minLength": 1 },
+    "publishAttempts": { "type": "integer", "minimum": 0 },
     "occurredAt": { "type": "string", "format": "date-time" },
     "correlationId": { "type": "string" },
     "sessionId": { "type": "string" }

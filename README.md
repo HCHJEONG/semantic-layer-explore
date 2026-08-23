@@ -70,6 +70,8 @@ The authoritative-store migrations, deterministic worker rule path, event and
 Explain read path, and Neo4j Explorer view are locally verified. See the
 [distributed expansion plan](./docs/implementation-2nd-plan.md) and the latest
 [PostgreSQL-only handoff](./docs/implementation-2nd-014-sqlite-retirement-handoff.md)
+
+[MQTT outbound failure UX handoff](./docs/implementation-2nd-015-mqtt-outbound-failure-ux-handoff.md)
 for the remaining broader-stage boundaries.
 
 ## Reading The System As One Story

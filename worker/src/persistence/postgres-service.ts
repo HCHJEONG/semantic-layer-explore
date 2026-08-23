@@ -198,11 +198,12 @@ export class PostgresService implements OnModuleDestroy {
         await client.query("update devices set state=$2::jsonb,updated_at=$3 where id=$1", [result.deviceId, JSON.stringify(result.state), result.occurredAt]);
       }
       const status = result.success ? "succeeded" : "failed";
-      await client.query("update device_command set status=$2,completed_at=$3,result=$4::jsonb,last_error=$5 where command_id=$1", [result.commandId, status, result.occurredAt, JSON.stringify(result), result.error ?? null]);
+      const failureCode = result.success ? null : (result.failureCode ?? "device.command.rejected");
+      await client.query("update device_command set status=$2,completed_at=$3,result=$4::jsonb,last_error=$5,failure_code=$6,publish_attempts=greatest(publish_attempts,$7) where command_id=$1", [result.commandId, status, result.occurredAt, JSON.stringify({ ...result, ...(failureCode ? { failureCode } : {}) }), result.error ?? null, failureCode, result.publishAttempts ?? 0]);
       await client.query(
         `insert into workspace_event(event_id,type,source_type,source_id,payload,occurred_at)
          values($1,$2,'device',$3,$4::jsonb,$5) on conflict(event_id) do nothing`,
-        [result.commandId, `device.command.${status}`, result.deviceId, JSON.stringify({ command: command.payload, result }), result.occurredAt],
+        [result.commandId, `device.command.${status}`, result.deviceId, JSON.stringify({ command: command.payload, result: { ...result, ...(failureCode ? { failureCode } : {}) } }), result.occurredAt],
       );
       await client.query("commit");
       return { duplicate: false };

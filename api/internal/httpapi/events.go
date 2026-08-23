@@ -133,7 +133,31 @@ func (r *Router) causalTrace(w http.ResponseWriter, req *http.Request) {
 	}
 	deviceID := textValue(command["deviceId"])
 	commandName := textValue(command["command"])
-	evidences := []map[string]any{evidence("device-execution", "Device command event", "proven", deviceID+" received "+commandName, &selected)}
+	executionDetail := deviceID + " received " + commandName
+	evidences := []map[string]any{evidence("device-execution", "Device command event", "proven", executionDetail, &selected)}
+	failureCode := textValue(result["failureCode"])
+	if selected.Type == "device.command.failed" && failureCode == "" {
+		failureCode = "device.command.rejected"
+	}
+	failureError := textValue(result["error"])
+	publishAttempts := result["publishAttempts"]
+	if selected.Type == "device.command.failed" {
+		label := "Device command failure"
+		phase := "device acknowledgement"
+		if failureCode == "mqtt.publish.exhausted" {
+			label = "MQTT outbound failure"
+			phase = "MQTT publish"
+		}
+		if failureCode == "device.ack.timeout" {
+			label = "Device acknowledgement timeout"
+		}
+		detail := failureError
+		if publishAttempts != nil {
+			detail = fmt.Sprintf("%s after %v publish attempts", detail, publishAttempts)
+		}
+		evidences = append(evidences, evidence("command-failure", label, "proven", detail, &selected))
+		executionDetail = commandName + " failed during " + phase
+	}
 	steps := make([]map[string]any, 0)
 	if reading != nil {
 		detail := fmt.Sprintf("%v %v", reading["value"], reading["unit"])
@@ -149,14 +173,22 @@ func (r *Router) causalTrace(w http.ResponseWriter, req *http.Request) {
 		steps = append(steps, map[string]any{"type": "rule", "label": ruleID, "detail": fmt.Sprintf("%s %v %v", textValue(condition["operator"]), condition["value"], condition["unit"]), "evidenceId": "matched-rule", "support": proof})
 		matched = map[string]any{"ruleId": ruleID, "condition": condition, "action": action}
 	}
-	steps = append(steps, map[string]any{"type": "execution", "label": deviceID, "detail": commandName, "evidenceId": "device-execution", "support": "proven"})
+	steps = append(steps, map[string]any{"type": "execution", "label": deviceID, "detail": executionDetail, "evidenceId": "device-execution", "support": "proven"})
 	completeness := "partial"
 	summary := "This explanation is partial. The selected device command was found, but linked rule and sensor evidence could not be proven."
 	if len(missing) == 0 {
 		completeness = "complete"
 		summary = deviceID + " received " + commandName + " because the recorded sensor reading satisfied the matched PostgreSQL rule."
 	}
-	response := map[string]any{"eventId": eventID, "explainable": true, "completeness": completeness, "title": "Why did " + deviceID + " " + commandName + "?", "summary": summary, "selectedEvent": selected, "deviceExecution": selected, "resultingState": result["state"], "missing": missing, "evidence": evidences, "causalSteps": steps}
+	title := "Why did " + deviceID + " " + commandName + "?"
+	if selected.Type == "device.command.failed" {
+		title = "Why did " + deviceID + " " + commandName + " fail?"
+		summary += " The command failed with " + failureCode + ": " + failureError + "."
+	}
+	response := map[string]any{"eventId": eventID, "explainable": true, "completeness": completeness, "title": title, "summary": summary, "selectedEvent": selected, "deviceExecution": selected, "resultingState": result["state"], "missing": missing, "evidence": evidences, "causalSteps": steps}
+	if selected.Type == "device.command.failed" {
+		response["failure"] = map[string]any{"code": failureCode, "error": failureError, "publishAttempts": publishAttempts}
+	}
 	if reading != nil {
 		response["triggerReading"] = reading
 	}

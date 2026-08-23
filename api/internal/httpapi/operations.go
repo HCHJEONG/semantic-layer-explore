@@ -56,6 +56,9 @@ func (r *Router) operationsState(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, 503, map[string]string{"error": "state unavailable"})
 		return
 	}
+	for i := range devices {
+		devices[i].CommandMaxPublishAttempts = r.cfg.CommandMaxPublishAttempts
+	}
 	definitions := make([]map[string]any, 0, len(sensors))
 	readings := make([]any, 0, len(sensors))
 	for _, sensor := range sensors {
@@ -71,6 +74,9 @@ func (r *Router) devices(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		writeJSON(w, 503, map[string]string{"error": "devices unavailable"})
 		return
+	}
+	for i := range items {
+		items[i].CommandMaxPublishAttempts = r.cfg.CommandMaxPublishAttempts
 	}
 	writeJSON(w, 200, items)
 }
@@ -315,11 +321,5 @@ func (r *Router) deviceCommand(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, 503, map[string]string{"error": "device command unavailable"})
 		return
 	}
-	body, _ := json.Marshal(command)
-	if err := r.mqtt.PublishCommand(req.Context(), eventID, device.ID, body); err == nil {
-		_ = r.store.MarkCommandPublished(req.Context(), eventID)
-	} else {
-		r.store.MarkCommandPublishFailed(req.Context(), eventID, err)
-	}
-	writeJSON(w, http.StatusAccepted, map[string]any{"status": "pending", "commandId": eventID, "deviceId": device.ID})
+	writeJSON(w, http.StatusAccepted, map[string]any{"status": "queued", "commandId": eventID, "deviceId": device.ID})
 }

@@ -45,11 +45,11 @@ function reviewRuleEvidence(trace: CausalTrace): EvidenceReview {
 }
 
 function reviewExecutionEvidence(trace: CausalTrace): EvidenceReview {
-  const evidence = trace.evidence.find((item) => item.id === "device-execution");
+  const evidence = trace.evidence.filter((item) => item.id === "device-execution" || item.id === "command-failure");
   return evidenceReviewSchema.parse({
     agent: "execution",
-    findings: evidence ? [finding(evidence.detail, [evidence.id], evidence.support)] : [],
-    uncertainties: evidence ? [] : ["No valid device execution payload was found."],
+    findings: evidence.map((item) => finding(item.detail, [item.id], item.support)),
+    uncertainties: evidence.length ? [] : ["No valid device execution payload was found."],
   });
 }
 

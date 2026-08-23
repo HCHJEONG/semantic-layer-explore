@@ -53,5 +53,15 @@ export type WorkspaceState = {
   simulator: { running: boolean; scenario: SimulatorScenario; intervalMs: number };
   sensors: SensorDefinition[];
   readings: SensorReading[];
-  devices: Array<DeviceDefinition & { state: DeviceState; commandStatus?: "pending" | "published" | "succeeded" | "failed"; commandId?: string }>;
+  devices: Array<DeviceDefinition & {
+    state: DeviceState;
+    commandStatus?: "pending" | "publishing" | "retrying" | "published" | "finalizing" | "succeeded" | "failed";
+    commandId?: string;
+    commandPublishAttempts?: number;
+    commandMaxPublishAttempts?: number;
+    commandError?: string;
+    commandFailureCode?: string;
+    commandLastAttemptAt?: string;
+    commandNextAttemptAt?: string;
+  }>;
 };
