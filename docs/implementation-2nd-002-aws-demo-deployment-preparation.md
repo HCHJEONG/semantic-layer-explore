@@ -101,8 +101,21 @@ build에 사용한 exact commit SHA를 배포 로그에 남긴다.
 배포는 다음 명령과 확인 입력을 maintainer가 직접 수행해야 한다.
 
 ```bash
-./.fordeploy/deploy.sh --deploy aws-demo
+./.fordeploy/deploy.sh
 ```
+
+스크립트 실행 자체가 명시적인 배포 승인 역할을 하므로 별도의
+`aws-demo` 확인 문자열은 다시 입력하지 않는다. 스크립트는 기존 `ssh-agent`를
+재사용하고 GitHub clean clone용 `~/.ssh/id_rsa`가 아직 등록되지 않았으면
+`ssh-add`를 실행한다. 따라서 encrypted GitHub key의 passphrase는 배포 중
+여러 번이 아니라 최초 등록 시 한 번만 요청된다. AWS SSH alias가 사용하는
+`penvotkeypair1.pem`은 passphrase가 없으므로 agent에 추가하지 않는다.
+스크립트가 임시 agent를 직접 시작한 경우 종료 시 해당 agent를 정리한다.
+
+배포는 image build와 전송 때문에 오래 실행될 수 있다. 실행 중 원본
+`deploy.sh`가 editor, patch 또는 commit으로 교체되더라도 Bash가 변경된 file
+offset을 다시 읽지 않도록 시작 즉시 script를 mode `700`의 임시 snapshot으로
+복사하고 해당 snapshot을 `exec`한다. 배포 종료 시 snapshot은 제거한다.
 
 ## 4. AWS 전용 디렉터리
 

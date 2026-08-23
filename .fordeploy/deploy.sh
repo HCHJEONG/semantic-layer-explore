@@ -3,15 +3,25 @@ set -euo pipefail
 
 # This deployment is intentionally maintainer-operated. Agents may edit and
 # statically validate this file, but must never execute it against AWS.
-if [ "${1:-}" != "--deploy" ] || [ "${2:-}" != "aws-demo" ] || [ "$#" -ne 2 ]; then
-  echo "Usage: .fordeploy/deploy.sh --deploy aws-demo" >&2
+if [ "$#" -ne 0 ]; then
+  echo "Usage: .fordeploy/deploy.sh" >&2
   exit 2
 fi
 
-if [ "${CONFIRM_DEPLOY:-}" != "aws-demo" ]; then
-  printf 'Type aws-demo to build locally and deploy: '
-  read -r confirmation
-  [ "${confirmation}" = "aws-demo" ] || { echo "Deployment cancelled."; exit 1; }
+# Freeze the script before the long build and transfer. This prevents an editor
+# or concurrent commit from changing the file offsets while Bash is still
+# reading the running script.
+if [ "${DEPLOY_SCRIPT_SNAPSHOT:-0}" != "1" ]; then
+  SOURCE_SCRIPT="$(realpath -- "${BASH_SOURCE[0]}")"
+  SOURCE_WORKING_ROOT="$(cd -- "$(dirname -- "${SOURCE_SCRIPT}")/.." && pwd)"
+  SNAPSHOT_PATH="$(mktemp "${TMPDIR:-/tmp}/physicalai-deploy-script.XXXXXX.sh")"
+  cp -- "${SOURCE_SCRIPT}" "${SNAPSHOT_PATH}"
+  chmod 700 "${SNAPSHOT_PATH}"
+  exec env \
+    DEPLOY_SCRIPT_SNAPSHOT=1 \
+    DEPLOY_SCRIPT_SNAPSHOT_PATH="${SNAPSHOT_PATH}" \
+    DEPLOY_WORKING_ROOT="${SOURCE_WORKING_ROOT}" \
+    "${SNAPSHOT_PATH}" "$@"
 fi
 
 VERSION="${VERSION:-aws$(date +'%Y%m%d%H%M%S')}"
@@ -30,11 +40,13 @@ API_HTTP_HOST_PORT="${API_HTTP_HOST_PORT:-18080}"
 PUBLIC_URL="${PUBLIC_URL:-https://physicalai.penvot.com}"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-WORKING_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+WORKING_ROOT="${DEPLOY_WORKING_ROOT:?missing DEPLOY_WORKING_ROOT}"
 REPO_URL="${REPO_URL:-git@github.com:HCHJEONG/semantic-layer-explore.git}"
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
 CLEAN_CLONE_ROOT="${CLEAN_CLONE_ROOT:-${HOME}/deploy-remote-repo}"
 CLEAN_CLONE_DIR="${CLEAN_CLONE_DIR:-${CLEAN_CLONE_ROOT}/semantic-layer-explore}"
+GIT_SSH_KEY="${GIT_SSH_KEY:-${HOME}/.ssh/id_rsa}"
+STARTED_SSH_AGENT=0
 ARTIFACT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/physicalai-deploy.XXXXXX")"
 IMAGE_ARCHIVE="${ARTIFACT_DIR}/physicalai-images-${VERSION}.tar.gz"
 BUNDLE_ARCHIVE="${ARTIFACT_DIR}/physicalai-compose-${VERSION}.tar.gz"
@@ -56,16 +68,40 @@ INFRASTRUCTURE_IMAGES=(
 
 cleanup_local() {
   rm -rf -- "${ARTIFACT_DIR}"
+  rm -f -- "${DEPLOY_SCRIPT_SNAPSHOT_PATH:-}"
   for image in "${APPLICATION_IMAGES[@]}"; do
     docker image rm "${image}" >/dev/null 2>&1 || true
   done
+  if [ "${STARTED_SSH_AGENT}" = "1" ]; then
+    ssh-agent -k >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup_local EXIT
 
-for command_name in docker git ssh scp tar gzip realpath; do
+for command_name in awk docker git grep ssh scp ssh-agent ssh-add ssh-keygen tar gzip realpath; do
   command -v "${command_name}" >/dev/null || { echo "Missing command: ${command_name}" >&2; exit 1; }
 done
 docker compose version >/dev/null
+test -f "${GIT_SSH_KEY}" || { echo "Missing Git SSH key: ${GIT_SSH_KEY}" >&2; exit 1; }
+
+if ! ssh-add -l >/dev/null 2>&1; then
+  eval "$(ssh-agent -s)" >/dev/null
+  STARTED_SSH_AGENT=1
+fi
+add_key_if_missing() {
+  local key_path="$1"
+  local key_label="$2"
+  local fingerprint
+  fingerprint="$(ssh-keygen -lf "${key_path}" | awk '{print $2}')"
+  if ssh-add -l | grep -Fq "${fingerprint}"; then
+    echo "[local] ${key_label} SSH key is already loaded in ssh-agent"
+    return
+  fi
+  echo "[local] adding ${key_label} SSH key to ssh-agent (passphrase may be requested once)"
+  ssh-add "${key_path}"
+}
+
+add_key_if_missing "${GIT_SSH_KEY}" "GitHub"
 
 case "$(realpath -m "${CLEAN_CLONE_ROOT}")" in
   "${HOME}/deploy-remote-repo") ;;
