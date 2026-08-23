@@ -25,7 +25,12 @@ export class TelemetryService {
 
     await this.audit.recordTelemetryAccepted(event);
     if (this.mastra.shouldRunForTelemetry(event)) {
-      await this.mastra.runForTelemetry(event);
+      try {
+        await this.mastra.runForTelemetry(event);
+      } catch (error) {
+        await this.audit.recordMastraDecisionFailed(event, error);
+        this.logger.warn(`Mastra telemetry decision failed for eventId=${event.eventId}: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   }
 }

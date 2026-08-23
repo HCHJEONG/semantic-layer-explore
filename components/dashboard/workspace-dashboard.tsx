@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, AlertTriangle, BellRing, Database, Fan, Gauge, HelpCircle, Lightbulb, Play, Radio, RefreshCw, Ruler, ShieldCheck, Thermometer, ToggleLeft, UserCheck, Zap } from "lucide-react";
+import { Activity, AlertTriangle, BellRing, Bot, Database, Fan, Gauge, HelpCircle, Lightbulb, Play, Radio, RefreshCw, Ruler, ShieldCheck, Thermometer, ToggleLeft, UserCheck, Zap } from "lucide-react";
 import type { SensorReading, SimulatorScenario, WorkspaceState } from "@/domain/physical";
 import type { RuleRecord } from "@/domain/rule";
 import { Button } from "@/components/ui/button";
@@ -20,8 +20,10 @@ type WorkspaceEvent = {
 type OperationsSummary = {
   telemetryCount: number;
   deadLetterCount: number;
+  mastraDecisionCount: number;
   latestTelemetry?: { eventId: string; deviceId: string; sensorId: string; processedAt: string };
   latestDeadLetter?: { deadLetterId: string; reason: string; errorMessage: string; failedAt: string };
+  latestMastraDecision?: { auditId: string; type: string; occurredAt: string };
   checkedAt: string;
 };
 
@@ -248,6 +250,10 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
         <Card className="metric">
           <AlertTriangle />
           <span>Dead letters<strong>{operations?.deadLetterCount ?? "—"}</strong></span>
+        </Card>
+        <Card className="metric">
+          <Bot />
+          <span>AI decisions<strong>{operations?.mastraDecisionCount ?? "—"}</strong></span>
         </Card>
       </div>
 

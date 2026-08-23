@@ -74,6 +74,29 @@ export class PostgresService implements OnModuleDestroy {
     return { duplicate: result.rowCount === 0 };
   }
 
+  async insertAuditEvent(event: {
+    auditId: string;
+    type: string;
+    occurredAt: string;
+    payload: unknown;
+    correlationId?: string;
+  }) {
+    const result = await this.pool.query(
+      `insert into audit_event
+        (audit_id, type, occurred_at, payload, correlation_id)
+       values ($1, $2, $3, $4::jsonb, $5)
+       on conflict (audit_id) do nothing`,
+      [
+        event.auditId,
+        event.type,
+        event.occurredAt,
+        JSON.stringify(event.payload),
+        event.correlationId ?? null,
+      ],
+    );
+    return { duplicate: result.rowCount === 0 };
+  }
+
   async onModuleDestroy() {
     await this.pool.end();
   }

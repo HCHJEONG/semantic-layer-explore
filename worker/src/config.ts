@@ -5,4 +5,7 @@ export const config = {
   consumerGroup: process.env.KAFKA_TELEMETRY_GROUP ?? "physicalai-telemetry-workers",
   databaseUrl: process.env.DATABASE_URL ?? "postgres://physicalai:physicalai@postgres:5432/physicalai",
   workerId: process.env.HOSTNAME ?? `worker-${process.pid}`,
+  mastraTelemetryMode: process.env.MASTRA_TELEMETRY_MODE ?? "dry-run",
+  mastraTemperatureThreshold: Number(process.env.MASTRA_TEMPERATURE_THRESHOLD ?? "31.5"),
+  mastraDistanceThreshold: Number(process.env.MASTRA_DISTANCE_THRESHOLD ?? "10"),
 };
