@@ -1,0 +1,10 @@
+# Test-only overlay. The legacy Compose baseline remains in compose.yaml.
+services:
+  frontend:
+    ports: !reset []
+  api:
+    ports: !reset []
+  mosquitto:
+    ports: !reset []
+  neo4j:
+    ports: !reset []

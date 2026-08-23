@@ -65,7 +65,7 @@ func (a *Adapter) Run(ctx context.Context) {
 	if token := client.Connect(); !token.WaitTimeout(15*time.Second) || token.Error() != nil {
 		a.logger.Error("mqtt connect failed", "url", a.cfg.MQTTURL, "instanceId", instanceID, "clientId", clientID, "error", token.Error())
 	}
-	go a.dispatchLoop(ctx)
+	go a.dispatchLoop(ctx, clientID)
 	<-ctx.Done()
 	client.Disconnect(250)
 }
@@ -101,7 +101,7 @@ func (a *Adapter) PublishCommand(ctx context.Context, commandID, deviceID string
 	return nil
 }
 
-func (a *Adapter) dispatchLoop(ctx context.Context) {
+func (a *Adapter) dispatchLoop(ctx context.Context, owner string) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -109,9 +109,9 @@ func (a *Adapter) dispatchLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			a.publishTimeouts(ctx)
-			a.publishExhaustedFailures(ctx)
-			commands, err := a.store.ClaimDispatchableCommands(ctx, 20)
+			a.publishTimeouts(ctx, owner)
+			a.publishExhaustedFailures(ctx, owner)
+			commands, err := a.store.ClaimDispatchableCommands(ctx, owner, a.cfg.CommandLease, 20)
 			if err != nil {
 				a.logger.Warn("command dispatch query failed", "error", err)
 				continue
@@ -119,7 +119,7 @@ func (a *Adapter) dispatchLoop(ctx context.Context) {
 			for _, command := range commands {
 				if err := a.PublishCommand(ctx, command.CommandID, command.DeviceID, command.Payload); err != nil {
 					if command.PublishAttempts >= a.cfg.CommandMaxPublishAttempts {
-						if markErr := a.store.MarkCommandPublishExhausted(ctx, command.CommandID, err); markErr != nil {
+						if markErr := a.store.MarkCommandPublishExhausted(ctx, command.CommandID, owner, err); markErr != nil {
 							a.logger.Warn("command publish exhaustion update failed", "commandId", command.CommandID, "error", markErr)
 						}
 					} else {
@@ -127,13 +127,13 @@ func (a *Adapter) dispatchLoop(ctx context.Context) {
 						if delay > a.cfg.CommandRetryMax {
 							delay = a.cfg.CommandRetryMax
 						}
-						if retryErr := a.store.ScheduleCommandRetry(ctx, command, err, time.Now().Add(delay), a.cfg.CommandMaxPublishAttempts); retryErr != nil {
+						if retryErr := a.store.ScheduleCommandRetry(ctx, command, owner, err, time.Now().Add(delay), a.cfg.CommandMaxPublishAttempts); retryErr != nil {
 							a.logger.Warn("command retry scheduling failed", "commandId", command.CommandID, "error", retryErr)
 						}
 					}
 					continue
 				}
-				if err := a.store.MarkCommandPublished(ctx, command.CommandID); err != nil {
+				if err := a.store.MarkCommandPublished(ctx, command.CommandID, owner); err != nil {
 					a.logger.Warn("command publish status failed", "commandId", command.CommandID, "error", err)
 				}
 			}
@@ -141,8 +141,8 @@ func (a *Adapter) dispatchLoop(ctx context.Context) {
 	}
 }
 
-func (a *Adapter) publishExhaustedFailures(ctx context.Context) {
-	commands, err := a.store.CommandsAwaitingFailureResult(ctx, 20)
+func (a *Adapter) publishExhaustedFailures(ctx context.Context, owner string) {
+	commands, err := a.store.ClaimCommandsAwaitingFailureResult(ctx, owner, a.cfg.CommandLease, 20)
 	if err != nil {
 		a.logger.Warn("exhausted command query failed", "error", err)
 		return
@@ -154,12 +154,14 @@ func (a *Adapter) publishExhaustedFailures(ctx context.Context) {
 			a.logger.Warn("exhausted command result publish failed", "commandId", command.CommandID, "error", err)
 			continue
 		}
-		_ = a.store.DelayCommandFailureResult(ctx, command.CommandID)
+		if err := a.store.DelayCommandFailureResult(ctx, command.CommandID, owner); err != nil {
+			a.logger.Warn("exhausted command result claim release skipped", "commandId", command.CommandID, "error", err)
+		}
 	}
 }
 
-func (a *Adapter) publishTimeouts(ctx context.Context) {
-	commands, err := a.store.TimedOutCommands(ctx, a.cfg.CommandAckTimeout, 20)
+func (a *Adapter) publishTimeouts(ctx context.Context, owner string) {
+	commands, err := a.store.ClaimTimedOutCommands(ctx, owner, a.cfg.CommandAckTimeout, a.cfg.CommandLease, 20)
 	if err != nil {
 		a.logger.Warn("command timeout query failed", "error", err)
 		return
@@ -171,7 +173,9 @@ func (a *Adapter) publishTimeouts(ctx context.Context) {
 			a.logger.Warn("command timeout publish failed", "commandId", command.CommandID, "error", err)
 			continue
 		}
-		_ = a.store.MarkCommandTimeoutNotified(ctx, command.CommandID)
+		if err := a.store.MarkCommandTimeoutNotified(ctx, command.CommandID, owner); err != nil {
+			a.logger.Warn("command timeout claim release skipped", "commandId", command.CommandID, "error", err)
+		}
 	}
 }
 

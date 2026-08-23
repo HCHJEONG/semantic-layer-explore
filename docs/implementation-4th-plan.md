@@ -4,6 +4,8 @@
 
 이 문서는 2차 분산 Physical AI 구현과 3차 Kubernetes scaling/failure 실험 이후, 시스템을 실제 공장 현장에 연결하기 위한 4차 계획이다. 현재 코드가 이미 production-ready라는 의미가 아니다. 2차 구현의 완료 사실은 numbered handoff 문서, 특히 `implementation-2nd-015-mqtt-outbound-failure-ux-handoff.md`를 기준으로 판단한다.
 
+실제 device adapter는 durable `commandId` idempotency를 구현해야 한다. Gateway lease 만료로 같은 command가 재발행돼도 actuator는 한 번만 동작하고, device reboot 이후에도 저장된 최종 ACK를 재전송할 수 있어야 한다. 현재 Python simulator의 cache는 process memory에만 있으므로 이 production requirement를 충족한 것으로 보지 않는다.
+
 4차의 핵심은 Python simulator를 삭제하는 것이 아니라 **운영 데이터 경로에서 실제 industrial edge adapter로 교체**하는 것이다. Simulator는 contract test, demo, 장애 주입용 reference device로 계속 사용할 수 있다.
 
 현재 확정된 중앙 처리 구조는 유지한다.

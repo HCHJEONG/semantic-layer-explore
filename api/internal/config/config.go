@@ -28,6 +28,7 @@ type Config struct {
 	MQTTResultSharedGroup     string
 	CommandResultTopic        string
 	CommandAckTimeout         time.Duration
+	CommandLease              time.Duration
 	CommandMaxPublishAttempts int
 	CommandRetryInitial       time.Duration
 	CommandRetryMax           time.Duration
@@ -55,6 +56,7 @@ func FromEnv() Config {
 		MQTTResultSharedGroup:     env("MQTT_COMMAND_RESULT_SHARED_GROUP", "physicalai-command-results"),
 		CommandResultTopic:        env("KAFKA_COMMAND_RESULT_TOPIC", "command.result"),
 		CommandAckTimeout:         time.Duration(envInt("COMMAND_ACK_TIMEOUT_SECONDS", 10)) * time.Second,
+		CommandLease:              time.Duration(envInt("MQTT_COMMAND_LEASE_SECONDS", 30)) * time.Second,
 		CommandMaxPublishAttempts: envInt("MQTT_COMMAND_MAX_PUBLISH_ATTEMPTS", 3),
 		CommandRetryInitial:       time.Duration(envInt("MQTT_COMMAND_RETRY_INITIAL_MS", 500)) * time.Millisecond,
 		CommandRetryMax:           time.Duration(envInt("MQTT_COMMAND_RETRY_MAX_MS", 5000)) * time.Millisecond,

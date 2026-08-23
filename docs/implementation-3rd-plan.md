@@ -32,7 +32,7 @@ Kubernetes 파일을 만들기 전에 다음을 계획하고 구현한다.
 3. telemetry subscription에 MQTT shared subscription을 적용하되 command/ACK 등 다른 topic의 소유권과 fan-out 요구는 각각 구분한다.
 4. Compose single-instance 기본 동작과 multi-instance 실험 동작을 모두 지원한다.
 5. 단위·통합 테스트로 client ID 충돌, shared group 분배, reconnect, QoS 1 duplicate 처리 경계를 검증한다.
-6. 결과와 configuration decision을 새 numbered 3rd-plan handoff에 기록한다.
+6. 결과와 configuration decision을 `implementation-3rd-001-mqtt-scale-safety-handoff.md`에 기록한다.
 
 완료 게이트:
 
@@ -206,10 +206,10 @@ A connects
 
 ### 해결: Unique MQTT Client ID
 
-각 Pod는 고유 ID를 사용한다.
+각 Pod는 `INSTANCE_ID`로 주입한 Pod UID를 사용하고, Compose에서는 container hostname으로 fallback한다. 실제 MQTT client ID는 MQTT 3.1.1 portable length를 위해 identity의 짧은 hash로 만든다.
 
 ``` text
-physicalai-go-gateway-${HOSTNAME}
+pago${SHA256(INSTANCE_ID)[0:12]}
 ```
 
 Pod identity와 연결된 값을 우선 사용하여 운영 중 추적 가능하게 한다.
@@ -241,7 +241,8 @@ devices/+/telemetry
 ### 해결: MQTT Shared Subscription
 
 ``` text
-$share/go-gateway/devices/+/telemetry
+$share/physicalai-telemetry/devices/+/telemetry
+$share/physicalai-command-results/devices/+/command-results
 ```
 
 같은 shared group의 Gateway 중 하나가 메시지를 처리하도록 한다.
@@ -258,15 +259,30 @@ Kafka consumer group과 구현은 다르지만 workload distribution 측면에�
 권장 configuration:
 
 ``` env
-MQTT_CLIENT_ID_PREFIX=physicalai-go-gateway
-MQTT_SHARED_GROUP=go-gateway
-MQTT_TOPIC=devices/+/telemetry
-MQTT_QOS=1
-MQTT_SHARED_SUBSCRIPTION=true
+MQTT_CLIENT_ID_PREFIX=pago
+MQTT_TELEMETRY_SHARED_GROUP=physicalai-telemetry
+MQTT_COMMAND_RESULT_SHARED_GROUP=physicalai-command-results
+MQTT_TELEMETRY_TOPIC=devices/+/telemetry
+MQTT_COMMAND_RESULT_TOPIC=devices/+/command-results
+MQTT_COMMAND_LEASE_SECONDS=30
 ```
 
-Compose single-instance와 Kubernetes multi-instance를 모두 지원하도록
-shared subscription 여부를 설정으로 분리한다.
+Compose single-instance와 Kubernetes multi-instance가 같은 shared subscription configuration을 사용한다. 한 replica만 있을 때도 동일 group의 단일 member로 정상 동작한다.
+
+### MQTT ACK와 Kafka 저장 경계
+
+Go Gateway는 Paho auto-ACK를 끄고 Kafka의 동기 `WriteMessages`가 성공한 뒤에만 MQTT message를 ACK한다. Kafka 응답 유실처럼 저장 여부가 불명확한 실패에서는 MQTT가 재전달할 수 있으므로 exactly-once를 주장하지 않으며, 기존 `eventId`와 `commandId` idempotency가 중복을 흡수한다.
+
+### Outbound command lease와 실제 장치 경계
+
+Gateway가 command를 `publishing`으로 claim한 뒤 종료될 수 있으므로 PostgreSQL에 `dispatch_owner`와 `lease_until`을 기록한다. 만료된 lease는 다른 Gateway가 회수한다. Timeout과 synthetic failure result도 atomic claim을 사용한다.
+
+이 lease 회수는 command 재발행 가능성을 의도적으로 허용한다. Python simulator는 process memory에서 `commandId`별 결과를 cache하여 같은 process 안에서는 물리 상태 변경을 한 번만 수행하고 기존 ACK를 재전송한다. 실제 device는 아직 구현 범위 밖이며 다음 요구사항이 남아 있다.
+
+- 최근 `commandId`와 최종 ACK payload를 device의 durable local storage에 bounded retention으로 저장한다.
+- 같은 `commandId`를 받으면 actuator를 다시 동작시키지 않고 저장된 ACK를 재전송한다.
+- device reboot 및 network reconnect 뒤에도 이 기록이 유지되는지 검증한다.
+- 이 작업 전에는 실제 장치 command 경로의 end-to-end idempotency가 완료됐다고 주장하지 않는다.
 
 ## 7. QoS 1과 End-to-End Idempotency
 
@@ -589,10 +605,10 @@ PostgreSQL/RDS 등 stateful infrastructure를 managed service로 분리하는
 -   [ ] 기존 Compose 파일과 문서가 legacy baseline 및 rollback evidence로 보존된다.
 -   [ ] Kubernetes manifest 작성 전에 MQTT scale-out 선행 작업이 Compose에서 검증된다.
 -   [ ] Local Kubernetes에서 application workload가 실행된다.
--   [ ] Go Gateway가 unique MQTT Client ID를 사용한다.
--   [ ] MQTT Shared Subscription이 적용된다.
--   [ ] Go Gateway를 runtime에서 scale-out할 수 있다.
--   [ ] Gateway 증가가 단순 duplicate fan-out을 만들지 않는다.
+-   [x] Go Gateway가 unique MQTT Client ID를 사용한다.
+-   [x] MQTT Shared Subscription이 적용된다.
+-   [x] Go Gateway를 Compose runtime에서 scale-out할 수 있다.
+-   [x] Gateway 증가가 단순 duplicate fan-out을 만들지 않는다.
 -   [ ] MQTT QoS 1 duplicate가 end-to-end idempotency로 처리된다.
 -   [ ] NestJS Kafka worker를 runtime에서 scale-out/in할 수 있다.
 -   [ ] Kafka partition/consumer 관계를 실제 확인했다.
