@@ -8,7 +8,7 @@
 
 ### 바로 착수 가능 여부
 
-바로 착수 가능하다. 단, 첫 작업은 기능 추가가 아니라 Kubernetes 실험을 안전하게 시작하기 위한 baseline 확인이어야 한다.
+바로 착수 가능하다. 단, 첫 작업은 Kubernetes manifest 작성이 아니라 Go Gateway의 MQTT scale-out 안전성을 먼저 구현하고 검증하는 것이다. Kubernetes 설정은 이 선행 작업과 Compose baseline 준비가 끝난 뒤 시작한다.
 
 착수 전 확인:
 
@@ -19,13 +19,52 @@
 - `semantic.graph.rebuild` projection smoke
 - `kind` 또는 동등한 local Kubernetes cluster 사용 가능 여부
 
-초기 구현 순서:
+## 0.1 실행 순서와 단계 게이트
 
-1. `k8s/` plain manifest를 추가한다.
-2. 먼저 replica 1로 Next.js, Go Gateway, NestJS Worker, Rust Graph Worker를 실행한다.
-3. Kafka, PostgreSQL, Mosquitto, Neo4j는 처음에는 기존 Compose infrastructure에 연결해 application orchestration부터 검증한다.
-4. Go Gateway scale-out 전에 unique MQTT client ID와 shared subscription 설정을 구현한다.
-5. worker scale-out은 Kafka partition assignment와 idempotency evidence를 확인한 뒤 진행한다.
+3차 작업은 다음 순서를 고정한다. 앞 단계의 완료 evidence 없이 다음 단계로 넘어가지 않는다.
+
+### Phase 1. Go Gateway MQTT scale-out 선행 작업
+
+Kubernetes 파일을 만들기 전에 다음을 계획하고 구현한다.
+
+1. 현재 MQTT client ID 생성, subscription, reconnect, shutdown 경로를 조사한다.
+2. instance identity를 주입할 수 있는 unique client ID 규칙과 configuration contract를 정한다.
+3. telemetry subscription에 MQTT shared subscription을 적용하되 command/ACK 등 다른 topic의 소유권과 fan-out 요구는 각각 구분한다.
+4. Compose single-instance 기본 동작과 multi-instance 실험 동작을 모두 지원한다.
+5. 단위·통합 테스트로 client ID 충돌, shared group 분배, reconnect, QoS 1 duplicate 처리 경계를 검증한다.
+6. 결과와 configuration decision을 새 numbered 3rd-plan handoff에 기록한다.
+
+완료 게이트:
+
+- Gateway replica마다 추적 가능한 MQTT client ID가 생성된다.
+- shared subscription을 사용하는 topic과 사용하지 않는 topic이 문서와 설정에서 명확하다.
+- Gateway를 Compose에서 2개 이상 실행했을 때 reconnect 경쟁과 단순 duplicate fan-out이 없다.
+- 기존 `eventId` 기반 end-to-end idempotency가 유지된다.
+
+### Phase 2. Kubernetes 전 준비 마무리
+
+Compose baseline 테스트, health/readiness, graceful shutdown, configuration 및 secret 주입 방식, image architecture, 관찰 가능한 instance identity를 정리한다. Kafka partition assignment와 worker idempotency evidence도 이 단계에서 다시 확인한다.
+
+완료 게이트:
+
+- 착수 전 확인 목록이 모두 통과하거나, 미통과 항목과 허용 사유가 기록된다.
+- application workload가 외부화된 configuration으로 기동할 수 있다.
+- SIGTERM 처리와 readiness 의미가 workload별로 정의된다.
+- Compose baseline 결과가 3차 handoff에 남는다.
+
+### Phase 3. Kubernetes 설정 계획 및 작성
+
+`k8s/` plain manifest의 workload, Service, ConfigMap, Secret example, probe, resource request/limit, rollout 전략을 먼저 설계한 뒤 작성한다. 처음에는 Helm을 도입하지 않는다.
+
+Kafka, PostgreSQL, Mosquitto, Neo4j는 초기 실험에서 기존 Compose infrastructure를 사용할 수 있다. 이 hybrid 연결의 주소, 네트워크 경계, 실패 조건을 manifest 작성 전에 기록한다.
+
+### Phase 4. Kubernetes 전환
+
+먼저 replica 1로 Next.js, Go Gateway, NestJS Worker, Rust Graph Worker를 실행하고 Compose baseline과 기능 동등성을 확인한다. 이후 Go Gateway와 worker를 순서대로 scale-out한다. 전환은 Compose 자산 제거를 의미하지 않는다.
+
+### Phase 5. Kubernetes 테스트와 실험
+
+baseline, scale-out, duplicate injection, Pod failure, Kafka rebalance, commit 경계 장애, rolling update, graceful shutdown 순으로 실험하고 결과를 `docs/kubernetes-experiments.md`에 기록한다.
 
 ## 1. 목표
 
@@ -75,6 +114,16 @@ Kubernetes는 Compose를 제거하지 않는다.
     single-host/AWS EC2 demo
 -   Kubernetes: scaling, self-healing, rolling deployment,
     orchestration/failure experiments
+
+### Compose legacy archive 원칙
+
+Kubernetes 전환 과정에서 기존 Compose 관련 파일과 문서를 삭제하거나 Kubernetes 내용으로 덮어쓰지 않는다.
+
+- `compose.yaml`, `.fordeploy/compose.aws-demo.yaml`, 2차 plan 및 numbered handoff는 검증된 Compose baseline과 AWS EC2 rollback evidence로 보존한다.
+- 더 이상 active Kubernetes 경로가 아닌 설명에는 `Legacy / Compose baseline` 또는 `Historical Compose deployment`라고 명시한다.
+- 오래된 명령이나 설정을 보존할 때는 실행 가능한 active 절차와 혼동되지 않도록 문서 heading, blockquote, YAML comment 등으로 상태를 표시한다.
+- Compose 설정을 실제로 폐기할 필요가 생겨도 3차 작업에서 즉시 삭제하지 않는다. 대체 경로 검증, 참조 검색, rollback 결정 기록을 거친 별도 변경으로 처리한다.
+- Compose baseline은 local integration test와 single-host `aws-demo` 운용 경로로 계속 유효하다.
 
 ### 과도한 재설계 금지
 
@@ -521,20 +570,24 @@ PostgreSQL/RDS 등 stateful infrastructure를 managed service로 분리하는
 
 ## 18. 필수 검증 시나리오
 
-1.  Baseline: Go=1, Nest=1 정상 처리
-2.  Kafka Worker Scale-Out: 1→3→6
-3.  Consumer Over-Scaling: partitions=6, workers=8
+1.  Compose MQTT Preflight: Go=2 이상에서 unique Client ID와 Shared Subscription 검증
+2.  Compose Baseline: Go=1, Nest=1 정상 처리와 기존 회귀 테스트
+3.  Kubernetes Baseline: Go=1, Nest=1 기능 동등성
 4.  Go Gateway Scale-Out: 1→3 + unique Client ID + Shared Subscription
-5.  Nest Worker Failure: Pod kill + recreation + Kafka rebalance
-6.  MQTT Gateway Failure: Go Pod kill + shared subscriber continuity
-7.  Duplicate Injection: 동일 eventId 반복 전송 후 `received > 1`,
+5.  Kafka Worker Scale-Out: 1→3→6
+6.  Consumer Over-Scaling: partitions=6, workers=8
+7.  Nest Worker Failure: Pod kill + recreation + Kafka rebalance
+8.  MQTT Gateway Failure: Go Pod kill + shared subscriber continuity
+9.  Duplicate Injection: 동일 eventId 반복 전송 후 `received > 1`,
     `persisted = 1` 확인
-8.  DB Commit / Offset Commit Failure: 재처리 후 DB consistency 확인
-9.  Rolling Update: v1→v2 중 processing continuity 확인
+10. DB Commit / Offset Commit Failure: 재처리 후 DB consistency 확인
+11. Rolling Update: v1→v2 중 processing continuity 확인
 
 ## 19. 완료 조건
 
 -   [ ] 기존 Docker Compose 환경이 정상 동작한다.
+-   [ ] 기존 Compose 파일과 문서가 legacy baseline 및 rollback evidence로 보존된다.
+-   [ ] Kubernetes manifest 작성 전에 MQTT scale-out 선행 작업이 Compose에서 검증된다.
 -   [ ] Local Kubernetes에서 application workload가 실행된다.
 -   [ ] Go Gateway가 unique MQTT Client ID를 사용한다.
 -   [ ] MQTT Shared Subscription이 적용된다.

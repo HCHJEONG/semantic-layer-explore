@@ -375,6 +375,11 @@ local machine
 The inactive legacy deployment block remains as a reference, while the active
 path uses locally built image archives.
 
+The third-stage Kubernetes work also preserves `compose.yaml`, the AWS Compose
+file, and the second-stage handoffs as the legacy Compose baseline. Kubernetes
+manifests add an orchestration path; they do not delete or overwrite the
+single-host integration, rollback, and historical deployment evidence.
+
 ## Project philosophy
 
 This is not a Protégé clone. It intentionally does not implement OWL, RDF,
