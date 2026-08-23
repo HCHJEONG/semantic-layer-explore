@@ -40,12 +40,16 @@ services:
       KAFKA_BROKERS: kafka:9092
       KAFKA_TELEMETRY_TOPIC: telemetry.raw
       KAFKA_GRAPH_REBUILD_TOPIC: semantic.graph.rebuild
+      KAFKA_COMMAND_RESULT_TOPIC: command.result
       DATABASE_URL: postgres://physicalai:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.local}@postgres:5432/physicalai
       NEO4J_HTTP_URL: http://neo4j:7474/db/neo4j/tx/commit
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env.local}
       MQTT_URL: tcp://mosquitto:1883
       MQTT_TELEMETRY_TOPIC: devices/+/telemetry
+      MQTT_COMMAND_TOPIC_TEMPLATE: devices/%s/commands
+      MQTT_COMMAND_RESULT_TOPIC: devices/+/command-results
+      COMMAND_ACK_TIMEOUT_SECONDS: ${COMMAND_ACK_TIMEOUT_SECONDS:-10}
     ports:
       - "127.0.0.1:${API_HTTP_HOST_PORT:-18080}:8080"
     restart: unless-stopped
@@ -63,6 +67,7 @@ services:
       NODE_OPTIONS: --max-old-space-size=256
       KAFKA_BROKERS: kafka:9092
       KAFKA_TELEMETRY_TOPIC: telemetry.raw
+      KAFKA_COMMAND_RESULT_TOPIC: command.result
       KAFKA_DEAD_LETTER_TOPIC: dead-letter
       KAFKA_AGENT_RESULT_TOPIC: agent.result
       KAFKA_TELEMETRY_GROUP: physicalai-telemetry-workers
@@ -156,6 +161,10 @@ services:
       SIMULATOR_EVENTS_PER_HOUR: ${SIMULATOR_EVENTS_PER_HOUR:-60}
       SIMULATOR_SEED: ${SIMULATOR_SEED:-20260804}
       SIMULATOR_SCENARIO: ${SIMULATOR_SCENARIO:-normal}
+      SIM_COMMAND_ACK_ENABLED: ${SIM_COMMAND_ACK_ENABLED:-true}
+      SIM_COMMAND_ACK_DELAY_MS: ${SIM_COMMAND_ACK_DELAY_MS:-100}
+      SIM_COMMAND_FAILURE_RATE: ${SIM_COMMAND_FAILURE_RATE:-0.01}
+      SIM_COMMAND_ACK_DROP_RATE: ${SIM_COMMAND_ACK_DROP_RATE:-0}
     restart: unless-stopped
     depends_on:
       mosquitto:

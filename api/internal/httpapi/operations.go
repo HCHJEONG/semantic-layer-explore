@@ -294,36 +294,32 @@ func (r *Router) deviceCommand(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "Invalid input"})
 		return
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	state := device.State
+	nowTime := time.Now().UTC()
+	now := nowTime.Format(time.RFC3339Nano)
 	if input.Command == "set-angle" {
 		if input.Value == nil || *input.Value < 0 || *input.Value > 180 {
 			writeJSON(w, 400, map[string]string{"error": "Invalid input"})
 			return
 		}
-		state["status"] = "on"
-		state["angle"] = *input.Value
-	} else if input.Command == "beep" {
-		state["status"] = "off"
-	} else {
-		state["status"] = input.Command
 	}
-	state["lastCommandAt"] = now
 	eventID, idErr := randomID("device-command:user:")
 	if idErr != nil {
 		writeJSON(w, 500, map[string]string{"error": "could not create command id"})
 		return
 	}
-	command := map[string]any{"commandId": eventID, "deviceId": device.ID, "deviceType": device.Type, "command": input.Command, "issuedBy": "user", "issuedAt": now}
+	command := map[string]any{"schemaVersion": "command.v1", "commandId": eventID, "deviceId": device.ID, "command": input.Command, "issuedBy": "user", "issuedAt": now}
 	if input.Value != nil {
 		command["value"] = *input.Value
 	}
-	payload := map[string]any{"command": command, "result": map[string]any{"success": true, "deviceId": device.ID, "state": state}}
-	occurredAt, _ := time.Parse(time.RFC3339Nano, now)
-	updated, err := r.store.UpdateDeviceStateWithEvent(req.Context(), device.ID, state, eventID, payload, occurredAt)
-	if err != nil {
+	if err := r.store.CreateDeviceCommand(req.Context(), eventID, device.ID, command, nowTime); err != nil {
 		writeJSON(w, 503, map[string]string{"error": "device command unavailable"})
 		return
 	}
-	writeJSON(w, 200, map[string]any{"success": true, "deviceId": updated.ID, "state": updated.State})
+	body, _ := json.Marshal(command)
+	if err := r.mqtt.PublishCommand(req.Context(), eventID, device.ID, body); err == nil {
+		_ = r.store.MarkCommandPublished(req.Context(), eventID)
+	} else {
+		r.store.MarkCommandPublishFailed(req.Context(), eventID, err)
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"status": "pending", "commandId": eventID, "deviceId": device.ID})
 }

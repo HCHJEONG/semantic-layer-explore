@@ -14,6 +14,17 @@
     "issuedBy": { "type": "string", "default": "api" },
     "issuedAt": { "type": "string", "format": "date-time" },
     "correlationId": { "type": "string" },
-    "sessionId": { "type": "string" }
+    "sessionId": { "type": "string" },
+    "causation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["correlationId", "ruleId", "ruleEventId", "triggerEventId"],
+      "properties": {
+        "correlationId": { "type": "string", "minLength": 1 },
+        "ruleId": { "type": "string", "minLength": 1 },
+        "ruleEventId": { "type": "string", "minLength": 1 },
+        "triggerEventId": { "type": "string", "minLength": 1 }
+      }
+    }
   }
 }

@@ -44,6 +44,19 @@ def env_int(name: str, fallback: int, minimum: int | None = None) -> int:
     return value
 
 
+def env_float(name: str, fallback: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
+    raw = os.getenv(name, "").strip()
+    value = float(raw) if raw else fallback
+    return min(maximum, max(minimum, value))
+
+
+def env_bool(name: str, fallback: bool) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+    if not raw:
+        return fallback
+    return raw in {"1", "true", "yes", "on"}
+
+
 def clamp(value: float, minimum: float, maximum: float) -> float:
     return min(maximum, max(minimum, value))
 
@@ -74,6 +87,17 @@ class WorkspaceTelemetrySimulator:
         self.random = random.Random(self.seed)
         self.sequence = 0
         self.values: dict[str, float | bool] = {sensor.sensor_id: sensor.fallback for sensor in SENSORS}
+        self.command_ack_enabled = env_bool("SIM_COMMAND_ACK_ENABLED", True)
+        self.command_ack_delay_ms = env_int("SIM_COMMAND_ACK_DELAY_MS", 100, minimum=0)
+        self.command_failure_rate = env_float("SIM_COMMAND_FAILURE_RATE", 0.01)
+        self.command_ack_drop_rate = env_float("SIM_COMMAND_ACK_DROP_RATE", 0.0)
+        self.device_states: dict[str, dict[str, object]] = {
+            "led-01": {"status": "off"},
+            "servo-01": {"status": "off", "angle": 90},
+            "buzzer-01": {"status": "off"},
+            "relay-fan-01": {"status": "off"},
+        }
+        self.command_results: dict[str, dict[str, object]] = {}
         self.running = True
 
     def stop(self, *_args: object) -> None:
@@ -84,6 +108,56 @@ class WorkspaceTelemetrySimulator:
 
     def topic(self) -> str:
         return f"{self.topic_prefix}/{self.device_id}/telemetry"
+
+    def command_topic(self) -> str:
+        return f"{self.topic_prefix}/+/commands"
+
+    def handle_command(self, topic: str, payload: bytes) -> tuple[str, dict[str, object]] | None:
+        try:
+            command = json.loads(payload.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        device_id = topic.split("/")[-2] if topic.count("/") >= 2 else ""
+        command_id = command.get("commandId")
+        if command.get("schemaVersion") != "command.v1" or not isinstance(command_id, str) or command.get("deviceId") != device_id or device_id not in self.device_states:
+            return None
+        cached = self.command_results.get(command_id)
+        if cached is not None:
+            return device_id, cached
+        success = self.random.random() >= self.command_failure_rate
+        state = dict(self.device_states[device_id])
+        error = None
+        name = command.get("command")
+        value = command.get("value")
+        allowed = {"led-01": {"on", "off"}, "relay-fan-01": {"on", "off"}, "servo-01": {"set-angle", "off"}, "buzzer-01": {"beep", "off"}}
+        if name not in allowed[device_id] or (name == "set-angle" and (not isinstance(value, (int, float)) or not 0 <= value <= 180)):
+            success, error = False, "unsupported command"
+        if success:
+            if name == "set-angle":
+                state.update({"status": "on", "angle": value})
+            elif name == "beep":
+                state["status"] = "off"
+            else:
+                state["status"] = name
+            state["lastCommandAt"] = now_rfc3339()
+            self.device_states[device_id] = state
+        elif error is None:
+            error = "simulated device failure"
+        result: dict[str, object] = {
+            "schemaVersion": "command-result.v1",
+            "commandId": command_id,
+            "deviceId": device_id,
+            "success": success,
+            "occurredAt": now_rfc3339(),
+        }
+        if success:
+            result["state"] = state
+        else:
+            result["error"] = error
+        if isinstance(command.get("correlationId"), str):
+            result["correlationId"] = command["correlationId"]
+        self.command_results[command_id] = result
+        return device_id, result
 
     def next_event(self) -> dict[str, object] | None:
         sensor = SENSORS[self.sequence % len(SENSORS)]
@@ -137,6 +211,26 @@ def main() -> None:
 
     host, port = parse_mqtt_url(os.getenv("SIMULATOR_MQTT_URL", "mqtt://mosquitto:1883"))
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"{simulator.device_id}-publisher")
+    def on_connect(connected_client: mqtt.Client, _userdata: object, _flags: object, reason_code: object, _properties: object) -> None:
+        if not getattr(reason_code, "is_failure", False):
+            connected_client.subscribe(simulator.command_topic(), qos=1)
+
+    def on_message(connected_client: mqtt.Client, _userdata: object, message: mqtt.MQTTMessage) -> None:
+        handled = simulator.handle_command(message.topic, message.payload)
+        if handled is None or not simulator.command_ack_enabled:
+            return
+        device_id, result = handled
+        if simulator.command_ack_delay_ms:
+            time.sleep(simulator.command_ack_delay_ms / 1000.0)
+        if simulator.random.random() < simulator.command_ack_drop_rate:
+            print(json.dumps({"event": "command.ack.dropped", "commandId": result["commandId"]}), flush=True)
+            return
+        ack_topic = f"{simulator.topic_prefix}/{device_id}/command-results"
+        connected_client.publish(ack_topic, json.dumps(result, separators=(",", ":")), qos=1)
+        print(json.dumps({"event": "command.ack.published", "commandId": result["commandId"], "success": result["success"]}), flush=True)
+
+    client.on_connect = on_connect
+    client.on_message = on_message
     client.connect(host, port, keepalive=30)
     client.loop_start()
 
@@ -148,6 +242,8 @@ def main() -> None:
                 "topic": simulator.topic(),
                 "eventsPerHour": simulator.events_per_hour,
                 "scenario": simulator.scenario,
+                "commandTopic": simulator.command_topic(),
+                "commandAckEnabled": simulator.command_ack_enabled,
             }
         ),
         flush=True,

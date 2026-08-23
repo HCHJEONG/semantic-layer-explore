@@ -10,12 +10,13 @@ import (
 )
 
 type Producer struct {
-	writer        *kafka.Writer
-	rebuildWriter *kafka.Writer
-	logger        *slog.Logger
+	writer              *kafka.Writer
+	rebuildWriter       *kafka.Writer
+	commandResultWriter *kafka.Writer
+	logger              *slog.Logger
 }
 
-func NewProducer(brokers []string, topic string, rebuildTopic string, logger *slog.Logger) *Producer {
+func NewProducer(brokers []string, topic string, rebuildTopic string, commandResultTopic string, logger *slog.Logger) *Producer {
 	return &Producer{
 		writer: &kafka.Writer{
 			Addr:         kafka.TCP(brokers...),
@@ -24,9 +25,16 @@ func NewProducer(brokers []string, topic string, rebuildTopic string, logger *sl
 			RequiredAcks: kafka.RequireOne,
 			Async:        false,
 		},
-		rebuildWriter: &kafka.Writer{Addr: kafka.TCP(brokers...), Topic: rebuildTopic, RequiredAcks: kafka.RequireOne, Async: false},
-		logger:        logger,
+		rebuildWriter:       &kafka.Writer{Addr: kafka.TCP(brokers...), Topic: rebuildTopic, RequiredAcks: kafka.RequireOne, Async: false},
+		commandResultWriter: &kafka.Writer{Addr: kafka.TCP(brokers...), Topic: commandResultTopic, Balancer: &kafka.Hash{}, RequiredAcks: kafka.RequireOne, Async: false},
+		logger:              logger,
 	}
+}
+
+func (p *Producer) PublishCommandResult(ctx context.Context, deviceID string, value []byte) error {
+	publishCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return p.commandResultWriter.WriteMessages(publishCtx, kafka.Message{Key: []byte(deviceID), Value: value})
 }
 
 type GraphRebuild struct {
@@ -69,5 +77,8 @@ func (p *Producer) Close() {
 	}
 	if err := p.rebuildWriter.Close(); err != nil {
 		p.logger.Warn("Kafka rebuild writer close failed", "error", err)
+	}
+	if err := p.commandResultWriter.Close(); err != nil {
+		p.logger.Warn("Kafka command result writer close failed", "error", err)
 	}
 }

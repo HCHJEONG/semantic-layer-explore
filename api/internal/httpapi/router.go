@@ -12,6 +12,7 @@ import (
 	"semantic-layer-explore/api/internal/config"
 	"semantic-layer-explore/api/internal/graph"
 	"semantic-layer-explore/api/internal/kafka"
+	"semantic-layer-explore/api/internal/mqtt"
 	"semantic-layer-explore/api/internal/persistence"
 )
 
@@ -21,10 +22,11 @@ type Router struct {
 	store    *persistence.Store
 	logger   *slog.Logger
 	graph    *graph.Client
+	mqtt     *mqtt.Adapter
 }
 
-func NewRouter(cfg config.Config, producer *kafka.Producer, store *persistence.Store, logger *slog.Logger) http.Handler {
-	router := &Router{cfg: cfg, producer: producer, store: store, logger: logger, graph: graph.NewClient(cfg.Neo4jHTTPURL, cfg.Neo4jUser, cfg.Neo4jPassword)}
+func NewRouter(cfg config.Config, producer *kafka.Producer, store *persistence.Store, mqttAdapter *mqtt.Adapter, logger *slog.Logger) http.Handler {
+	router := &Router{cfg: cfg, producer: producer, store: store, mqtt: mqttAdapter, logger: logger, graph: graph.NewClient(cfg.Neo4jHTTPURL, cfg.Neo4jUser, cfg.Neo4jPassword)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", router.health)
 	mux.HandleFunc("GET /ready", router.ready)

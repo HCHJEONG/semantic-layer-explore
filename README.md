@@ -63,6 +63,7 @@ long-running services.
 | Two-worker partition distribution | Implemented and verified |
 | Mosquitto broker | Deployed internally |
 | Go MQTT subscriber | Implemented and locally verified with Mosquitto |
+| MQTT device commands and acknowledgements | Go outbound, Python virtual-device ACK, Kafka result, and worker finalization locally verified |
 | Neo4j service | Deployed and startup verified |
 | Rust Kafka consumer and Neo4j projection | Rebuild flow implemented and locally verified |
 | Go graph queries and Next.js Explorer projection view | Source/projection inspection implemented and locally verified |
@@ -70,7 +71,7 @@ long-running services.
 The authoritative-store migrations, deterministic worker rule path, event and
 Explain read path, and Neo4j Explorer view are locally verified. See the
 [distributed expansion plan](./docs/implementation-2nd-plan.md) and the latest
-[Explorer handoff](./docs/implementation-2nd-012-neo4j-explorer-view-handoff.md)
+[device-command handoff](./docs/implementation-2nd-013-mqtt-device-command-handoff.md)
 for the remaining broader-stage boundaries.
 
 ## Reading The System As One Story
@@ -158,8 +159,10 @@ Imagine a factory temperature sensor reporting `37.8 C`.
    three, or more consumers.
 5. **Operational persistence.** The worker validates the event and stores it in
    PostgreSQL with its Kafka position. It applies enabled PostgreSQL rules
-   deterministically and commits cooldown, virtual device state, causal events,
-   and audit evidence transactionally.
+   deterministically and commits cooldown, pending device commands, causal
+   events, and audit evidence transactionally. Go publishes pending commands
+   over MQTT; device ACKs return through Kafka before the worker finalizes
+   PostgreSQL device state.
 6. **Read-side use.** Go exposes authoritative operational state, SSE events,
    causal traces, and bounded Neo4j reads to the Next.js BFF. Rust independently
    rebuilds Neo4j without putting it on the telemetry write path.

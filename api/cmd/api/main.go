@@ -25,7 +25,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	producer := kafka.NewProducer(cfg.KafkaBrokers, cfg.TelemetryTopic, cfg.GraphRebuildTopic, logger)
+	producer := kafka.NewProducer(cfg.KafkaBrokers, cfg.TelemetryTopic, cfg.GraphRebuildTopic, cfg.CommandResultTopic, logger)
 	defer producer.Close()
 
 	store, err := persistence.NewStore(ctx, cfg.DatabaseURL)
@@ -35,9 +35,10 @@ func main() {
 	}
 	defer store.Close()
 
+	mqttAdapter := mqtt.NewAdapter(cfg, producer, store, logger)
 	server := &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      httpapi.NewRouter(cfg, producer, store, logger),
+		Handler:      httpapi.NewRouter(cfg, producer, store, mqttAdapter, logger),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 0,
 		IdleTimeout:  60 * time.Second,
@@ -52,7 +53,7 @@ func main() {
 	}()
 
 	go ssh.Listen(ctx, cfg, logger)
-	go mqtt.Listen(ctx, cfg, producer, logger)
+	go mqttAdapter.Run(ctx)
 	go outbox.New(store, producer, cfg.GraphRebuildTopic, logger).Run(ctx)
 
 	<-ctx.Done()

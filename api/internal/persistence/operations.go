@@ -14,10 +14,12 @@ type Sensor struct {
 	LatestReading any    `json:"latestReading"`
 }
 type Device struct {
-	ID    string         `json:"id"`
-	Name  string         `json:"name"`
-	Type  string         `json:"type"`
-	State map[string]any `json:"state"`
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	Type          string         `json:"type"`
+	State         map[string]any `json:"state"`
+	CommandStatus string         `json:"commandStatus,omitempty"`
+	CommandID     string         `json:"commandId,omitempty"`
 }
 type Rule struct {
 	ID              string         `json:"id"`
@@ -59,7 +61,7 @@ func (store *Store) ListSensors(ctx context.Context) ([]Sensor, error) {
 }
 
 func (store *Store) ListDevices(ctx context.Context) ([]Device, error) {
-	rows, err := store.pool.Query(ctx, `select id,name,type,state from devices where enabled order by case type when 'led' then 1 when 'servo' then 2 when 'buzzer' then 3 when 'relay' then 4 else 5 end,id`)
+	rows, err := store.pool.Query(ctx, `select d.id,d.name,d.type,d.state,coalesce(c.status,''),coalesce(c.command_id,'') from devices d left join lateral (select command_id,status from device_command where device_id=d.id order by requested_at desc limit 1) c on true where d.enabled order by case d.type when 'led' then 1 when 'servo' then 2 when 'buzzer' then 3 when 'relay' then 4 else 5 end,d.id`)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +70,7 @@ func (store *Store) ListDevices(ctx context.Context) ([]Device, error) {
 	for rows.Next() {
 		var item Device
 		var state []byte
-		if err := rows.Scan(&item.ID, &item.Name, &item.Type, &state); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.Type, &state, &item.CommandStatus, &item.CommandID); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(state, &item.State); err != nil {

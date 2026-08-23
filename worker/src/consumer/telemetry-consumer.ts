@@ -4,6 +4,8 @@ import { config } from "../config.js";
 import { parseTelemetry } from "../contracts/telemetry.js";
 import { DeadLetterService } from "../dead-letter/dead-letter-service.js";
 import { TelemetryService } from "../telemetry/telemetry-service.js";
+import { parseCommandResult } from "../contracts/command-result.js";
+import { CommandResultService } from "../commands/command-result-service.js";
 
 @Injectable()
 export class TelemetryConsumer {
@@ -14,6 +16,7 @@ export class TelemetryConsumer {
   constructor(
     private readonly telemetry: TelemetryService,
     private readonly deadLetters: DeadLetterService,
+    private readonly commandResults: CommandResultService,
   ) {}
 
   async startWithRetry() {
@@ -34,14 +37,15 @@ export class TelemetryConsumer {
   async start() {
     await this.consumer.connect();
     await this.consumer.subscribe({ topic: config.telemetryTopic, fromBeginning: false });
-    this.logger.log(`worker ${config.workerId} consuming ${config.telemetryTopic} as ${config.consumerGroup}`);
+    await this.consumer.subscribe({ topic: config.commandResultTopic, fromBeginning: false });
+    this.logger.log(`worker ${config.workerId} consuming ${config.telemetryTopic} and ${config.commandResultTopic} as ${config.consumerGroup}`);
     await this.consumer.run({
       autoCommit: false,
       eachMessage: async ({ topic, partition, message }) => {
         try {
-          if (!message.value) throw new Error("Telemetry message value is empty");
-          const event = parseTelemetry(message.value);
-          await this.telemetry.handle(event, { topic, partition, offset: message.offset });
+          if (!message.value) throw new Error("Kafka message value is empty");
+          if (topic === config.commandResultTopic) await this.commandResults.handle(parseCommandResult(message.value));
+          else await this.telemetry.handle(parseTelemetry(message.value), { topic, partition, offset: message.offset });
         } catch (error) {
           await this.deadLetters.record({
             topic,
@@ -65,5 +69,6 @@ export class TelemetryConsumer {
 
 function classifyFailure(error: unknown) {
   if (error instanceof Error && error.message.includes("Invalid telemetry event")) return "telemetry.validation";
+  if (error instanceof Error && error.message.includes("command result")) return "command-result.validation";
   return "telemetry.processing";
 }

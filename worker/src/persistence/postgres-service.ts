@@ -3,6 +3,7 @@ import pg from "pg";
 import { config } from "../config.js";
 import type { TelemetryEvent } from "../contracts/telemetry.js";
 import { applyAction, matchesCondition, type RuleAction, type RuleCondition } from "../rules/deterministic-rule.js";
+import type { CommandResult } from "../contracts/command-result.js";
 
 const { Pool } = pg;
 
@@ -142,12 +143,11 @@ export class PostgresService implements OnModuleDestroy {
         const deviceResult = await client.query("select type, state from devices where id=$1 and enabled for update", [action.deviceId]);
         if (deviceResult.rowCount !== 1) throw new Error(`Rule ${row.id} targets an unavailable device: ${action.deviceId}`);
         const device = deviceResult.rows[0] as { type: string; state: Record<string, unknown> };
-        const state = applyAction(device.type, device.state, action, triggeredAt);
+        applyAction(device.type, device.state, action, triggeredAt);
         const correlationId = event.correlationId ?? event.eventId;
         const ruleEventId = `rule-event:${event.eventId}:${row.id}`;
         const commandEventId = `device-command:${event.eventId}:${row.id}`;
-        const command = { commandId: commandEventId, deviceId: action.deviceId, deviceType: device.type, command: action.command, ...(action.value === undefined ? {} : { value: action.value }), issuedBy: "rule-engine", issuedAt: triggeredAt, causation: { correlationId, ruleId: row.id, ruleEventId, triggerEventId: event.eventId } };
-        await client.query("update devices set state=$2::jsonb, updated_at=$3 where id=$1", [action.deviceId, JSON.stringify(state), triggeredAt]);
+        const command = { schemaVersion: "command.v1", commandId: commandEventId, deviceId: action.deviceId, command: action.command, ...(action.value === undefined ? {} : { value: action.value }), issuedBy: "rule-engine", issuedAt: triggeredAt, correlationId, causation: { correlationId, ruleId: row.id, ruleEventId, triggerEventId: event.eventId } };
         await client.query("update rules set last_triggered_at=$2, updated_at=$2 where id=$1", [row.id, triggeredAt]);
         await client.query(
           `insert into workspace_event(event_id,type,source_type,source_id,payload,occurred_at)
@@ -155,9 +155,14 @@ export class PostgresService implements OnModuleDestroy {
           [ruleEventId, row.id, JSON.stringify({ ruleId: row.id, condition, action, reading: { eventId: event.eventId, sensorId: event.sensorId, sensorType: event.payload.kind, value: event.payload.value, unit: event.payload.unit, measuredAt: event.measuredAt, source: event.source ?? "mqtt" }, causation: { correlationId, triggerEventId: event.eventId } }), triggeredAt],
         );
         await client.query(
+          `insert into device_command(command_id,device_id,payload,status,requested_at)
+           values($1,$2,$3::jsonb,'pending',$4) on conflict(command_id) do nothing`,
+          [commandEventId, action.deviceId, JSON.stringify(command), triggeredAt],
+        );
+        await client.query(
           `insert into workspace_event(event_id,type,source_type,source_id,payload,occurred_at)
-           values($1,'device.command.succeeded','device',$2,$3::jsonb,$4) on conflict(event_id) do nothing`,
-          [commandEventId, action.deviceId, JSON.stringify({ command, result: { success: true, deviceId: action.deviceId, state } }), triggeredAt],
+           values($1,'device.command.pending','device',$2,$3::jsonb,$4) on conflict(event_id) do nothing`,
+          [`${commandEventId}:pending`, action.deviceId, JSON.stringify({ command, status: "pending" }), triggeredAt],
         );
         await client.query(
           `insert into audit_event(audit_id,type,occurred_at,payload,correlation_id)
@@ -168,6 +173,39 @@ export class PostgresService implements OnModuleDestroy {
       }
       await client.query("commit");
       return matched;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async applyCommandResult(result: CommandResult) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const commandRow = await client.query("select device_id,payload,status from device_command where command_id=$1 for update", [result.commandId]);
+      if (commandRow.rowCount !== 1) throw new Error(`Unknown command result: ${result.commandId}`);
+      const command = commandRow.rows[0] as { device_id: string; payload: Record<string, unknown>; status: string };
+      if (command.device_id !== result.deviceId) throw new Error(`Command result device mismatch: ${result.commandId}`);
+      if (command.status === "succeeded" || command.status === "failed") {
+        await client.query("commit");
+        return { duplicate: true };
+      }
+      if (result.success) {
+        if (!result.state) throw new Error(`Successful command result has no state: ${result.commandId}`);
+        await client.query("update devices set state=$2::jsonb,updated_at=$3 where id=$1", [result.deviceId, JSON.stringify(result.state), result.occurredAt]);
+      }
+      const status = result.success ? "succeeded" : "failed";
+      await client.query("update device_command set status=$2,completed_at=$3,result=$4::jsonb,last_error=$5 where command_id=$1", [result.commandId, status, result.occurredAt, JSON.stringify(result), result.error ?? null]);
+      await client.query(
+        `insert into workspace_event(event_id,type,source_type,source_id,payload,occurred_at)
+         values($1,$2,'device',$3,$4::jsonb,$5) on conflict(event_id) do nothing`,
+        [result.commandId, `device.command.${status}`, result.deviceId, JSON.stringify({ command: command.payload, result }), result.occurredAt],
+      );
+      await client.query("commit");
+      return { duplicate: false };
     } catch (error) {
       await client.query("rollback");
       throw error;

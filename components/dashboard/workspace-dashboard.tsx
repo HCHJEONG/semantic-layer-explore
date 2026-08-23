@@ -76,6 +76,7 @@ function readingLabel(reading: SensorReading | undefined) {
 function eventDescription(event: WorkspaceEvent, rules: RuleRecord[]) {
   if (event.type === "sensor.reading") return `${event.sourceId} reported a new reading`;
   if (event.type === "rule.matched") return `${rules.find((rule) => rule.id === event.sourceId)?.name ?? "Automation rule"} matched`;
+  if (event.type === "device.command.pending") return `${event.sourceId} is awaiting device acknowledgement`;
   if (event.type === "device.command.succeeded") return `${event.sourceId} accepted a device command`;
   if (event.type === "device.command.failed") return `${event.sourceId} rejected a device command`;
   if (event.type === "simulator.scenario") return `Scenario changed to ${event.sourceId}`;
@@ -84,6 +85,8 @@ function eventDescription(event: WorkspaceEvent, rules: RuleRecord[]) {
 }
 
 function deviceStateLabel(device: WorkspaceState["devices"][number]) {
+  if (device.commandStatus === "pending" || device.commandStatus === "published") return "Pending ACK";
+  if (device.commandStatus === "failed") return "Failed";
   if (device.type === "servo") return `${device.state.angle ?? 90}°`;
   if (device.type === "buzzer") return "Beep";
   return device.state.status;
