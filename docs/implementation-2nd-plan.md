@@ -6,6 +6,18 @@
 
 따라서 이 문서의 "확정 아키텍처"와 완료 기준은 2차 확장 범위 안에서의 목표 상태를 뜻한다. 현재 코드가 이미 이 구조로 구현되어 있다는 의미가 아니며, 착수 전에는 반드시 1차 문서와 실제 저장소 상태를 먼저 확인한다.
 
+### 0.1 확정된 Polyglot Monorepo 범위
+
+이 2차 계획은 의도적으로 거대한 polyglot distributed monorepo를 만든다. Go, NestJS/TypeScript, Rust, Kafka, PostgreSQL, MQTT, Neo4j는 제거하거나 단일 runtime으로 접기 위한 후보가 아니라 이 단계의 핵심 학습·검증 대상이다.
+
+구현 중 난점이 생겨도 기본 대응은 architecture 축소가 아니다. sequencing, profile 분리, instance size 조정, resource limit, contract test, observability, rollout gate로 복잡도를 통제한다. 단일 Next.js application, 단일 database, 단일 language runtime으로 되돌아가는 방향은 이 2차 계획의 목표와 맞지 않는다.
+
+### 0.2 범위 통제 원칙
+
+범위는 줄이지 않고 순서를 통제한다. 핵심 telemetry path와 failure semantics를 먼저 증명하고, Mastra migration, SSH/Scene IR, Rust/Neo4j projection은 각자의 검증 gate를 통과하며 붙인다.
+
+초기 instance는 `aws-demo`의 `t3a.medium`을 기준으로 잡지만, 이는 비용 효율적인 출발점이다. 실제 측정에서 CPU, memory, I/O, swap, PSI 한계가 드러나면 `t3a.large` 이상으로 올리는 것은 정상적인 capacity adjustment이며 프로젝트 범위 축소 사유가 아니다.
+
 작업의 최종 목표는 다음 구조를 실제로 구현하고 검증하는 것이다.
 
 ```text
@@ -294,6 +306,8 @@ PostgreSQL은 authoritative operational store다. Neo4j는 ontology와 semantic 
 - PostgreSQL과 Neo4j에 application-level dual-write 금지
 - graph projection은 eventual consistency를 명시적으로 허용
 - raw·고빈도 telemetry는 PostgreSQL/Kafka에 유지
+- 초기 사용자-facing graph UI는 `/operations`와 Explain/Impact drill-down에 한정한다.
+- Next.js는 Neo4j에 직접 연결하지 않는다. Next.js API route는 thin BFF로 Go Gateway의 read-only graph query endpoint를 호출한다.
 
 ### 4.5 Next.js와 SSH의 지위
 
@@ -306,6 +320,12 @@ Next.js와 SSH는 같은 World Runtime을 사용하는 동등한 presentation ad
 | External agent | REST/WebSocket | 구조화 JSON action/result |
 
 Scene IR에는 ANSI color code나 React component 이름을 넣지 않는다. `WARNING`, `SYSTEM`, `DIALOGUE` 같은 semantic style과 timeline을 기술하고 renderer가 client capability에 맞게 변환한다.
+
+초기 UI 우선순위는 `/operations`가 높다. `/operations`는 Kafka lag, worker assignment, DLQ, processing latency, MQTT 상태, PostgreSQL/Neo4j projection lag처럼 분산 처리의 증거를 보여주는 관측 화면이다.
+
+초기 Neo4j projection 활용도 `/operations`와 Explain/Impact drill-down에서 시작한다. 사용자는 device나 event를 선택해 factory, sensor, rule, responsible actor, dependency, downstream impact 같은 관계를 확인한다. 이때 Next.js API는 화면에 필요한 DTO만 얇게 구성하고, Neo4j driver와 Cypher query는 Go Gateway 내부에 둔다.
+
+`/terminal`과 SSH는 처음부터 화려한 cinematic experience를 완성하려 하지 않는다. 초기 구현은 동일 action contract와 Scene IR을 Next.js와 SSH 양쪽에서 thin adapter로 재생한다는 사실을 증명하는 데 집중한다. 타이밍, text-art, keyboard/mouse interaction, 장면 연출의 품질은 telemetry path, idempotency, rebalance, operations observability가 검증된 뒤 확장한다.
 
 Next.js 최소 화면은 다음 두 개다.
 
@@ -718,11 +738,26 @@ Rebuild는 기존 graph를 즉시 삭제한 뒤 장시간 비워두는 방식보
 
 ### 9.6 Graph query 경계
 
-- Go API: UI용 graph query endpoint 제공 가능
+- Go API: UI용 read-only graph query endpoint 제공
+- Next.js API route: thin BFF로 Go graph endpoint 호출, UI DTO shaping, degraded state 전달
 - NestJS/Mastra worker: semantic context query port 사용
 - Neo4j Cypher를 domain/Mastra tool 여러 곳에 흩어놓지 않음
+- Next.js가 Neo4j driver나 Cypher를 직접 소유하지 않음
+- 범용 Cypher proxy 금지. 제품 의미가 있는 query endpoint만 제공
 - graph query timeout과 result size 제한
 - variable-length traversal 깊이 제한
+
+초기 endpoint 후보:
+
+```text
+GET /graph/devices/{deviceId}/impact
+GET /graph/devices/{deviceId}/responsibility
+GET /graph/rules/{ruleId}/dependencies
+GET /graph/events/{eventId}/context
+GET /graph/projection/status
+```
+
+`/graph/events/{eventId}/context`는 PostgreSQL의 event/causal data와 Neo4j semantic relation을 조합해 Explain/Impact UI에 제공할 수 있다. 단, 조합 책임은 Go Gateway의 application/query service에 두고 Next.js는 read-only response를 렌더링한다.
 
 ## 10. NestJS/Mastra Worker 설계
 
@@ -897,6 +932,7 @@ Next.js는 presentation layer로 유지한다.
 
 - PostgreSQL 직접 연결 금지
 - Kafka 직접 연결 금지
+- Neo4j 직접 연결 금지
 - 브라우저 MQTT 직접 연결 금지
 - business write는 Go API 사용
 - 처리 결과는 REST + SSE/WebSocket으로 수신
@@ -905,11 +941,20 @@ Next.js는 presentation layer로 유지한다.
 - 장시간 작업 상태 조회 endpoint 제공
 - `/terminal`은 Scene IR을 React/xterm-compatible renderer로 재생
 - `/operations`는 worker, partition, lag, retry, DLQ, MQTT 상태를 표시
+- `/operations`와 Explain/Impact graph UI는 Next.js API route가 Go Gateway graph query endpoint를 호출해 제공
 - Next.js와 SSH action은 동일한 Go application service를 호출
 - server component의 단순 조회는 Go REST API를 사용
 - 실시간 장면·진행상태는 WebSocket/SSE를 사용
 
 SQLite는 신규 경로가 검증된 뒤 제거한다. 장기간 dual-write하지 않는다.
+
+초기 graph UI 방침:
+
+- Next.js는 Neo4j에 직접 붙지 않는다.
+- Next.js API route는 Go Gateway 호출, response mapping, auth/session bridge, degraded UI 상태 전달만 담당한다.
+- Go Gateway는 Neo4j connection, Cypher, traversal depth, timeout, result size limit, projection stale 판단을 소유한다.
+- 초기 UI 범위는 Operations device/event drill-down과 Explain/Impact context에 한정한다.
+- Semantic Explorer 고도화와 AI Copilot graph reasoning은 이후 단계에서 worker 또는 별도 graph query backend 도입을 검토한다.
 
 권장 API 경계:
 
@@ -992,7 +1037,7 @@ worker container 이름은 Compose가 자동 생성한다. instance ID, assigned
 
 ### 13.5 Graph profile
 
-Neo4j는 메모리 사용량이 크므로 기본 `t3a.medium` runtime에 무조건 포함하지 않는다.
+Neo4j와 Rust graph worker는 2차 계획의 확정 범위에 포함된다. 다만 graph projection은 운영 mode를 분리하기 위해 `graph` profile로 실행할 수 있게 한다. 이는 architecture 축소가 아니라 기본 telemetry demo, graph projection 실험, memory/capacity 측정을 분리하는 운영 전략이다.
 
 ```yaml
 services:
@@ -1023,7 +1068,7 @@ services:
 
 ### 14.2 Runtime memory budget
 
-2 vCPU, 4 GiB에서도 모든 optional service가 항상 안정적이라고 가정하지 않는다. 다음은 목표 범위이며 실제 RSS와 PSI를 측정해 조정한다.
+2 vCPU, 4 GiB의 `t3a.medium`은 초기 실험 기준이다. 모든 service가 이 instance에서 항상 안정적이어야 한다고 가정하지 않는다. 다음은 목표 범위이며 실제 RSS와 PSI를 측정해 조정한다.
 
 ```text
 기존 demo containers 약 530 MiB
@@ -1050,12 +1095,13 @@ OS/Docker           나머지
 - swap은 OOM 완화용일 뿐 정상 메모리로 계산하지 않음
 - OOM, sustained swap, memory PSI, CPU credit exhaustion 측정
 
-상시 구성이 medium의 안전 범위를 넘으면 결과를 숨기지 않는다. 다음 중 하나를 선택하고 문서화한다.
+상시 구성이 medium의 안전 범위를 넘으면 결과를 숨기지 않는다. 이 상황은 범위 축소 실패가 아니라 capacity planning 결과로 기록한다. 다음 중 하나를 선택하고 문서화한다.
 
-1. 상시 데모에서 traffic을 낮춤
-2. 사용하지 않는 기존 demo container를 중지
-3. Kafka cluster/관측 도구를 실험 profile로 분리
-4. Neo4j와 Rust graph worker를 `graph` profile로 분리
+1. `aws-demo`를 `t3a.large` 이상으로 승격
+2. 상시 데모 traffic과 load-test traffic을 분리
+3. 사용하지 않는 기존 demo container를 중지
+4. Kafka cluster/관측 도구를 실험 profile로 분리
+5. Neo4j와 Rust graph worker를 `graph` profile로 실행하되, graph E2E 검증 시에는 반드시 포함
 
 최종 분산 실험에서는 worker 2개 이상 실행이 필수다.
 
@@ -1319,14 +1365,19 @@ MQTT → Go → Kafka → Worker × 2 → PostgreSQL
 - Next.js API client 변경
 - seed/data migration
 - 회귀 후 SQLite 제거
-- `/terminal`, `/operations`
-- Scene IR React renderer
-- SSH ANSI renderer와 동일 action contract
+- `/operations` 우선 구현: worker, partition, lag, retry, DLQ, MQTT, processing latency, PostgreSQL 상태 표시
+- `/operations` graph drill-down: Next.js API route → Go Gateway → Neo4j read-only query
+- Explain/Impact graph context: event 선택 시 PostgreSQL causal data와 Neo4j semantic relation을 Go Gateway에서 조합
+- `/terminal` 초기 구현: Scene IR thin React renderer
+- SSH 초기 구현: 동일 action contract와 Scene IR을 ANSI thin renderer로 재생
+- terminal/SSH cinematic polish는 telemetry path와 operations observability 검증 이후 확장
 
 완료 조건:
 
 - 핵심 화면에 SQLite runtime dependency 없음
 - UI가 distributed path의 처리 결과 표시
+- `/operations`가 분산 처리 상태와 장애 실험 결과를 확인할 수 있는 1차 관측면 역할을 함
+- Next.js가 Neo4j에 직접 연결하지 않고 Go Gateway의 graph query API를 통해 projection을 사용함
 
 ### Milestone 5 — 장애·확장 검증
 
@@ -1394,6 +1445,7 @@ Go API ─┬→ Kafka
 - container 안에 여러 runtime 강제 결합
 - 단일 broker를 Kafka 고가용성이라고 표현
 - PostgreSQL 모델을 실제 DynamoDB와 동일하다고 표현
+- 확정된 polyglot architecture를 단일 runtime 또는 단일 database application으로 단순화해 대체
 
 ---
 
@@ -1470,6 +1522,8 @@ docker compose up --scale worker=4
 30. 동기 조회는 Kafka 없이 응답하고, AI·대량·재처리 작업만 Kafka 경로를 사용한다.
 31. SSH는 public-key 인증, session timeout, resize, disconnect cleanup을 지원하며 OS shell을 노출하지 않는다.
 32. Spring Boot가 중복 backend로 추가되지 않는다.
+33. Go, NestJS/TypeScript, Rust, Kafka, PostgreSQL, MQTT, Neo4j의 runtime 경계와 contract evidence가 문서화된다.
+34. `/operations`가 worker partition, lag, retry, DLQ, projection 상태, memory/capacity 관측을 보여주는 primary operations UI로 동작한다.
 
 ---
 
