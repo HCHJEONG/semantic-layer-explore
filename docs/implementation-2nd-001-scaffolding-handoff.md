@@ -7,7 +7,7 @@ distributed monorepo 스캐폴딩과 telemetry vertical slice의 실제 작업 �
 기록한다.
 
 - `docs/implementation-2nd-plan.md`: 확정된 2차 확장 계획
-- `docs/current-state.md`: 스캐폴딩 시작 전 저장소 상태
+- `docs/current-state-before-2nd-plan.md`: 스캐폴딩 시작 전 저장소 상태
 - 이 문서: 첫 스캐폴딩에서 실제 생성ㆍ구현ㆍ검증한 내용과 후속 작업 경계
 
 문서에서 `완료` 또는 `검증`이라고 표현하는 항목은 로컬 Docker 환경에서
@@ -39,7 +39,7 @@ distributed monorepo 스캐폴딩과 telemetry vertical slice의 실제 작업 �
 3. `docs/implementation-2nd-plan.md`
 4. `docs/ontology-modeling-notes.md`
 
-조사 결과는 `docs/current-state.md`에 기록했다. 주요 inventory 범위는 다음과
+조사 결과는 `docs/current-state-before-2nd-plan.md`에 기록했다. 주요 inventory 범위는 다음과
 같다.
 
 - 루트 Next.js App Router와 API route
@@ -49,7 +49,7 @@ distributed monorepo 스캐폴딩과 telemetry vertical slice의 실제 작업 �
 - 기존 Mastra Explain Event workflow와 LLM provider boundary
 - 2차 계획 대비 누락된 service, contract, infrastructure
 
-`docs/current-state.md`는 작업 전 시점 기록이므로 이 문서의 완료 상태와 섞어
+`docs/current-state-before-2nd-plan.md`는 작업 전 시점 기록이므로 이 문서의 완료 상태와 섞어
 갱신하지 않는다.
 
 ## 2. 언어 중립 계약 스캐폴딩
@@ -435,7 +435,7 @@ Go와 Cargo는 WSL에 설치하지 않았기 때문에 host에서 직접 `go tes
 - `graph-worker/`
 - `compose.yaml`
 - root `Dockerfile`
-- `docs/current-state.md`
+- `docs/current-state-before-2nd-plan.md`
 - 이 handoff 문서
 
 기존 파일 중 스캐폴딩 연결을 위해 변경한 주요 파일:

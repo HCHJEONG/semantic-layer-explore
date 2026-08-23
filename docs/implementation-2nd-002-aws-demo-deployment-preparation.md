@@ -214,7 +214,7 @@ interpolation에 사용하지만 frontend container에는 infrastructure credent
 수행하지 않는다. PostgreSQL, Kafka, Mosquitto, Neo4j와 SQLite data volume은
 보존한다.
 
-## 10. 검증 상태와 다음 단계
+## 10. 검증 상태와 후속 완료 기록
 
 실제로 통과한 배포 준비 검증:
 
@@ -227,7 +227,7 @@ interpolation에 사용하지만 frontend container에는 infrastructure credent
 - AWS hardcoded infrastructure credential 제거
 - staged diff와 whitespace 검사
 
-아직 수행하지 않은 항목:
+이 문서를 작성한 시점에는 아래 항목이 아직 남아 있었다.
 
 - 새 Physical AI image의 최종 수동 AWS 배포
 - AWS에서 11개 container 생성 확인
@@ -236,7 +236,11 @@ interpolation에 사용하지만 frontend container에는 infrastructure credent
 - 배포 후 RSS, swap, PSI, I/O 측정
 - `t3a.medium` 유지 또는 `t3a.large` 승격 판단
 
-수동 배포 후에는 container별 RSS, host available memory, swap-in/out,
-`/proc/pressure/memory`, `/proc/pressure/io`, Kafka consumer lag와 Neo4j heap을
-측정한다. 지속 swap, memory PSI 상승, OOM/restart 또는 낮은 available memory가
-확인되면 `t3a.large` 이상으로 조정한다.
+후속 maintainer 수동 작업으로 2차 계획의 `aws-demo` 배포는 완료되었다. 이
+handoff는 배포 준비 단계의 기록이므로, 실제 배포 이후 구현 완료 여부는 최신
+numbered handoff와 2차 계획의 완료 기록을 함께 확인한다.
+
+수동 배포 후 운영 판단에는 container별 RSS, host available memory,
+swap-in/out, `/proc/pressure/memory`, `/proc/pressure/io`, Kafka consumer lag와
+Neo4j heap 측정값을 사용한다. 지속 swap, memory PSI 상승, OOM/restart 또는
+낮은 available memory가 확인되면 `t3a.large` 이상으로 조정한다.

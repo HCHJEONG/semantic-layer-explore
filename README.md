@@ -44,7 +44,8 @@ This is an expansion model for increasing data volume:
 - Kafka carries asynchronous events, while synchronous queries, sessions, and
   light commands use Go HTTP/WebSocket/SSE boundaries.
 
-The verified AWS slice is
+The second-stage `aws-demo` deployment has been completed manually by the
+maintainer. The verified AWS slice includes
 `HTTP -> Go -> Kafka -> NestJS worker x 2 -> PostgreSQL`: a smoke event was
 persisted with its Kafka topic, partition, and offset, and consumer lag returned
 to zero. Processing uses at-least-once delivery, `eventId` idempotency, and manual
@@ -274,7 +275,7 @@ The same plan also preserves a few reusable architecture patterns:
 
 For the ontology terminology decisions that guide the `domain/` model, see [`docs/ontology-modeling-notes.md`](./docs/ontology-modeling-notes.md).
 
-For the retrospective implementation handoff plan that builds on the completed domain model, see [`docs/implementation-1st-plan.md`](./docs/implementation-1st-plan.md). A separate follow-on distributed Physical AI expansion plan lives in [`docs/implementation-2nd-plan.md`](./docs/implementation-2nd-plan.md).
+For the retrospective implementation handoff plan that builds on the completed domain model, see [`docs/implementation-1st-plan.md`](./docs/implementation-1st-plan.md). The completed distributed Physical AI expansion plan lives in [`docs/implementation-2nd-plan.md`](./docs/implementation-2nd-plan.md). The next Kubernetes scaling plan is [`docs/implementation-3rd-plan.md`](./docs/implementation-3rd-plan.md), followed by the industrial edge plan in [`docs/implementation-4th-plan.md`](./docs/implementation-4th-plan.md).
 
 ## Features
 

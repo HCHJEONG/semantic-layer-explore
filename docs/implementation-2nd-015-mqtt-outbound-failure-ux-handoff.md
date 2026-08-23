@@ -208,6 +208,7 @@ Results:
 ## Operational notes and follow-up boundaries
 
 - This work was verified locally only. No AWS deployment was performed in this stage.
+- The broader second-stage `aws-demo` deployment was later completed manually by the maintainer; this line preserves the narrower verification boundary of handoff 015.
 - The state response still reports the configured MQTT adapter, not a live broker-health probe. Command lifecycle and failure evidence are authoritative for an individual outbound command.
 - Retry events are PostgreSQL audit/UI events; final command results remain worker-owned.
 - PostgreSQL is authoritative, Neo4j is unrelated to command delivery, and SQLite is not used.

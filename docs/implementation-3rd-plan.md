@@ -1,308 +1,584 @@
-# Implementation 3rd Plan: Industrial Edge And Production Readiness
+# Implementation 3rd Plan: Kubernetes Scaling And Failure Experiments
 
 ## 0. 문서 성격
 
-이 문서는 2차 분산 Physical AI 구현 이후, 시스템을 실제 공장 현장에 연결하기 위한 3차 계획이다. 현재 코드가 이미 production-ready라는 의미가 아니다. 2차 구현의 완료 사실은 numbered handoff 문서, 특히 `implementation-2nd-015-mqtt-outbound-failure-ux-handoff.md`를 기준으로 판단한다.
+이 문서는 2차 분산 Physical AI 구현과 `aws-demo` 수동 배포 완료 이후에 바로 착수할 3차 계획이다. 기존 Docker Compose 기반 구조를 유지한 채 Kubernetes에서 application workload의 scale-out, self-healing, rolling update, failure timing을 검증한다.
 
-3차의 핵심은 Python simulator를 삭제하는 것이 아니라 **운영 데이터 경로에서 실제 industrial edge adapter로 교체**하는 것이다. Simulator는 contract test, demo, 장애 주입용 reference device로 계속 사용할 수 있다.
+2차 완료 사실은 numbered handoff 문서와 `aws-demo` 배포 완료 기록을 기준으로 판단한다. 이 계획은 4차 industrial edge/production readiness 이전에 Kubernetes orchestration 특성을 먼저 검증하는 단계다.
 
-현재 확정된 중앙 처리 구조는 유지한다.
+### 바로 착수 가능 여부
 
-```text
-MQTT -> Go Gateway -> Kafka -> NestJS/Mastra Worker x N -> PostgreSQL
-PostgreSQL outbox -> Rust Graph Worker -> Neo4j projection
-Browser -> Next.js thin BFF -> Go -> PostgreSQL/Neo4j
+바로 착수 가능하다. 단, 첫 작업은 기능 추가가 아니라 Kubernetes 실험을 안전하게 시작하기 위한 baseline 확인이어야 한다.
+
+착수 전 확인:
+
+- `docker compose config --quiet`
+- root/Go/worker/graph-worker의 기존 테스트
+- `docker compose --profile graph --profile simulator up -d --build --scale worker=2`
+- MQTT command ACK 및 publish-failure lifecycle smoke
+- `semantic.graph.rebuild` projection smoke
+- `kind` 또는 동등한 local Kubernetes cluster 사용 가능 여부
+
+초기 구현 순서:
+
+1. `k8s/` plain manifest를 추가한다.
+2. 먼저 replica 1로 Next.js, Go Gateway, NestJS Worker, Rust Graph Worker를 실행한다.
+3. Kafka, PostgreSQL, Mosquitto, Neo4j는 처음에는 기존 Compose infrastructure에 연결해 application orchestration부터 검증한다.
+4. Go Gateway scale-out 전에 unique MQTT client ID와 shared subscription 설정을 구현한다.
+5. worker scale-out은 Kafka partition assignment와 idempotency evidence를 확인한 뒤 진행한다.
+
+## 1. 목표
+
+현재 Docker Compose 기반 polyglot distributed system을 유지하면서
+Kubernetes에서도 실행·확장하고, 단순 기술 추가가 아니라 실제
+scaling/failure 특성을 검증한다.
+
+핵심 검증 범위:
+
+-   Runtime horizontal scaling
+-   Pod self-healing 및 rolling update
+-   Kafka consumer group rebalance
+-   Kafka partition과 consumer replica 관계
+-   MQTT ingress horizontal scaling
+-   MQTT QoS 1 duplicate handling
+-   End-to-end idempotency
+-   Graceful shutdown / liveness / readiness
+-   장애 복구 및 throughput / latency / lag 관찰
+
+``` text
+Devices / Simulator
+       │ MQTT
+       ▼
+   Mosquitto
+       │
+       ▼
+ Go Gateway × N
+       │
+     Kafka
+   ┌───┼────────┐
+   ▼   ▼        ▼
+Nest  Python   Rust
+× N             │
+   │             ▼
+PostgreSQL     Neo4j
+
+      + Next.js
 ```
 
-Spring Boot와 Kotlin은 3차 기본 범위에 포함하지 않는다. 새 JVM transactional domain core가 실제 요구사항으로 확인될 때만 별도 ADR로 검토한다.
+## 2. 기본 원칙
 
-## 1. 목표 운영 형태
+### Docker Compose 유지
 
-```text
-Sensors / PLC / Actuators
-  -> OPC UA / Modbus TCP-RTU / vendor protocol
-  -> Industrial PC edge adapter
-       - protocol normalization
-       - local safety boundary
-       - disk-backed buffer
-       - device identity and heartbeat
-  -> Factory Mosquitto with mTLS and ACL
-  -> Go / Kafka / NestJS / PostgreSQL
+Kubernetes는 Compose를 제거하지 않는다.
+
+-   Compose: local development, integration test, debugging,
+    single-host/AWS EC2 demo
+-   Kubernetes: scaling, self-healing, rolling deployment,
+    orchestration/failure experiments
+
+### 과도한 재설계 금지
+
+초기 Kubernetes 대상은 Next.js, Go Gateway, NestJS Worker, Python
+Worker/Service, Rust Graph Worker다.
+
+Kafka, PostgreSQL, Neo4j, Mosquitto 같은 stateful infrastructure는
+처음부터 Kubernetes 내부로 옮기지 않아도 된다. Application
+orchestration부터 검증한다.
+
+## 3. 권장 구조
+
+``` text
+k8s/
+├── namespace.yaml
+├── config/
+│   ├── configmap.yaml
+│   └── secrets.example.yaml
+├── next/
+│   ├── deployment.yaml
+│   └── service.yaml
+├── go-gateway/
+│   ├── deployment.yaml
+│   ├── service.yaml
+│   └── hpa.yaml
+├── nest-worker/
+│   ├── deployment.yaml
+│   └── hpa.yaml
+├── python-worker/
+│   └── deployment.yaml
+├── rust-graph-worker/
+│   └── deployment.yaml
+└── ingress/
+    └── ingress.yaml
 ```
 
-중앙 시스템 장애가 설비의 기본 안전 동작을 막아서는 안 된다. Emergency stop, PLC interlock, 수동 운전 우선권, 즉시 보호 동작은 edge/PLC에 남긴다. 중앙 rule과 AI는 안전 제어기를 대체하지 않는다.
+초기에는 Helm보다 plain Kubernetes manifest를 사용한다. 이후 필요하면
+Helm/Kustomize를 검토한다.
 
-## 2. 현재 기준선
+## 4. Local Kubernetes
 
-이미 구현되거나 로컬 검증된 범위:
+첫 구현은 EKS보다 `kind`를 우선 사용한다. 필요하면 minikube를 대안으로
+둔다.
 
-- Versioned MQTT telemetry, command, command-result JSON contract
-- Go MQTT subscriber와 outbound command dispatcher
-- Bounded publish retry, ACK timeout, negative ACK, idempotent finalization
-- Kafka at-least-once 처리와 PostgreSQL idempotency
-- NestJS deterministic rule processing 및 conditional Mastra workflow
-- PostgreSQL authoritative store와 SQLite 제거
-- Rust 기반 Neo4j rebuild projection과 제한된 Go graph read
-- 기존 UI의 command lifecycle, event timeline, causal Explain evidence
-- Python simulator의 telemetry, virtual-device state, ACK 및 실패 주입
-
-아직 production-ready로 보지 않는 핵심 이유:
-
-- 실제 PLC/센서 protocol adapter가 없음
-- MQTT mTLS, 장치별 ACL, certificate lifecycle이 없음
-- broker 및 장치의 실시간 연결 상태 모델이 없음
-- edge store-and-forward와 장기 offline 복구가 없음
-- MQTT ACK와 물리적 동작 완료가 구분되지 않음
-- OT safety interlock과 승인 정책이 없음
-- HA, backup/restore drill, production observability가 충분하지 않음
-
-## 3. 설계 원칙
-
-1. Read-only telemetry부터 시작하고 actuator write는 뒤에 연다.
-2. PLC/edge의 safety logic을 중앙 LLM이나 Kafka workflow로 옮기지 않는다.
-3. 실제 장치도 simulator와 동일한 versioned contract를 사용한다.
-4. Vendor protocol과 중앙 domain contract 사이에 명시적인 adapter를 둔다.
-5. 모든 외부 입력을 신뢰하지 않고 schema, identity, timestamp, range를 검증한다.
-6. MQTT와 WAN이 끊겨도 edge가 bounded disk queue로 telemetry를 보존한다.
-7. Command는 TTL, causation, idempotency key, authorization evidence를 가진다.
-8. `accepted`, `executing`, `completed`, `failed`를 구분한다.
-9. PostgreSQL이 authoritative하고 Neo4j는 계속 rebuildable projection이다.
-10. Exactly-once를 주장하지 않는다. 중복과 재전송을 견디는 설계를 검증한다.
-11. AI는 설명과 제안에 사용하고 safety-critical actuation의 단독 승인자가 되지 않는다.
-12. 한 번에 공장 전체로 확대하지 않고 line/cell 단위 rollout gate를 사용한다.
-
-## 4. Milestone 1: 현장 조사와 계약 동결
-
-### 범위
-
-- 대상 공장, line, cell, PLC, sensor, actuator inventory
-- OPC UA, Modbus, EtherNet/IP 등 실제 protocol과 vendor SDK 조사
-- Tag/address, engineering unit, sampling rate, quality code, writable 여부 수집
-- Factory network zone, DMZ, firewall, outbound route, DNS/NTP 조사
-- 현장 Mosquitto version, listener, authentication, bridge/cluster 구성 확인
-- Existing telemetry/command/result schema와 실제 tag mapping 정의
-- Device ID, asset ID, topic naming, certificate identity 규칙 확정
-
-### 산출물
-
-- Asset/tag registry 초안
-- Protocol-to-MQTT mapping 문서
-- Topic ACL matrix
-- Network/data-flow diagram
-- 위험 분석과 read/write 허용 목록
-
-### 완료 gate
-
-- 한 종류의 sensor를 read-only로 연결할 수 있는 정보가 모두 확보됨
-- 실제 장치 데이터가 기존 contract로 손실 없이 표현됨
-- 쓰기 명령은 아직 비활성 상태임
-
-## 5. Milestone 2: Industrial Edge Adapter
-
-### 책임
-
-- PLC/vendor protocol session 관리
-- Raw tag를 domain telemetry envelope로 변환
-- Unit conversion, range validation, quality code 보존
-- Device timestamp와 edge receive timestamp 분리
-- Stable event ID와 sequence 생성
-- MQTT reconnect와 resubscribe
-- Disk-backed store-and-forward
-- Heartbeat 및 adapter health publish
-- Command deduplication과 TTL 확인
-
-언어는 현장 SDK와 운영성에 따라 결정한다. 기존 Go gateway와 같은 언어를 반드시 강제하지 않는다. Python simulator 구현을 복사해 production adapter로 사용하지 않는다.
-
-### Offline 정책
-
-- Queue 최대 크기와 최대 보존 시간을 설정한다.
-- Disk full 이전에 backpressure와 alarm을 발생시킨다.
-- 재연결 시 device별 순서를 가능한 범위에서 유지한다.
-- 오래된 command는 재실행하지 않고 만료 결과를 반환한다.
-- Telemetry replay에는 original measured time과 replay marker를 보존한다.
-
-### 완료 gate
-
-- 네트워크 단절과 재연결 후 유실/중복/순서 측정 결과가 있음
-- Edge process restart 후 queue 복구가 검증됨
-- Simulator와 실제 edge adapter가 같은 contract tests를 통과함
-
-## 6. Milestone 3: MQTT Identity And OT Security
-
-### 범위
-
-- TLS 1.2 이상과 가능하면 mutual TLS
-- Industrial PC 또는 device별 certificate identity
-- Topic별 publish/subscribe ACL
-- Anonymous listener 제거
-- Certificate 발급, 배포, rotation, expiry alert, revocation 절차
-- Secret을 source, Compose file, image에 넣지 않는 운영 방식
-- IT/OT segmentation, DMZ, firewall allowlist, outbound-only route 검토
-- Broker audit log와 connection event 보존
-
-### ACL 예시
-
-```text
-edge/site-a/line-1 publish devices/line-1/+/telemetry
-edge/site-a/line-1 publish devices/line-1/+/command-results
-edge/site-a/line-1 subscribe devices/line-1/+/commands
-central-go subscribe devices/+/telemetry
-central-go subscribe devices/+/command-results
-central-go publish devices/+/commands
+``` bash
+kubectl get nodes
+kubectl get pods -A
 ```
 
-### 완료 gate
+프로젝트 전용 namespace 예:
 
-- 잘못된 certificate와 금지 topic 접근이 차단됨
-- Certificate rotation 중 telemetry 중단 시간이 측정됨
-- Broker 설정과 비밀정보 복구 절차가 문서화됨
-
-## 7. Milestone 4: Live Connectivity And Device Registry
-
-현재 UI의 MQTT adapter 표시는 broker의 실시간 health 증명이 아니다. 이를 실제 운영 상태로 교체한다.
-
-### 상태 모델
-
-```text
-commissioning -> online -> stale -> offline
-                         -> maintenance
-                         -> decommissioned
+``` yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: semantic-layer
 ```
 
-### 수집 항목
+## 5. Go Gateway 핵심 문제: MQTT Client ID
 
-- Go broker connection/reconnect 상태
-- Device/edge heartbeat와 last-seen
-- Last telemetry/ACK timestamp
-- Firmware/adapter version
-- Certificate expiry
-- Queue depth와 oldest buffered event age
-- Clock skew와 quality degradation
+현재 MQTT adapter가 고정 ID를 사용한다면:
 
-### UI
-
-- 기존 Operations 화면에 broker, edge, device 상태를 밀도 있게 표시
-- Stale/offline 이유와 마지막 정상 시각 제공
-- 연결 장애와 개별 command 실패를 구분
-- 운영자가 maintenance를 선언하고 이력을 남길 수 있게 함
-
-### 완료 gate
-
-- Broker stop, cable loss, edge process crash를 서로 구분해 표시
-- Heartbeat 누락이 설정된 시간 안에 stale/offline으로 전환됨
-- SSE reconnect 후 상태가 authoritative store에서 복구됨
-
-## 8. Milestone 5: Safe Command Lifecycle
-
-### 확장 contract
-
-```text
-queued -> published -> accepted -> executing -> completed
-                                      -> failed
-       -> expired / rejected / cancelled
+``` go
+SetClientID("physicalai-go-gateway")
 ```
 
-`accepted`는 command 수신이고 `completed`는 feedback sensor 또는 PLC state로 물리적 완료가 확인된 상태다.
+Kubernetes에서 여러 replica가 같은 ID로 접속하면서 기존 connection을
+끊고 reconnect 경쟁을 만들 수 있다.
 
-### 필수 제어
+``` text
+A connects
+→ B connects
+→ A disconnected
+→ A reconnects
+→ B disconnected
+→ ...
+```
 
-- Command TTL과 deadline
-- Expected current state 또는 optimistic concurrency token
-- Device-side idempotency
-- User/service identity와 authorization evidence
-- Rule version과 causation trace
-- Maintenance/manual mode 차단
-- PLC interlock 결과
-- Two-person approval이 필요한 위험 command 분류
-- Cancellation 또는 명시적 compensation 정책
-- Desired state, reported state, confirmed physical state 분리
+따라서 scale-out 전에 반드시 수정한다.
 
-### 완료 gate
+### 해결: Unique MQTT Client ID
 
-- 중복, 지연, 역순 command가 안전하게 처리됨
-- ACK 후 actuator failure를 별도 실패로 관찰 가능
-- Manual override와 emergency stop이 중앙 command보다 우선함
-- 위험 command는 승인 없이 실행되지 않음
+각 Pod는 고유 ID를 사용한다.
 
-## 9. Milestone 6: Observability And Operations
+``` text
+physicalai-go-gateway-${HOSTNAME}
+```
 
-### Metrics와 trace
+Pod identity와 연결된 값을 우선 사용하여 운영 중 추적 가능하게 한다.
 
-- MQTT connect/reconnect, publish error, ACK latency
-- Device heartbeat age와 edge queue depth
-- Kafka throughput, consumer lag, rebalance
-- Worker processing latency, retry, DLQ
-- PostgreSQL pool, query latency, storage growth
-- Rust projection lag/rebuild duration
-- End-to-end correlation: sensor -> rule -> command -> physical completion
+## 6. Go Gateway 핵심 문제: MQTT Duplicate Fan-Out
 
-OpenTelemetry와 Prometheus-compatible metrics를 우선 검토한다. 로그만으로 운영 가능하다고 가정하지 않는다.
+Client ID만 고유하게 만들고 모든 replica가 일반 subscription으로 다음을
+구독하면:
 
-### 운영 기능
+``` text
+devices/+/telemetry
+```
 
-- DLQ 조회, 승인형 replay, replay audit
-- Alert routing과 담당자 ownership
-- Runbook: broker down, Kafka lag, DB saturation, edge offline, certificate expiry
-- SLO 및 error budget 초안
+동일 telemetry가 각 subscriber에 전달될 수 있다.
 
-### 완료 gate
+``` text
+             Mosquitto
+                 │
+              Event X
+          ┌──────┼──────┐
+          ▼      ▼      ▼
+        Go A   Go B   Go C
+          │      │      │
+          ▼      ▼      ▼
+        Kafka  Kafka  Kafka
+             Event X × 3
+```
 
-- 장애 주입 후 dashboard/alert가 원인을 제한 시간 안에 보여줌
-- 하나의 correlation ID로 end-to-end trace를 재구성할 수 있음
-- Replay가 원본 event를 덮어쓰거나 중복 command를 실행하지 않음
+### 해결: MQTT Shared Subscription
 
-## 10. Milestone 7: HA, Backup, Recovery, And Deployment
+``` text
+$share/go-gateway/devices/+/telemetry
+```
 
-### 범위
+같은 shared group의 Gateway 중 하나가 메시지를 처리하도록 한다.
 
-- Mosquitto 운영 topology 또는 broker 대안의 HA 요구사항 검증
-- Kafka replication, retention, disk capacity policy
-- PostgreSQL backup, PITR, restore rehearsal
-- Go/worker scale-out 및 rolling update
-- Edge version compatibility와 staged rollout
-- Signed image, SBOM, vulnerability scanning
-- Config/schema migration rollback
-- Capacity test와 CPU/memory/I/O/PSI 측정
+``` text
+Event 1 → Go A
+Event 2 → Go B
+Event 3 → Go C
+```
 
-### 완료 gate
+Kafka consumer group과 구현은 다르지만 workload distribution 측면에서
+유사하다.
 
-- PostgreSQL restore와 Neo4j full rebuild가 실제로 수행됨
-- Worker 또는 Go instance 장애 중 처리가 회복됨
-- Previous application/edge release로 rollback 가능
-- Retention과 disk-full alarm이 부하 테스트에서 검증됨
+권장 configuration:
 
-## 11. 도입 단계
+``` env
+MQTT_CLIENT_ID_PREFIX=physicalai-go-gateway
+MQTT_SHARED_GROUP=go-gateway
+MQTT_TOPIC=devices/+/telemetry
+MQTT_QOS=1
+MQTT_SHARED_SUBSCRIPTION=true
+```
 
-1. Lab에서 simulator와 실제 edge adapter contract parity를 검증한다.
-2. 공장 한 cell의 한 sensor를 read-only shadow mode로 연결한다.
-3. Dashboard와 alarm만 운영하고 자동 command를 금지한다.
-4. 비위험 actuator에 operator 승인형 command를 연다.
-5. Physical completion feedback과 interlock을 검증한다.
-6. 제한된 deterministic rule automation을 단계적으로 허용한다.
-7. HA, backup/restore, security review, 장애 훈련 후 line 범위를 확대한다.
+Compose single-instance와 Kubernetes multi-instance를 모두 지원하도록
+shared subscription 여부를 설정으로 분리한다.
 
-각 단계는 관찰 기간과 rollback 기준을 가진다. 다음 단계로 넘어가는 것은 기능 구현 완료가 아니라 측정된 운영 gate 통과로 결정한다.
+## 7. QoS 1과 End-to-End Idempotency
 
-## 12. 명시적 비범위
+Shared Subscription을 사용해도 QoS 1은 `at least once`이므로 duplicate
+delivery 가능성이 있다.
 
-- LLM이 PLC safety logic을 직접 생성하거나 실행하는 기능
-- Kafka 또는 중앙 cloud가 emergency stop을 담당하는 구조
-- Neo4j를 telemetry 또는 command의 source of truth로 사용하는 구조
-- 검증 없이 공장 전체 actuator를 자동화하는 big-bang rollout
-- 단지 기술 스택을 늘리기 위한 Kotlin/Spring Boot 추가
-- Vendor protocol을 일반 문자열 parsing으로 임시 처리하는 구현
+목표는 duplicate를 완전히 제거하는 것이 아니라 duplicate가 발생해도
+business state가 깨지지 않게 하는 것이다.
 
-## 13. 최종 완료 기준
+Telemetry에는 immutable `eventId`를 둔다.
 
-3차는 다음 조건을 모두 증명해야 완료로 본다.
+``` json
+{
+  "eventId": "01JABC...",
+  "deviceId": "TEMP-001",
+  "timestamp": "2026-08-23T09:00:00Z",
+  "temperature": 83.2
+}
+```
 
-1. 실제 sensor telemetry가 industrial edge와 mTLS MQTT를 거쳐 기존 중앙 경로에 저장된다.
-2. Edge offline buffering과 replay의 유실/중복 특성이 측정되어 있다.
-3. 장치 identity, ACL, certificate rotation이 검증되어 있다.
-4. Broker/edge/device live state가 UI와 alert에 표시된다.
-5. 비위험 actuator command가 authorization, TTL, idempotency, interlock을 거친다.
-6. Accepted ACK와 physical completion이 분리되어 기록된다.
-7. End-to-end trace와 causal Explain이 실제 장치 증거를 사용한다.
-8. DLQ replay, backup restore, Neo4j rebuild, service failure recovery가 훈련되었다.
-9. Capacity와 SLO가 측정값으로 기록되어 있다.
-10. 현장 운영 runbook, rollback, 책임자, 보안 검토가 문서화되어 있다.
+가능하면 eventId는 Gateway보다 event origin에 가까운 곳에서 생성한다.
+동일 physical event의 재전송에는 동일 eventId를 유지한다.
+
+``` text
+Device / Simulator
+       │ eventId=X
+       ▼
+ MQTT QoS 1
+       ▼
+ Go Gateway × N
+       ▼
+     Kafka
+       ▼
+NestJS Worker × N
+       ▼
+ PostgreSQL
+       ▼
+ UNIQUE(eventId)
+```
+
+기록 권장:
+
+-   received event count
+-   duplicate event count
+-   persisted unique event count
+-   duplicate suppression count
+
+## 8. Go Gateway Scaling Experiment
+
+처음에는 replica 1로 기존 동작을 검증한 후:
+
+``` bash
+kubectl scale deployment go-gateway --replicas=3
+```
+
+검증한다.
+
+-   MQTT Client ID uniqueness
+-   동시 connection 안정성
+-   reconnect war 부재
+-   Shared Subscription 동작
+-   telemetry distribution
+-   Kafka publish count
+-   duplicate count
+
+현재 Go application이 HTTP ingestion과 MQTT subscription을 동시에
+담당한다면 초기에는 하나의 Deployment로 유지한다. 독립 scaling 필요성이
+확인되면 `go-http-gateway`와 `go-mqtt-gateway`로 분리한다.
+
+## 9. NestJS Kafka Worker Scaling
+
+모든 replica는 동일 Kafka consumer group을 사용한다.
+
+``` text
+group.id = semantic-worker
+```
+
+6 partitions / 3 workers 예:
+
+``` text
+Worker A → P0, P1
+Worker B → P2, P3
+Worker C → P4, P5
+```
+
+Kafka가 Kubernetes를 직접 인식하는 것은 아니다. 새 Pod의 consumer가 같은
+group에 join하면 Kafka가 membership 변화를 감지하고 rebalance한다.
+
+다음 순서로 실험한다.
+
+``` text
+replicas: 1 → 2 → 3 → 6 → 8
+```
+
+측정:
+
+-   consumer count
+-   partition assignment
+-   rebalance
+-   throughput
+-   consumer lag
+-   CPU / memory
+-   PostgreSQL write rate
+
+특히 partitions=6, consumers=8에서 추가 consumer가 idle이 되는 것을
+확인한다.
+
+## 10. Self-Healing Experiment
+
+NestJS worker 하나를 강제로 제거한다.
+
+``` bash
+kubectl delete pod <nest-worker-pod>
+```
+
+관찰:
+
+``` text
+Pod failure
+→ desired-state violation
+→ replacement Pod
+→ Kafka membership change
+→ rebalance
+→ partition reassignment
+→ processing resumes
+```
+
+측정:
+
+-   Pod recreation time
+-   rebalance duration
+-   processing interruption
+-   lag increase / recovery
+-   duplicate count
+
+Go Gateway도 같은 방식으로 제거하여 remaining shared subscribers가
+processing을 계속하고 replacement Pod가 unique Client ID로 다시
+join하는지 확인한다.
+
+## 11. Failure Timing Experiment
+
+### Case A: DB commit 전 kill
+
+``` text
+Kafka consume
+→ processing
+→ worker kill
+→ no DB commit
+```
+
+재처리되는지 확인한다.
+
+### Case B: DB commit 후 offset commit 전 kill
+
+``` text
+Kafka consume
+→ DB commit
+→ worker kill
+→ offset not committed
+```
+
+동일 message가 재처리되어도 `UNIQUE(eventId)` 등으로 duplicate business
+record가 생기지 않아야 한다.
+
+## 12. Rolling Update
+
+``` text
+v1 v1 v1
+→ v1 v1 v2
+→ v1 v2 v2
+→ v2 v2 v2
+```
+
+검증:
+
+-   HTTP downtime
+-   MQTT connection churn
+-   Kafka rebalance
+-   processing interruption
+-   message loss / duplicate
+-   DB consistency
+
+특히 MQTT Gateway update 중 remaining replicas가 shared traffic을
+이어받는지 확인한다.
+
+## 13. Graceful Shutdown
+
+Go Gateway:
+
+``` text
+SIGTERM
+→ stop new HTTP requests
+→ stop MQTT subscription
+→ flush Kafka producer
+→ disconnect MQTT
+→ close Kafka
+→ exit
+```
+
+NestJS Worker:
+
+``` text
+SIGTERM
+→ stop new Kafka records
+→ finish/safely abort current work
+→ handle offset
+→ disconnect Kafka
+→ close DB
+→ exit
+```
+
+초기값:
+
+``` yaml
+terminationGracePeriodSeconds: 30
+```
+
+## 14. Liveness / Readiness
+
+HTTP workload에는 예를 들어:
+
+``` text
+/health/live
+/health/ready
+```
+
+를 둔다.
+
+-   Liveness: 프로세스가 살아 있는가?
+-   Readiness: 현재 traffic을 받아도 되는가?
+
+Kafka/MQTT/PostgreSQL의 짧은 장애를 곧바로 liveness failure로 처리하여
+restart storm을 만들지 않는다.
+
+## 15. Service / HPA
+
+HTTP inbound가 필요한 workload만 Kubernetes Service를 둔다. Background
+Kafka consumer에는 불필요한 Service를 만들지 않는다.
+
+HTTP workload에는 CPU 등의 metric을 이용한 HPA를 실험할 수 있다.
+
+Kafka worker는 CPU만 보고 무한 scale-out하지 않는다. Partition이 6개라면
+consumer 20개를 만들어도 추가 parallelism이 생기지 않을 수 있다.
+
+향후 Kafka-aware autoscaling에서는 다음을 검토한다.
+
+-   consumer lag
+-   partition count
+-   active consumer count
+-   processing latency
+
+## 16. Observability
+
+최소한 다음을 활용한다.
+
+``` bash
+kubectl get pods
+kubectl describe pod ...
+kubectl logs ...
+kubectl top pod
+```
+
+로그에는 가능하면 다음 identity를 포함한다.
+
+-   Pod / instance
+-   MQTT Client ID
+-   Kafka consumer ID
+-   eventId
+-   partition
+-   offset
+
+목표는 하나의 event를 다음처럼 추적할 수 있게 하는 것이다.
+
+``` text
+Device
+→ MQTT
+→ Go Pod B
+→ Kafka P3 offset 18432
+→ Nest Worker Pod D
+→ PostgreSQL
+```
+
+## 17. AWS 단계
+
+Local Kubernetes 검증 완료 전 EKS를 우선하지 않는다.
+
+``` text
+Docker Compose
+→ kind
+→ Kubernetes manifests
+→ scaling/failure experiments
+→ stable local Kubernetes
+→ AWS deployment 검토
+```
+
+AWS에서는 필요하면 application workload를 EKS에 두고 Kafka/MSK,
+PostgreSQL/RDS 등 stateful infrastructure를 managed service로 분리하는
+방안을 검토한다.
+
+비용 대비 가치가 낮으면 기존 EC2 demo를 유지해도 된다.
+
+## 18. 필수 검증 시나리오
+
+1.  Baseline: Go=1, Nest=1 정상 처리
+2.  Kafka Worker Scale-Out: 1→3→6
+3.  Consumer Over-Scaling: partitions=6, workers=8
+4.  Go Gateway Scale-Out: 1→3 + unique Client ID + Shared Subscription
+5.  Nest Worker Failure: Pod kill + recreation + Kafka rebalance
+6.  MQTT Gateway Failure: Go Pod kill + shared subscriber continuity
+7.  Duplicate Injection: 동일 eventId 반복 전송 후 `received > 1`,
+    `persisted = 1` 확인
+8.  DB Commit / Offset Commit Failure: 재처리 후 DB consistency 확인
+9.  Rolling Update: v1→v2 중 processing continuity 확인
+
+## 19. 완료 조건
+
+-   [ ] 기존 Docker Compose 환경이 정상 동작한다.
+-   [ ] Local Kubernetes에서 application workload가 실행된다.
+-   [ ] Go Gateway가 unique MQTT Client ID를 사용한다.
+-   [ ] MQTT Shared Subscription이 적용된다.
+-   [ ] Go Gateway를 runtime에서 scale-out할 수 있다.
+-   [ ] Gateway 증가가 단순 duplicate fan-out을 만들지 않는다.
+-   [ ] MQTT QoS 1 duplicate가 end-to-end idempotency로 처리된다.
+-   [ ] NestJS Kafka worker를 runtime에서 scale-out/in할 수 있다.
+-   [ ] Kafka partition/consumer 관계를 실제 확인했다.
+-   [ ] Pod kill 후 Kubernetes self-healing을 확인했다.
+-   [ ] Kafka rebalance와 lag recovery를 관찰했다.
+-   [ ] DB commit/offset commit 경계 장애를 실험했다.
+-   [ ] Rolling update를 검증했다.
+-   [ ] Graceful shutdown을 검증했다.
+-   [ ] 주요 실험 결과가 `docs/kubernetes-experiments.md`에 기록되어
+    있다.
+
+## 20. 최종 산출물
+
+Kubernetes 구현 완료 후 repo에는 최소 다음 evidence가 남아야 한다.
+
+``` text
+k8s/
+docs/
+  implementation-3rd-plan.md
+  kubernetes-experiments.md
+```
+
+`kubernetes-experiments.md`에는 단순 명령어 기록이 아니라 다음을 남긴다.
+
+-   실험 목적
+-   architecture / configuration
+-   workload
+-   예상 결과
+-   실제 결과
+-   throughput / latency / lag
+-   failure/recovery timeline
+-   발견한 문제
+-   수정 내용
+-   architecture decision
+
+최종 목표는 README에 단순히 `Kubernetes`라고 적는 것이 아니라 다음과
+같은 주장을 실제 실험으로 뒷받침하는 것이다.
+
+> Horizontally scaled polyglot event-processing system using Kubernetes,
+> Kafka consumer groups and MQTT shared subscriptions, with failure
+> recovery and end-to-end idempotency verified under at-least-once
+> delivery.

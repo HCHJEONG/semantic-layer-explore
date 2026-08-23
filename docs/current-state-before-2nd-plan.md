@@ -1,4 +1,4 @@
-# Current State Inventory
+# Current State Before 2nd Plan Inventory
 
 ## Scope
 

@@ -9,7 +9,7 @@ implementation stage:
 2. `docs/implementation-1st-plan.md`
 3. `docs/implementation-2nd-plan.md`
 4. `docs/ontology-modeling-notes.md`
-5. `docs/current-state.md`
+5. `docs/current-state-before-2nd-plan.md`
 6. The latest numbered `docs/implementation-2nd-*-handoff.md`
 
 Treat the implementation plans as architecture constraints, and handoff files
@@ -115,7 +115,7 @@ Do not add Spring Boot during this implementation stage.
 - Add focused tests in proportion to behavioral risk and blast radius.
 - State exactly which commands were run. Never report unexecuted tests as
   passing.
-- Keep `docs/current-state.md` as the pre-scaffolding inventory. Record later
+- Keep `docs/current-state-before-2nd-plan.md` as the pre-scaffolding inventory. Record later
   implementation work in numbered handoff documents.
 
 ## Build And Deployment

@@ -2,9 +2,9 @@
 
 ## 0. 문서 성격
 
-이 문서는 1차 Semantic Workspace baseline 이후에 착수하는 **분산 Physical AI 처리 시스템 확장 계획**이다. 현재 구현 상태를 설명하는 handoff 문서는 `docs/implementation-1st-plan.md`이며, 이 문서는 그 기준선을 보존한 뒤 Go, MQTT, Kafka, PostgreSQL, NestJS worker, Rust graph worker, Neo4j를 추가하는 2차 확장 범위를 정의한다.
+이 문서는 1차 Semantic Workspace baseline 이후에 착수한 **분산 Physical AI 처리 시스템 확장 계획**이다. 현재 구현 상태를 설명하는 handoff 문서는 `docs/implementation-1st-plan.md`이며, 이 문서는 그 기준선을 보존한 뒤 Go, MQTT, Kafka, PostgreSQL, NestJS worker, Rust graph worker, Neo4j를 추가하는 2차 확장 범위를 정의한다.
 
-따라서 이 문서의 "확정 아키텍처"와 완료 기준은 2차 확장 범위 안에서의 목표 상태를 뜻한다. 현재 코드가 이미 이 구조로 구현되어 있다는 의미가 아니며, 착수 전에는 반드시 1차 문서와 실제 저장소 상태를 먼저 확인한다.
+따라서 이 문서의 "확정 아키텍처"와 완료 기준은 2차 확장 범위 안에서의 목표 상태를 뜻한다. 구현 완료 여부는 numbered handoff 문서, 특히 `docs/implementation-2nd-015-mqtt-outbound-failure-ux-handoff.md`를 기준으로 판단한다. 2차 계획의 `aws-demo` 배포는 maintainer의 수동 배포로 완료되었으며, 에이전트가 직접 배포 명령을 실행한 것은 아니다.
 
 ### 0.1 확정된 Polyglot Monorepo 범위
 
@@ -106,7 +106,7 @@ MQTT → Go API → Kafka → NestJS/Mastra Worker × N → PostgreSQL
 
 ## 3. 먼저 조사할 현재 상태
 
-코드를 수정하기 전에 `docs/current-state.md`를 작성한다.
+코드를 수정하기 전에 `docs/current-state-before-2nd-plan.md`를 작성한다.
 
 ### 3.1 Next.js
 
@@ -1306,7 +1306,7 @@ Load stage 3: 1,000 events/sec
 
 - 저장소 조사
 - 기존 기능 실행
-- `docs/current-state.md`
+- `docs/current-state-before-2nd-plan.md`
 - MQTT/Mastra/SQLite inventory
 - 회귀 기준 확보
 
@@ -1453,7 +1453,7 @@ Go API ─┬→ Kafka
 
 ```text
 README.md
-docs/current-state.md
+docs/current-state-before-2nd-plan.md
 docs/architecture.md
 docs/message-contracts.md
 docs/kafka-partitioning.md
@@ -1550,4 +1550,4 @@ docker compose up --scale worker=4
 
 ## 23. Codex 즉시 착수 명령
 
-> 저장소의 지침과 현재 Next.js·SQLite·MQTT·Mastra·ontology 구현을 먼저 조사하라. `docs/current-state.md`를 작성하고 기존 기능 baseline을 검증하라. 그다음 기존 Next.js root 구조를 유지한 채 `api/` Go protocol gateway(HTTP·WebSocket·SSH·MQTT), `worker/` NestJS/Mastra consumer, `contracts/`, Kafka, PostgreSQL, MQTT Compose skeleton을 추가하라. Spring을 중복 backend로 추가하지 말라. 동기 조회와 session 처리는 Kafka를 우회하고, AI·대량·재처리 작업만 Kafka로 보낸다. 초기부터 worker 두 개를 같은 Kafka telemetry consumer group으로 실행하고, telemetry의 정상 쓰기 경로가 반드시 MQTT→Go→Kafka→NestJS Worker→PostgreSQL을 통과하도록 구현하라. Next.js `/terminal`과 SSH는 동일 action contract와 Scene IR을 사용하되 각각 React와 ANSI로 렌더링한다. 핵심 telemetry 경로가 검증된 뒤 `graph-worker/` Rust projector와 Neo4j `graph` profile을 추가하라. 현재 semantic model이 고정 ontology이면 `semantic.graph.rebuild`부터 구현하고, 실제 관계 mutation 기능이 확인된 경우에만 PostgreSQL transactional outbox를 통해 `semantic.relation.changed`를 발행하라. application image는 로컬 WSL에서 `linux/amd64`로 빌드하고 versioned tar.zst로 `aws-demo` t3a.medium에 전송하며 EC2에서는 빌드하지 않는다.
+> 저장소의 지침과 현재 Next.js·SQLite·MQTT·Mastra·ontology 구현을 먼저 조사하라. `docs/current-state-before-2nd-plan.md`를 작성하고 기존 기능 baseline을 검증하라. 그다음 기존 Next.js root 구조를 유지한 채 `api/` Go protocol gateway(HTTP·WebSocket·SSH·MQTT), `worker/` NestJS/Mastra consumer, `contracts/`, Kafka, PostgreSQL, MQTT Compose skeleton을 추가하라. Spring을 중복 backend로 추가하지 말라. 동기 조회와 session 처리는 Kafka를 우회하고, AI·대량·재처리 작업만 Kafka로 보낸다. 초기부터 worker 두 개를 같은 Kafka telemetry consumer group으로 실행하고, telemetry의 정상 쓰기 경로가 반드시 MQTT→Go→Kafka→NestJS Worker→PostgreSQL을 통과하도록 구현하라. Next.js `/terminal`과 SSH는 동일 action contract와 Scene IR을 사용하되 각각 React와 ANSI로 렌더링한다. 핵심 telemetry 경로가 검증된 뒤 `graph-worker/` Rust projector와 Neo4j `graph` profile을 추가하라. 현재 semantic model이 고정 ontology이면 `semantic.graph.rebuild`부터 구현하고, 실제 관계 mutation 기능이 확인된 경우에만 PostgreSQL transactional outbox를 통해 `semantic.relation.changed`를 발행하라. application image는 로컬 WSL에서 `linux/amd64`로 빌드하고 versioned tar.zst로 `aws-demo` t3a.medium에 전송하며 EC2에서는 빌드하지 않는다.
