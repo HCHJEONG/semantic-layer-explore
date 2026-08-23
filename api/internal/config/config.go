@@ -18,9 +18,14 @@ type Config struct {
 	Neo4jUser                 string
 	Neo4jPassword             string
 	MQTTURL                   string
+	MQTTClientID              string
+	MQTTClientIDPrefix        string
+	MQTTInstanceID            string
 	MQTTTopic                 string
+	MQTTTelemetrySharedGroup  string
 	MQTTCommandTopic          string
 	MQTTResultTopic           string
+	MQTTResultSharedGroup     string
 	CommandResultTopic        string
 	CommandAckTimeout         time.Duration
 	CommandMaxPublishAttempts int
@@ -40,9 +45,14 @@ func FromEnv() Config {
 		Neo4jUser:                 env("NEO4J_USER", "neo4j"),
 		Neo4jPassword:             env("NEO4J_PASSWORD", "physicalai"),
 		MQTTURL:                   env("MQTT_URL", "tcp://mosquitto:1883"),
+		MQTTClientID:              env("MQTT_CLIENT_ID", ""),
+		MQTTClientIDPrefix:        env("MQTT_CLIENT_ID_PREFIX", "pago"),
+		MQTTInstanceID:            env("INSTANCE_ID", ""),
 		MQTTTopic:                 env("MQTT_TELEMETRY_TOPIC", "devices/+/telemetry"),
+		MQTTTelemetrySharedGroup:  env("MQTT_TELEMETRY_SHARED_GROUP", "physicalai-telemetry"),
 		MQTTCommandTopic:          env("MQTT_COMMAND_TOPIC_TEMPLATE", "devices/%s/commands"),
 		MQTTResultTopic:           env("MQTT_COMMAND_RESULT_TOPIC", "devices/+/command-results"),
+		MQTTResultSharedGroup:     env("MQTT_COMMAND_RESULT_SHARED_GROUP", "physicalai-command-results"),
 		CommandResultTopic:        env("KAFKA_COMMAND_RESULT_TOPIC", "command.result"),
 		CommandAckTimeout:         time.Duration(envInt("COMMAND_ACK_TIMEOUT_SECONDS", 10)) * time.Second,
 		CommandMaxPublishAttempts: envInt("MQTT_COMMAND_MAX_PUBLISH_ATTEMPTS", 3),

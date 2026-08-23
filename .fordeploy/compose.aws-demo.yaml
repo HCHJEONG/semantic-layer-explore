@@ -34,6 +34,9 @@ services:
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env.local}
       MQTT_URL: tcp://mosquitto:1883
+      MQTT_CLIENT_ID_PREFIX: ${MQTT_CLIENT_ID_PREFIX:-pago}
+      MQTT_TELEMETRY_SHARED_GROUP: ${MQTT_TELEMETRY_SHARED_GROUP:-physicalai-telemetry}
+      MQTT_COMMAND_RESULT_SHARED_GROUP: ${MQTT_COMMAND_RESULT_SHARED_GROUP:-physicalai-command-results}
       MQTT_TELEMETRY_TOPIC: devices/+/telemetry
       MQTT_COMMAND_TOPIC_TEMPLATE: devices/%s/commands
       MQTT_COMMAND_RESULT_TOPIC: devices/+/command-results

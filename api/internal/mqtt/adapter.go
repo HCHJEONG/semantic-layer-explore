@@ -18,7 +18,7 @@ import (
 
 type Adapter struct {
 	cfg      config.Config
-	producer *kafka.Producer
+	producer eventPublisher
 	store    *persistence.Store
 	logger   *slog.Logger
 	mu       sync.RWMutex
@@ -30,32 +30,56 @@ func NewAdapter(cfg config.Config, producer *kafka.Producer, store *persistence.
 }
 
 func (a *Adapter) Run(ctx context.Context) {
-	opts := mqtt.NewClientOptions().AddBroker(a.cfg.MQTTURL).SetClientID("physicalai-go-gateway").SetAutoReconnect(true).SetConnectRetry(true).SetConnectRetryInterval(2 * time.Second).SetOrderMatters(false)
+	clientID, instanceID, err := resolveClientID(a.cfg)
+	if err != nil {
+		a.logger.Error("mqtt identity configuration failed", "error", err)
+		return
+	}
+	telemetrySubscription, err := sharedSubscription(a.cfg.MQTTTelemetrySharedGroup, a.cfg.MQTTTopic)
+	if err != nil {
+		a.logger.Error("mqtt telemetry subscription configuration failed", "error", err)
+		return
+	}
+	resultSubscription, err := sharedSubscription(a.cfg.MQTTResultSharedGroup, a.cfg.MQTTResultTopic)
+	if err != nil {
+		a.logger.Error("mqtt command result subscription configuration failed", "error", err)
+		return
+	}
+
+	opts := mqtt.NewClientOptions().AddBroker(a.cfg.MQTTURL).SetClientID(clientID).SetAutoReconnect(true).SetConnectRetry(true).SetConnectRetryInterval(2 * time.Second).SetOrderMatters(false).SetAutoAckDisabled(true)
 	opts.OnConnect = func(client mqtt.Client) {
-		subscriptions := map[string]byte{a.cfg.MQTTTopic: 1, a.cfg.MQTTResultTopic: 1}
+		subscriptions := map[string]byte{telemetrySubscription: 1, resultSubscription: 1}
 		token := client.SubscribeMultiple(subscriptions, func(_ mqtt.Client, message mqtt.Message) {
-			if strings.HasSuffix(message.Topic(), "/command-results") {
-				a.handleCommandResult(ctx, message)
-				return
-			}
-			handleMessage(ctx, a.producer, a.logger, message)
+			a.handleDelivery(ctx, message)
 		})
 		if !token.WaitTimeout(10*time.Second) || token.Error() != nil {
 			a.logger.Error("mqtt subscribe failed", "error", token.Error())
 			return
 		}
-		a.logger.Info("mqtt adapter subscribed", "telemetryTopic", a.cfg.MQTTTopic, "resultTopic", a.cfg.MQTTResultTopic)
+		a.logger.Info("mqtt adapter subscribed", "instanceId", instanceID, "clientId", clientID, "telemetryTopic", telemetrySubscription, "resultTopic", resultSubscription)
 	}
 	client := mqtt.NewClient(opts)
 	a.mu.Lock()
 	a.client = client
 	a.mu.Unlock()
 	if token := client.Connect(); !token.WaitTimeout(15*time.Second) || token.Error() != nil {
-		a.logger.Error("mqtt connect failed", "url", a.cfg.MQTTURL, "error", token.Error())
+		a.logger.Error("mqtt connect failed", "url", a.cfg.MQTTURL, "instanceId", instanceID, "clientId", clientID, "error", token.Error())
 	}
 	go a.dispatchLoop(ctx)
 	<-ctx.Done()
 	client.Disconnect(250)
+}
+
+func (a *Adapter) handleDelivery(ctx context.Context, message mqtt.Message) {
+	ack := false
+	if strings.HasSuffix(message.Topic(), "/command-results") {
+		ack = a.handleCommandResult(ctx, message)
+	} else {
+		ack = handleMessage(ctx, a.producer, a.logger, message)
+	}
+	if ack {
+		message.Ack()
+	}
 }
 
 func (a *Adapter) PublishCommand(ctx context.Context, commandID, deviceID string, payload []byte) error {
@@ -151,7 +175,7 @@ func (a *Adapter) publishTimeouts(ctx context.Context) {
 	}
 }
 
-func (a *Adapter) handleCommandResult(ctx context.Context, message mqtt.Message) {
+func (a *Adapter) handleCommandResult(ctx context.Context, message mqtt.Message) bool {
 	var envelope struct {
 		SchemaVersion string `json:"schemaVersion"`
 		CommandID     string `json:"commandId"`
@@ -161,13 +185,15 @@ func (a *Adapter) handleCommandResult(ctx context.Context, message mqtt.Message)
 	}
 	if err := json.Unmarshal(message.Payload(), &envelope); err != nil || envelope.SchemaVersion != "command-result.v1" || envelope.CommandID == "" || envelope.DeviceID == "" || envelope.Success == nil {
 		a.logger.Warn("mqtt command result rejected", "topic", message.Topic(), "error", err)
-		return
+		return true
 	}
 	if _, err := time.Parse(time.RFC3339, envelope.OccurredAt); err != nil {
 		a.logger.Warn("mqtt command result timestamp rejected", "commandId", envelope.CommandID)
-		return
+		return true
 	}
 	if err := a.producer.PublishCommandResult(ctx, envelope.DeviceID, message.Payload()); err != nil {
 		a.logger.Error("command result kafka publish failed", "commandId", envelope.CommandID, "error", err)
+		return false
 	}
+	return true
 }
