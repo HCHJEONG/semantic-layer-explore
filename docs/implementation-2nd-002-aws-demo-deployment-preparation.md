@@ -77,14 +77,23 @@ EC2에서 빌드했다. 이 로직은 스크립트 하단의 inert legacy refere
 
 활성 배포 로직은 다음 방식으로 변경했다.
 
-1. 로컬 WSL에서 `linux/amd64` application image 4개 빌드
-2. 공식 infrastructure image 4개를 로컬에서 pull
-3. 고유 image 8개를 하나의 versioned archive로 저장
-4. `aws-bastion -> aws-demo` 경로로 image와 Compose bundle 전송
-5. EC2에서는 build/pull 없이 `docker load`
-6. graph profile과 `worker=2`로 Compose 실행
-7. frontend/API/public URL readiness 확인
-8. 실패 시 기존 release 또는 legacy container rollback
+1. working checkout이 clean이고 `HEAD == origin/main`인지 확인
+2. `/home/hchjeong/deploy-remote-repo/semantic-layer-explore` clean clone 갱신
+3. clean clone을 `origin/main`으로 reset하고 untracked/ignored build input 제거
+4. clean clone에서 `linux/amd64` application image 4개 빌드
+5. 공식 infrastructure image 4개를 로컬에서 pull
+6. 고유 image 8개를 하나의 versioned archive로 저장
+7. clean clone에서 Compose와 infrastructure bundle 생성
+8. `aws-bastion -> aws-demo` 경로로 image와 Compose bundle 전송
+9. EC2에서는 build/pull 없이 `docker load`
+10. graph profile과 `worker=2`로 Compose 실행
+11. frontend/API/public URL readiness 확인
+12. 실패 시 기존 release 또는 legacy container rollback
+
+working checkout은 배포 입력으로 직접 사용하지 않는다. clean clone에 대한
+`reset --hard`와 `clean -fdx`는 경로가 정확히 전용 clone으로 확인된 후에만
+실행하며 IntelliJProjects working checkout에는 절대 실행하지 않는다. image
+build에 사용한 exact commit SHA를 배포 로그에 남긴다.
 
 고유 image 8개가 container 11개를 만든다. worker image는 두 container가
 공유하고, `migrate`는 PostgreSQL image, `kafka-init`은 Kafka image를 재사용한다.

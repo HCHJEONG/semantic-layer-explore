@@ -30,7 +30,11 @@ API_HTTP_HOST_PORT="${API_HTTP_HOST_PORT:-18080}"
 PUBLIC_URL="${PUBLIC_URL:-https://physicalai.penvot.com}"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+WORKING_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+REPO_URL="${REPO_URL:-git@github.com:HCHJEONG/semantic-layer-explore.git}"
+DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
+CLEAN_CLONE_ROOT="${CLEAN_CLONE_ROOT:-${HOME}/deploy-remote-repo}"
+CLEAN_CLONE_DIR="${CLEAN_CLONE_DIR:-${CLEAN_CLONE_ROOT}/semantic-layer-explore}"
 ARTIFACT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/physicalai-deploy.XXXXXX")"
 IMAGE_ARCHIVE="${ARTIFACT_DIR}/physicalai-images-${VERSION}.tar.gz"
 BUNDLE_ARCHIVE="${ARTIFACT_DIR}/physicalai-compose-${VERSION}.tar.gz"
@@ -58,16 +62,67 @@ cleanup_local() {
 }
 trap cleanup_local EXIT
 
-for command_name in docker ssh scp tar gzip; do
+for command_name in docker git ssh scp tar gzip realpath; do
   command -v "${command_name}" >/dev/null || { echo "Missing command: ${command_name}" >&2; exit 1; }
 done
 docker compose version >/dev/null
+
+case "$(realpath -m "${CLEAN_CLONE_ROOT}")" in
+  "${HOME}/deploy-remote-repo") ;;
+  *) echo "Unsafe CLEAN_CLONE_ROOT: ${CLEAN_CLONE_ROOT}" >&2; exit 1 ;;
+esac
+case "$(realpath -m "${CLEAN_CLONE_DIR}")" in
+  "${HOME}/deploy-remote-repo/semantic-layer-explore") ;;
+  *) echo "Unsafe CLEAN_CLONE_DIR: ${CLEAN_CLONE_DIR}" >&2; exit 1 ;;
+esac
+[ "$(realpath -m "${CLEAN_CLONE_DIR}")" != "${WORKING_ROOT}" ] || {
+  echo "Clean clone must not be the working checkout" >&2
+  exit 1
+}
+
+if [ -n "$(git -C "${WORKING_ROOT}" status --porcelain)" ]; then
+  echo "Working checkout has uncommitted changes; commit and push before deployment" >&2
+  exit 1
+fi
+git -C "${WORKING_ROOT}" fetch --prune origin \
+  "+refs/heads/${DEPLOY_BRANCH}:refs/remotes/origin/${DEPLOY_BRANCH}"
+WORKING_HEAD="$(git -C "${WORKING_ROOT}" rev-parse HEAD)"
+UPSTREAM_HEAD="$(git -C "${WORKING_ROOT}" rev-parse "origin/${DEPLOY_BRANCH}")"
+[ "${WORKING_HEAD}" = "${UPSTREAM_HEAD}" ] || {
+  echo "Working HEAD does not match origin/${DEPLOY_BRANCH}; push or update before deployment" >&2
+  exit 1
+}
+
+mkdir -p "${CLEAN_CLONE_ROOT}"
+if [ ! -d "${CLEAN_CLONE_DIR}/.git" ]; then
+  [ ! -e "${CLEAN_CLONE_DIR}" ] || {
+    echo "Clean clone path exists but is not a Git repository: ${CLEAN_CLONE_DIR}" >&2
+    exit 1
+  }
+  git clone --branch "${DEPLOY_BRANCH}" --single-branch "${REPO_URL}" "${CLEAN_CLONE_DIR}"
+fi
+[ "$(git -C "${CLEAN_CLONE_DIR}" remote get-url origin)" = "${REPO_URL}" ] || {
+  echo "Clean clone origin does not match ${REPO_URL}" >&2
+  exit 1
+}
+git -C "${CLEAN_CLONE_DIR}" fetch --prune origin \
+  "+refs/heads/${DEPLOY_BRANCH}:refs/remotes/origin/${DEPLOY_BRANCH}"
+git -C "${CLEAN_CLONE_DIR}" checkout -B "${DEPLOY_BRANCH}" "origin/${DEPLOY_BRANCH}"
+git -C "${CLEAN_CLONE_DIR}" reset --hard "origin/${DEPLOY_BRANCH}"
+git -C "${CLEAN_CLONE_DIR}" clean -fdx
+
+BUILD_COMMIT="$(git -C "${CLEAN_CLONE_DIR}" rev-parse HEAD)"
+[ "${BUILD_COMMIT}" = "${UPSTREAM_HEAD}" ] || {
+  echo "Clean clone commit does not match origin/${DEPLOY_BRANCH}" >&2
+  exit 1
+}
+echo "[local] building from clean clone ${CLEAN_CLONE_DIR} at ${BUILD_COMMIT}"
 
 export PHYSICALAI_VERSION="${VERSION}"
 export DOCKER_DEFAULT_PLATFORM="linux/amd64"
 
 echo "[local] building 4 application images for linux/amd64"
-docker compose -f "${ROOT_DIR}/compose.yaml" --profile graph build frontend api worker graph-worker
+docker compose -f "${CLEAN_CLONE_DIR}/compose.yaml" --profile graph build frontend api worker graph-worker
 
 echo "[local] pulling 4 official infrastructure images for linux/amd64"
 for image in "${INFRASTRUCTURE_IMAGES[@]}"; do
@@ -79,7 +134,7 @@ docker image inspect "${ALL_IMAGES[@]}" >/dev/null
 echo "[local] saving 8 unique images used by 11 Compose containers"
 docker save "${ALL_IMAGES[@]}" | gzip -1 >"${IMAGE_ARCHIVE}"
 
-tar -C "${ROOT_DIR}" -czf "${BUNDLE_ARCHIVE}" \
+tar -C "${CLEAN_CLONE_DIR}" -czf "${BUNDLE_ARCHIVE}" \
   .fordeploy/compose.aws-demo.yaml \
   infra/postgres/migrations \
   infra/postgres/migrate.sh \

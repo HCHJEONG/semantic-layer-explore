@@ -145,14 +145,24 @@ restart remote resources during inspection.
 
 The second-stage deployment model is:
 
-1. Build all application images locally in WSL for `linux/amd64`.
-2. Pull required official infrastructure images locally.
-3. Save versioned images to an archive.
-4. Transfer the archive and Compose configuration through the bastion to
+1. Require the maintainer's working checkout to be clean and at the same commit
+   as `origin/main`.
+2. Create or refresh the dedicated clean clone at
+   `~/deploy-remote-repo/semantic-layer-explore` from `origin/main`.
+3. Build all application images from that clean clone, never directly from the
+   IntelliJProjects working checkout, locally in WSL for `linux/amd64`.
+4. Pull required official infrastructure images locally.
+5. Save versioned images to an archive.
+6. Transfer the archive and Compose configuration through the bastion to
    `aws-demo`.
-5. Run only `docker load` and Docker Compose on EC2; do not build application
+7. Run only `docker load` and Docker Compose on EC2; do not build application
    images on EC2.
-6. Keep versioned image tags and the previous release metadata for rollback.
+8. Keep versioned image tags and the previous release metadata for rollback.
+
+The clean-clone refresh may use `reset --hard` and `clean -fdx` only after the
+resolved target has been verified as the dedicated project clone under
+`~/deploy-remote-repo`. Never run those commands in the maintainer's working
+checkout. Log the exact commit used for the image build.
 
 With graph profile and two workers, distinguish images from containers:
 
