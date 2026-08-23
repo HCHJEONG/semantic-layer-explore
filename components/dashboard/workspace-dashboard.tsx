@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, AlertTriangle, BellRing, Bot, Database, Fan, Gauge, HelpCircle, Lightbulb, Network, Play, Radio, RefreshCw, Ruler, ShieldCheck, Thermometer, ToggleLeft, UserCheck, Zap } from "lucide-react";
-import type { SensorReading, SimulatorScenario, WorkspaceState } from "@/domain/physical";
+import { Activity, AlertTriangle, BellRing, Bot, Database, Fan, Gauge, HelpCircle, Lightbulb, Network, Radio, RefreshCw, Ruler, ShieldCheck, Thermometer, ToggleLeft, UserCheck, Zap } from "lucide-react";
+import type { SensorReading, WorkspaceState } from "@/domain/physical";
 import type { RuleRecord } from "@/domain/rule";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,17 +49,7 @@ type AgentResult = {
 type GraphProjection = { status: string; rebuildId?: string; completedAt?: string; nodeCount: number; relationCount: number; errorMessage?: string };
 type GraphOntology = { nodes: Array<{ id: string; kind: string; name: string }>; relations: Array<{ id: number; subjectId: string; predicate: string; objectId: string }> };
 
-const scenarios: Array<{ id: SimulatorScenario; label: string }> = [
-  { id: "normal", label: "Normal" },
-  { id: "high-temperature", label: "High temp" },
-  { id: "dark-room", label: "Dark room" },
-  { id: "object-approaching", label: "Near object" },
-  { id: "button-pressed", label: "Button" },
-  { id: "sensor-disconnected", label: "Sensor offline" },
-];
-
 type BusyState =
-  | { type: "scenario"; id: SimulatorScenario }
   | { type: "device"; id: string }
   | null;
 
@@ -271,17 +261,6 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [refreshStateAndRules]);
 
-  async function runScenario(scenario: SimulatorScenario) {
-    setBusy({ type: "scenario", id: scenario });
-    try {
-      const response = await fetch(`/api/simulator/scenarios/${scenario}`, { method: "POST" });
-      if (!response.ok) throw new Error("Could not run the simulator scenario.");
-      setState(await response.json());
-      await refresh();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Scenario failed."); }
-    finally { setBusy(null); }
-  }
-
   async function toggleDevice(device: WorkspaceState["devices"][number]) {
     if (device.type === "servo") return;
     setBusy({ type: "device", id: device.id });
@@ -478,30 +457,6 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
             </CardContent>
           </Card>
 
-          <Card className="dashboard-panel">
-            <CardHeader className="dashboard-title">
-              <div>
-                <span className="eyebrow">SIMULATOR PRESETS</span>
-                <CardTitle>Scenario Controls</CardTitle>
-              </div>
-              <small>{state?.simulator.running ? `Running · ${state.simulator.intervalMs} ms` : "Stopped"}</small>
-            </CardHeader>
-            <CardContent className="p-4">
-              <div className="scenario-row">
-                {scenarios.map((scenario) => (
-                  <Button
-                    key={scenario.id}
-                    variant={state?.simulator.scenario === scenario.id ? "secondary" : "outline"}
-                    disabled={Boolean(busy)}
-                    onClick={() => void runScenario(scenario.id)}
-                  >
-                    <Play />
-                    {scenario.label}
-                  </Button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
         <Card className="timeline-panel">

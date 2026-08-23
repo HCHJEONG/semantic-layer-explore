@@ -1,72 +1,21 @@
-import { getWorkspaceRuntime } from "@/runtime/workspace-runtime";
-import { getEventStore } from "@/lib/stores";
 import { errorResponse } from "@/lib/server/validation";
-import { usesLegacyEvents } from "@/lib/server/go-gateway";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  if (!usesLegacyEvents()) {
-    const gateway = process.env.GO_GATEWAY_URL?.trim() || "http://localhost:8080";
-    const source = new URL("/operations/events/stream", gateway);
-    source.search = new URL(request.url).search;
-    try {
-      const response = await fetch(source, { headers: request.headers.get("last-event-id") ? { "last-event-id": request.headers.get("last-event-id")! } : undefined, cache: "no-store" });
-      return new Response(response.body, { status: response.status, headers: { "cache-control": "no-cache, no-transform", connection: "keep-alive", "content-type": response.headers.get("content-type") ?? "text/event-stream; charset=utf-8" } });
-    } catch (error) { return errorResponse(error); }
-  }
+  const gateway = process.env.GO_GATEWAY_URL?.trim() || "http://localhost:8080";
+  const source = new URL("/operations/events/stream", gateway);
+  source.search = new URL(request.url).search;
   try {
-    const runtime = getWorkspaceRuntime();
-    runtime.getState();
-    const eventStore = getEventStore();
-
-    const encoder = new TextEncoder();
-    const params = new URL(request.url).searchParams;
-    const explicitCursor = params.get("after") ?? request.headers.get("last-event-id");
-    let lastId = explicitCursor === null ? ((await eventStore.listEvents(1))[0]?.id ?? 0) : Number(explicitCursor);
-    if (!Number.isFinite(lastId)) lastId = ((await eventStore.listEvents(1))[0]?.id ?? 0);
-
-    const stream = new ReadableStream({
-      start(controller) {
-        let closed = false;
-
-        const send = (chunk: string) => {
-          if (!closed) controller.enqueue(encoder.encode(chunk));
-        };
-
-        const pushEvents = async () => {
-          const nextEvents = await eventStore.listEventsAfter(lastId, 50);
-          for (const event of nextEvents) {
-            lastId = Math.max(lastId, event.id);
-            send(`id: ${event.id}\n`);
-            send("event: workspace-event\n");
-            send(`data: ${JSON.stringify(event)}\n\n`);
-          }
-        };
-
-        send(": connected\n\n");
-        void pushEvents();
-        const interval = setInterval(() => {
-          send(": heartbeat\n\n");
-          void pushEvents();
-        }, 2_000);
-
-        request.signal.addEventListener("abort", () => {
-          closed = true;
-          clearInterval(interval);
-          controller.close();
-        }, { once: true });
-      },
-    });
-
-    return new Response(stream, {
+    const lastEventId = request.headers.get("last-event-id");
+    const response = await fetch(source, { headers: lastEventId ? { "last-event-id": lastEventId } : undefined, cache: "no-store" });
+    return new Response(response.body, {
+      status: response.status,
       headers: {
         "cache-control": "no-cache, no-transform",
-        "connection": "keep-alive",
-        "content-type": "text/event-stream; charset=utf-8",
+        connection: "keep-alive",
+        "content-type": response.headers.get("content-type") ?? "text/event-stream; charset=utf-8",
       },
     });
-  } catch (error) {
-    return errorResponse(error);
-  }
+  } catch (error) { return errorResponse(error); }
 }

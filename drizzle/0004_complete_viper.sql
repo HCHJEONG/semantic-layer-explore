@@ -1,1 +1,0 @@
-CREATE INDEX `idx_sensor_readings_measured_at` ON `sensor_readings` (`measured_at`);

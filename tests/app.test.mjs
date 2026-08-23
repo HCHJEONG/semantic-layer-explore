@@ -1,372 +1,73 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { once } from "node:events";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import os from "node:os";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-const port = 32147;
-const origin = `http://127.0.0.1:${port}`;
-let server;
-let tempDirectory;
+const root = fileURLToPath(new URL("../", import.meta.url));
+const read = (file) => readFile(path.join(root, file), "utf8");
 
-async function waitForServer() {
-  const deadline = Date.now() + 30_000;
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(`${origin}/api/health`);
-      if (response.ok) return;
-    } catch {}
-    await new Promise((resolve) => setTimeout(resolve, 250));
+async function sourceFiles(directory = root) {
+  const ignored = new Set([".git", ".next", "node_modules", "dist", "target", ".fordeploy", "docs"]);
+  const out = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    if (ignored.has(entry.name)) continue;
+    const absolute = path.join(directory, entry.name);
+    if (entry.isDirectory()) out.push(...await sourceFiles(absolute));
+    else if (/\.(?:ts|tsx|js|mjs|json|ya?ml)$/.test(entry.name)) out.push(absolute);
   }
-  throw new Error("Next.js test server did not become healthy.");
+  return out;
 }
 
-test.before(async () => {
-  tempDirectory = await mkdtemp(path.join(os.tmpdir(), "physical-ai-test-"));
-  server = spawn(process.execPath, [".next/standalone/server.js"], {
-    cwd: fileURLToPath(new URL("../", import.meta.url)),
-    env: {
-      ...process.env,
-      DATABASE_PATH: path.join(tempDirectory, "ontology.sqlite"),
-      ONTOLOGY_BACKEND: "sqlite",
-      OPERATIONAL_BACKEND: "sqlite",
-      EVENTS_BACKEND: "sqlite",
-      PHYSICAL_ADAPTER: "simulator",
-      PORT: String(port),
-      HOSTNAME: "127.0.0.1",
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  await waitForServer();
-});
-
-test.after(async () => {
-  if (server && server.exitCode === null) {
-    server.kill();
-    await once(server, "exit");
+test("Next.js BFF routes use the Go Gateway as their only data boundary", async () => {
+  const routes = await Promise.all([
+    "app/api/ontology/route.ts", "app/api/state/route.ts", "app/api/events/route.ts",
+    "app/api/rules/route.ts", "app/api/devices/route.ts", "app/api/sensors/route.ts",
+  ].map(read));
+  for (const route of routes) {
+    assert.match(route, /proxy(?:Ontology|Operations)/);
+    assert.doesNotMatch(route, /usesLegacy|getWorkspaceRuntime|get.*Store/);
   }
-  if (tempDirectory) await rm(tempDirectory, { recursive: true, force: true });
 });
 
-test("health and readiness endpoints describe the runtime", async () => {
-  const [healthResponse, readyResponse] = await Promise.all([
-    fetch(`${origin}/api/health`),
-    fetch(`${origin}/api/ready`),
-  ]);
-
-  assert.equal(healthResponse.status, 200);
-  assert.equal(readyResponse.status, 200);
-
-  const health = await healthResponse.json();
-  const ready = await readyResponse.json();
-  assert.equal(health.status, "ok");
-  assert.equal(health.service, "ai-physical-workspace");
-  assert.equal(ready.status, "ready");
-  assert.equal(ready.database.status, "ready");
-  assert.equal(ready.physicalAdapter, "simulator");
-  assert.deepEqual(ready.retention, {
-    readingDays: 7,
-    auditEventDays: 30,
-    cleanupIntervalMs: 3_600_000,
-    batchSize: 5_000,
-  });
-  assert.equal(ready.gemini.model, "gemini-3.5-flash-lite");
-});
-
-test("ontology API preserves the original semantic-layer contract", async () => {
-  const response = await fetch(`${origin}/api/ontology`);
-  assert.equal(response.status, 200);
-  const ontology = await response.json();
-
-  assert.deepEqual(ontology.classes.slice(0, 3).map(({ name }) => name), ["Person", "Company", "Project"]);
-  assert.deepEqual(ontology.properties.slice(0, 2).map(({ name, domain, range }) => ({ name, domain, range })), [
-    { name: "worksFor", domain: "Person", range: "Company" },
-    { name: "assignedTo", domain: "Person", range: "Project" },
-  ]);
-  assert.deepEqual(ontology.individuals.slice(0, 4).map(({ name, class: className }) => ({ name, class: className })), [
-    { name: "InspectionTeam", class: "Person" },
-    { name: "OpsEngineer", class: "Person" },
-    { name: "BestAiCom", class: "Company" },
-    { name: "BestAiCom Smart Workspace", class: "Project" },
-  ]);
-  assert.deepEqual(ontology.relations.slice(0, 3).map(({ subject, predicate, object }) => ({ subject, predicate, object })), [
-    { subject: "InspectionTeam", predicate: "worksFor", object: "BestAiCom" },
-    { subject: "OpsEngineer", predicate: "worksFor", object: "BestAiCom" },
-    { subject: "OpsEngineer", predicate: "assignedTo", object: "BestAiCom Smart Workspace" },
-  ]);
-  assert.deepEqual(ontology.classes.slice(3).map(({ name }) => name), ["Sensor", "Event", "Rule", "Device", "Room"]);
-  assert.deepEqual(
-    ontology.properties.filter(({ name }) => ["emits", "evaluatedBy", "triggers"].includes(name)).map(({ name, domain, range }) => ({ name, domain, range })),
-    [
-      { name: "emits", domain: "Sensor", range: "Event" },
-      { name: "evaluatedBy", domain: "Event", range: "Rule" },
-      { name: "triggers", domain: "Rule", range: "Device" },
-    ],
-  );
-  assert.equal(ontology.individuals.find(({ name }) => name === "TemperatureSensor01").externalId, "temperature-01");
-  assert.equal(ontology.individuals.find(({ name }) => name === "FanRelay01").externalId, "relay-fan-01");
-  assert.ok(ontology.relations.some(({ subject, predicate, object }) => subject === "TemperatureSensor01" && predicate === "emits" && object === "SensorReadingEvent"));
-  assert.ok(ontology.relations.some(({ subject, predicate, object }) => subject === "SensorReadingEvent" && predicate === "evaluatedBy" && object === "WorkspaceAutomationRule"));
-  assert.ok(ontology.relations.some(({ subject, predicate, object }) => subject === "WorkspaceAutomationRule" && predicate === "triggers" && object === "FanRelay01"));
-});
-
-test("main page keeps the BestAiCom Semantic Workspace baseline", async () => {
-  const response = await fetch(origin);
-  assert.equal(response.status, 200);
-  const html = await response.text();
-  assert.match(html, /BestAiCom Semantic/);
-  assert.match(html, /Operational Workspace Overview/);
-  assert.match(html, /Event Timeline/);
-  assert.match(html, /Automation/);
-  assert.match(html, /Ops Copilot/);
-  assert.doesNotMatch(html, /Your site is taking shape/);
-});
-
-test("Physical AI endpoints reject invalid requests before invoking Gemini", async () => {
-  const [chatResponse, proposalResponse, explainResponse] = await Promise.all([
-    fetch(`${origin}/api/ai/chat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question: "" }) }),
-    fetch(`${origin}/api/ai/rules/propose`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ instruction: "x" }) }),
-    fetch(`${origin}/api/ai/explain-event`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ eventId: "" }) }),
-  ]);
-  assert.equal(chatResponse.status, 400);
-  assert.equal(proposalResponse.status, 400);
-  assert.equal(explainResponse.status, 400);
+test("SQLite and Drizzle cannot re-enter application source or dependencies", async () => {
+  const files = await sourceFiles();
+  const matches = [];
+  for (const file of files) {
+    if (file === fileURLToPath(import.meta.url)) continue;
+    const content = await readFile(file, "utf8");
+    if (/better-sqlite3|drizzle-orm|DATABASE_PATH|DB_PROVIDER|BACKEND.*sqlite/i.test(content)) matches.push(path.relative(root, file));
+  }
+  assert.deepEqual(matches, []);
+  const packageJson = JSON.parse(await read("package.json"));
+  assert.equal(packageJson.dependencies?.["better-sqlite3"], undefined);
+  assert.equal(packageJson.dependencies?.["drizzle-orm"], undefined);
 });
 
 test("Ask AI and Rule Proposal keep ontology-first tool calling", async () => {
-  const root = fileURLToPath(new URL("../", import.meta.url));
-  const [chatRoute, proposalRoute] = await Promise.all([
-    readFile(path.join(root, "app/api/ai/chat/route.ts"), "utf8"),
-    readFile(path.join(root, "app/api/ai/rules/propose/route.ts"), "utf8"),
-  ]);
+  const [chatRoute, proposalRoute] = await Promise.all([read("app/api/ai/chat/route.ts"), read("app/api/ai/rules/propose/route.ts")]);
   assert.match(chatRoute, /allowedToolNames:\s*\["getOntology"\]/);
   assert.match(proposalRoute, /\["getOntology",\s*"getSensors",\s*"getDevices"\]/);
 });
 
-test("Semantic Map offers an in-place Neo4j projection view", async () => {
-  const root = fileURLToPath(new URL("../", import.meta.url));
-  const graph = await readFile(path.join(root, "components/ontology/ontology-graph.tsx"), "utf8");
+test("Semantic Map keeps the in-place Neo4j projection view", async () => {
+  const graph = await read("components/ontology/ontology-graph.tsx");
   assert.match(graph, /aria-label="Graph data source"/);
   assert.match(graph, /\/api\/graph\/ontology/);
   assert.match(graph, /\/api\/graph\/projection\/rebuild/);
-  assert.match(graph, /Select a projected node to inspect it/);
 });
 
-test("simulator exposes four sensors and four virtual devices", async () => {
-  const response = await fetch(`${origin}/api/state`);
-  assert.equal(response.status, 200);
-  const state = await response.json();
-  assert.equal(state.mode, "simulator");
-  assert.equal(state.connection.state, "connected");
-  assert.deepEqual(state.sensors.map(({ type }) => type), ["temperature", "light", "distance", "button"]);
-  assert.deepEqual(state.devices.map(({ type }) => type), ["led", "servo", "buzzer", "relay"]);
-  assert.equal(state.readings.length, 4);
+test("MQTT command contracts preserve versioned command and ACK envelopes", async () => {
+  const command = JSON.parse(await read("contracts/command.schema.json"));
+  const result = JSON.parse(await read("contracts/command-result.schema.json"));
+  assert.equal(command.properties.schemaVersion.const, "command.v1");
+  assert.equal(result.properties.schemaVersion.const, "command-result.v1");
+  assert.ok(command.required.includes("commandId"));
+  assert.ok(result.required.includes("success"));
 });
 
-test("scenario and manual readings use the same sensor event contract", async () => {
-  const scenarioResponse = await fetch(`${origin}/api/simulator/scenarios/high-temperature`, { method: "POST" });
-  assert.equal(scenarioResponse.status, 200);
-  const state = await scenarioResponse.json();
-  const temperature = state.readings.find(({ sensorId }) => sensorId === "temperature-01");
-  assert.equal(temperature.value, 31.5);
-  assert.equal(temperature.source, "simulator");
-
-  const buttonScenarioResponse = await fetch(`${origin}/api/simulator/scenarios/button-pressed`, { method: "POST" });
-  assert.equal(buttonScenarioResponse.status, 200);
-  const buttonScenarioState = await buttonScenarioResponse.json();
-  assert.equal(buttonScenarioState.readings.find(({ sensorId }) => sensorId === "button-01").value, true);
-  assert.equal(buttonScenarioState.simulator.scenario, "normal");
-
-  const manualResponse = await fetch(`${origin}/api/simulator/sensors/light-01/readings`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ value: 42 }),
-  });
-  assert.equal(manualResponse.status, 201);
-  const reading = await manualResponse.json();
-  assert.equal(reading.sensorId, "light-01");
-  assert.equal(reading.value, 42);
-});
-
-test("virtual device commands update state and write auditable events", async () => {
-  const ledCommandResponse = await fetch(`${origin}/api/devices/led-01/commands`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ command: "on" }),
-  });
-  assert.equal(ledCommandResponse.status, 200);
-  const ledCommandResult = await ledCommandResponse.json();
-  assert.equal(ledCommandResult.success, true);
-  assert.equal(ledCommandResult.state.status, "on");
-
-  const buzzerCommandResponse = await fetch(`${origin}/api/devices/buzzer-01/commands`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ command: "beep" }),
-  });
-  assert.equal(buzzerCommandResponse.status, 200);
-  const buzzerCommandResult = await buzzerCommandResponse.json();
-  assert.equal(buzzerCommandResult.success, true);
-  assert.equal(buzzerCommandResult.state.status, "off");
-
-  const eventsResponse = await fetch(`${origin}/api/events?limit=100`);
-  assert.equal(eventsResponse.status, 200);
-  const events = await eventsResponse.json();
-  assert.ok(events.some(({ type }) => type === "sensor.reading"));
-  assert.ok(events.some(({ type, sourceId }) => type === "device.command.succeeded" && sourceId === "led-01"));
-  assert.ok(events.some(({ type, sourceId, payload }) => type === "device.command.succeeded" && sourceId === "buzzer-01" && payload.command.command === "beep"));
-});
-
-test("rules are validated, editable, and execute device commands from sensor events", async () => {
-  const invalidResponse = await fetch(`${origin}/api/rules`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      name: "Invalid unit", condition: { sensorId: "temperature-01", operator: "gt", value: 30, unit: "lux" },
-      action: { deviceId: "relay-fan-01", command: "on" },
-    }),
-  });
-  assert.equal(invalidResponse.status, 400);
-
-  const createResponse = await fetch(`${origin}/api/rules`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      name: "Cool the workspace", description: "Turn on the fan above 30 C",
-      condition: { sensorId: "temperature-01", operator: "gt", value: 30, unit: "celsius" },
-      action: { deviceId: "relay-fan-01", command: "on" }, enabled: true, cooldownSeconds: 60,
-    }),
-  });
-  assert.equal(createResponse.status, 201);
-  const created = await createResponse.json();
-
-  const patchResponse = await fetch(`${origin}/api/rules/${created.id}`, {
-    method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "High temperature fan" }),
-  });
-  assert.equal(patchResponse.status, 200);
-  assert.equal((await patchResponse.json()).name, "High temperature fan");
-
-  const readingResponse = await fetch(`${origin}/api/simulator/sensors/temperature-01/readings`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ value: 32 }),
-  });
-  assert.equal(readingResponse.status, 201);
-
-  let state;
-  let eventLog = [];
-  const deadline = Date.now() + 3_000;
-  while (Date.now() < deadline) {
-    [state, eventLog] = await Promise.all([
-      fetch(`${origin}/api/state`).then((response) => response.json()),
-      fetch(`${origin}/api/events?limit=200`).then((response) => response.json()),
-    ]);
-    if (eventLog.some(({ type, sourceId }) => type === "rule.matched" && sourceId === created.id)) break;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  assert.equal(state.devices.find(({ id }) => id === "relay-fan-01").state.status, "on");
-  assert.equal(eventLog.filter(({ type, sourceId }) => type === "rule.matched" && sourceId === created.id).length, 1);
-  assert.ok(eventLog.some(({ type, payload }) => type === "device.command.succeeded" && payload.command.issuedBy === "rule-engine"));
-
-  const disableResponse = await fetch(`${origin}/api/rules/${created.id}/disable`, { method: "POST" });
-  assert.equal(disableResponse.status, 200);
-  assert.equal((await disableResponse.json()).enabled, false);
-
-  const deleteResponse = await fetch(`${origin}/api/rules/${created.id}`, { method: "DELETE" });
-  assert.equal(deleteResponse.status, 204);
-  assert.equal((await fetch(`${origin}/api/rules/${created.id}`)).status, 404);
-});
-
-test("Explain Why reconstructs rule-triggered device command causality", async () => {
-  const createResponse = await fetch(`${origin}/api/rules`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      name: "Explain high temperature fan", description: "Turn on the fan above 30 C for explanation tests",
-      condition: { sensorId: "temperature-01", operator: "gt", value: 30, unit: "celsius" },
-      action: { deviceId: "relay-fan-01", command: "on" }, enabled: true, cooldownSeconds: 0,
-    }),
-  });
-  assert.equal(createResponse.status, 201);
-  const created = await createResponse.json();
-
-  const readingResponse = await fetch(`${origin}/api/simulator/sensors/temperature-01/readings`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ value: 33 }),
-  });
-  assert.equal(readingResponse.status, 201);
-
-  let ruleCommandEvent;
-  const deadline = Date.now() + 3_000;
-  while (Date.now() < deadline) {
-    const eventLog = await fetch(`${origin}/api/events?limit=200`).then((response) => response.json());
-    ruleCommandEvent = eventLog.find(({ type, sourceId, payload }) => (
-      type === "device.command.succeeded"
-      && sourceId === "relay-fan-01"
-      && payload.command.issuedBy === "rule-engine"
-      && payload.command.causation?.ruleId === created.id
-    ));
-    if (ruleCommandEvent) break;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  assert.ok(ruleCommandEvent);
-
-  const explainResponse = await fetch(`${origin}/api/ai/explain-event`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ eventId: ruleCommandEvent.eventId }),
-  });
-  assert.equal(explainResponse.status, 200);
-  const explanation = await explainResponse.json();
-
-  assert.equal(explanation.explainable, true);
-  assert.equal(explanation.completeness, "complete");
-  assert.deepEqual(explanation.causalSteps.map(({ type }) => type), ["sensor", "rule", "execution"]);
-  assert.equal(explanation.matchedRule.ruleId, created.id);
-  assert.equal(explanation.triggerReading.sensorId, "temperature-01");
-  assert.equal(explanation.deviceExecution.sourceId, "relay-fan-01");
-  assert.ok(explanation.evidence.every(({ support }) => support === "proven"));
-  assert.equal(explanation.workflow.engine, "mastra-workflow");
-  assert.deepEqual(Object.keys(explanation.agentFindings), ["sensor", "rule", "execution"]);
-  assert.equal(explanation.critic.rejectedClaims.length, 0);
-  assert.equal(explanation.critic.verifiedClaims.length, 3);
-
-  const deleteResponse = await fetch(`${origin}/api/rules/${created.id}`, { method: "DELETE" });
-  assert.equal(deleteResponse.status, 204);
-});
-
-test("Explain Why returns a partial trace for manual device commands", async () => {
-  const commandResponse = await fetch(`${origin}/api/devices/led-01/commands`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ command: "off" }),
-  });
-  assert.equal(commandResponse.status, 200);
-
-  const eventLog = await fetch(`${origin}/api/events?limit=100`).then((response) => response.json());
-  const manualCommandEvent = eventLog.find(({ type, sourceId, payload }) => (
-    type === "device.command.succeeded"
-    && sourceId === "led-01"
-    && payload.command.issuedBy === "user"
-  ));
-  assert.ok(manualCommandEvent);
-
-  const explainResponse = await fetch(`${origin}/api/ai/explain-event`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ eventId: manualCommandEvent.eventId }),
-  });
-  assert.equal(explainResponse.status, 200);
-  const explanation = await explainResponse.json();
-
-  assert.equal(explanation.explainable, true);
-  assert.equal(explanation.completeness, "partial");
-  assert.deepEqual(explanation.missing, ["matched rule", "trigger sensor reading"]);
-  assert.deepEqual(explanation.causalSteps.map(({ type }) => type), ["execution"]);
-  assert.ok(explanation.evidence.some(({ id, support }) => id === "device-execution" && support === "proven"));
-  assert.equal(explanation.agentFindings.sensor.uncertainties.length, 1);
-  assert.equal(explanation.agentFindings.rule.uncertainties.length, 1);
-  assert.equal(explanation.critic.verifiedClaims.length, 1);
+test("Python virtual-device failure defaults to one percent", async () => {
+  const [simulator, compose] = await Promise.all([read("telemetry-simulator/simulator.py"), read("compose.yaml")]);
+  assert.match(simulator, /SIM_COMMAND_FAILURE_RATE", 0\.01/);
+  assert.match(compose, /SIM_COMMAND_FAILURE_RATE:-0\.01/);
 });

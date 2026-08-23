@@ -2,18 +2,6 @@ import "server-only";
 
 const gatewayURL = process.env.GO_GATEWAY_URL ?? "http://localhost:8080";
 
-export function usesLegacyOntology() {
-  return process.env.ONTOLOGY_BACKEND === "sqlite";
-}
-
-export function usesLegacyOperations() {
-  return process.env.OPERATIONAL_BACKEND === "sqlite";
-}
-
-export function usesLegacyEvents() {
-  return process.env.EVENTS_BACKEND === "sqlite";
-}
-
 export async function proxyOntology(request: Request | undefined, path: string) {
   const init: RequestInit = request
     ? { method: request.method, headers: { "content-type": "application/json" }, body: request.method === "GET" ? undefined : await request.text() }

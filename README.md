@@ -14,11 +14,9 @@ A semantic layer provides that missing contract. It tells an AI that `Inspection
 
 ## Distributed Physical AI expansion
 
-The working Next.js and SQLite application is being extended into a polyglot
-distributed system designed for high-volume telemetry. The existing UI and
-domain baseline remain at the repository root while ingress, transport,
-processing, operational storage, and semantic projection gain independent
-service boundaries.
+The root Next.js application is the UI and thin BFF for a polyglot distributed
+system designed for high-volume telemetry. PostgreSQL is the sole authoritative
+store; Neo4j is a rebuildable projection.
 
 ```text
 HTTP telemetry
@@ -71,7 +69,7 @@ long-running services.
 The authoritative-store migrations, deterministic worker rule path, event and
 Explain read path, and Neo4j Explorer view are locally verified. See the
 [distributed expansion plan](./docs/implementation-2nd-plan.md) and the latest
-[device-command handoff](./docs/implementation-2nd-013-mqtt-device-command-handoff.md)
+[PostgreSQL-only handoff](./docs/implementation-2nd-014-sqlite-retirement-handoff.md)
 for the remaining broader-stage boundaries.
 
 ## Reading The System As One Story
@@ -89,13 +87,11 @@ role in a single system rather than as a separate subject to memorize.
 | **Kafka** | Buffers events and distributes partitioned work to independent consumers. |
 | **NestJS worker** | Polls Kafka and performs validation and operational processing. |
 | **PostgreSQL** | Persists distributed operational records that must not be lost. |
-| **SQLite** | Keeps the original single-application semantic/runtime demo self-contained. |
 | **Neo4j** | Projects and traverses complex relationships as a graph read model. |
 | **Ontology / Semantic Layer** | Defines the vocabulary shared by the system and AI. |
 | **Gemini / LLM** | Understands language and generates tool choices, explanations, or proposals. |
 | **Mastra** | Organizes multi-step AI review as an explicit workflow. |
 | **Zod / JSON Schema** | Validate external data at runtime and across language boundaries. |
-| **Drizzle** | Maps TypeScript application data to the SQLite baseline. |
 | **Docker / Compose** | Fixes each runtime environment and starts the services as one system. |
 | **AWS EC2** | Runs the composed system continuously outside a developer machine. |
 
@@ -136,8 +132,8 @@ mix those concerns and make simple queries unnecessarily slow and complex.
 
 The distributed Compose runtime uses
 `Browser -> Next.js thin BFF -> Go -> PostgreSQL/Neo4j` for ontology,
-rules, sensors, devices, events, causal traces, and graph reads. SQLite remains
-available only through explicit legacy standalone backend settings.
+rules, sensors, devices, events, causal traces, and graph reads. No standalone
+database fallback remains in Next.js.
 
 ### Following One Telemetry Event
 
@@ -216,10 +212,10 @@ Semantic Layer API (/api/ontology)
    ↓
 Entity REST APIs
    ↓
-SQLite (Drizzle ORM)
+Go Gateway → PostgreSQL / Neo4j
 ```
 
-Gemini never accesses SQLite. Every question begins with `getOntology()`. After understanding the available classes, properties, and relationships, Gemini requests only the REST resources it needs.
+Gemini never accesses a database directly. Every question begins with `getOntology()`. After understanding the available classes, properties, and relationships, Gemini requests only the REST resources it needs.
 
 The Physical AI extension keeps the same boundary and adds a deterministic runtime below the API:
 
@@ -235,7 +231,7 @@ The Workspace Dashboard also includes a minimal **Explain Why** flow for explain
 
 The LLM integration is being prepared behind a provider boundary. `lib/ai/llm/provider.ts` defines the model-agnostic interface, while `lib/ai/llm/gemini-provider.ts` adapts the existing Vertex Gemini client. This keeps the current Gemini 3.5 Flash Lite setup replaceable by a later provider without changing Mastra workflow code.
 
-The demo keeps deployment simple by using one SQLite file, but the schema separates the semantic metadata store from operational state. Ontology records live in `semantic_classes`, `semantic_properties`, `semantic_individuals`, and `semantic_relations`; runtime state lives in `sensors`, `devices`, `sensor_readings`, `events`, and `rules`.
+PostgreSQL separates semantic metadata from operational state. Ontology records live in namespaced `semantic_*` tables; runtime state lives in sensors, devices, telemetry, commands, events, and rules tables.
 
 ```text
 "Which project is the operations engineer assigned to?"
@@ -286,7 +282,6 @@ For the retrospective implementation handoff plan that builds on the completed d
 - Read and create REST endpoints with Zod validation
 - Gemini tool-calling agent with an enforced ontology-first flow
 - Temporary per-process Ask AI protection: 10 requests per visitor and UTC day
-- File-backed SQLite with automatic Drizzle migrations, WAL mode, and persistent-volume support
 - Health and readiness endpoints for local and AWS operation
 - Seeded Sensor simulator for temperature, light, distance, and button readings
 - Virtual LED, Servo, Buzzer, and Relay devices behind a hardware-neutral adapter
@@ -343,23 +338,13 @@ Gemini follows the same environment convention as `lawvot`:
 GOOGLE_CLOUD_LOCATION=global
 GEMINI_MODEL=gemini-3.5-flash-lite
 GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
-DATABASE_PATH=./data/ai-workspace.sqlite
-DB_PROVIDER=sqlite
-ONTOLOGY_BACKEND=sqlite
-OPERATIONAL_BACKEND=sqlite
-EVENTS_BACKEND=sqlite
 EXPLAIN_LLM_REVIEW=disabled
-READING_RETENTION_DAYS=1
-AUDIT_EVENT_RETENTION_DAYS=30
-RETENTION_CLEANUP_INTERVAL_MS=3600000
-RETENTION_BATCH_SIZE=5000
+GO_GATEWAY_URL=http://localhost:8080
 ```
 
 The Google Cloud project is read from the service account JSON's `project_id`; `GOOGLE_CLOUD_PROJECT` remains an optional override. The Gemini model has one configuration source: `GEMINI_MODEL`, with `gemini-3.5-flash-lite` as the default.
 
-In the distributed Compose runtime, PostgreSQL is authoritative for ontology, rules, sensors, virtual device state, events, and deterministic Explain evidence, while the corresponding Next.js routes proxy the Go Gateway. `ONTOLOGY_BACKEND=sqlite`, `OPERATIONAL_BACKEND=sqlite`, and `EVENTS_BACKEND=sqlite` select the legacy standalone Next.js stores used by regression tests. `DB_PROVIDER` controls that legacy database provider. `EXPLAIN_LLM_REVIEW=enabled` opts the Mastra evidence review steps into live LLM review through the app-level LLM adapter.
-
-The runtime retains high-volume sensor readings and matching `sensor.reading` events for 7 days, while lower-volume audit events are retained for 30 days. Cleanup runs at startup and hourly in bounded batches so it does not monopolize SQLite. Deleted pages are reused by SQLite; the scheduler intentionally does not run `VACUUM`, which could block live traffic. Rule evaluation is serialized and keeps at most the newest pending reading per sensor, preventing an unbounded async backlog when device execution is slow.
+PostgreSQL is authoritative for ontology, rules, sensors, device state, commands, events, and deterministic Explain evidence. Every corresponding Next.js route is a thin Go Gateway BFF. `EXPLAIN_LLM_REVIEW=enabled` opts the Mastra evidence review steps into live LLM review through the app-level LLM adapter.
 
 ## AWS deployment shape
 
@@ -384,11 +369,8 @@ local machine
   -> private EC2 replaces the ai-physical-workspace container
 ```
 
-In that previous model, the source archive excluded `.git`, `node_modules`,
-`.next`, and `data`, so the persistent SQLite volume was not replaced by
-deployment. The Docker build, including `npm run build`, happened on the private
-EC2 instance. The inactive legacy block remains in the script as a reference,
-while the active path uses locally built image archives.
+The inactive legacy deployment block remains as a reference, while the active
+path uses locally built image archives.
 
 ## Project philosophy
 
@@ -407,4 +389,4 @@ directions rather than hidden scope.
 
 ## Stack
 
-Next.js 16 standalone · TypeScript · Tailwind CSS · shadcn-style UI primitives · SQLite · Drizzle ORM · React Flow · Zod · Mastra · Google Gemini · Go · Apache Kafka · NestJS · PostgreSQL · MQTT · Rust · Neo4j · Docker Compose
+Next.js 16 standalone · TypeScript · Tailwind CSS · shadcn-style UI primitives · React Flow · Zod · Mastra · Google Gemini · Go · Apache Kafka · NestJS · PostgreSQL · MQTT · Rust · Neo4j · Docker Compose

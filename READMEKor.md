@@ -14,10 +14,9 @@ Semantic layer는 그 빠진 계약을 제공합니다. 예를 들어 AI에게 `
 
 ## 분산 Physical AI 확장
 
-동작하는 Next.js 및 SQLite 애플리케이션을 유지하면서 대량 telemetry 처리에
-대응할 수 있는 polyglot distributed system으로 확장하고 있습니다. 기존 UI와
-domain baseline은 저장소 루트에 그대로 두고 ingress, transport, processing,
-operational storage, semantic projection을 독립적인 service 경계로 나눴습니다.
+루트 Next.js 애플리케이션은 대량 telemetry를 처리하는 polyglot distributed
+system의 UI와 얇은 BFF입니다. PostgreSQL이 유일한 authoritative store이고,
+Neo4j는 재생성 가능한 projection입니다.
 
 ```text
 HTTP telemetry
@@ -85,13 +84,11 @@ Graph profile과 worker 2개를 사용하면 고유 image 8개로 container 11�
 | **Kafka** | Event를 완충하고 partition 기반 작업을 독립 consumer에 분배합니다. |
 | **NestJS worker** | Kafka를 poll해 validation과 operational processing을 수행합니다. |
 | **PostgreSQL** | 잃어버리면 안 되는 분산 operational record를 영속화합니다. |
-| **SQLite** | 기존 단일 application semantic/runtime demo를 독립적으로 유지합니다. |
 | **Neo4j** | 복잡한 관계를 graph read model로 projection하고 탐색합니다. |
 | **Ontology / Semantic Layer** | 시스템과 AI가 공유하는 vocabulary와 의미를 정의합니다. |
 | **Gemini / LLM** | 언어를 이해해 tool 선택, 설명, 제안을 생성합니다. |
 | **Mastra** | 여러 AI review 단계를 명시적인 workflow로 구성합니다. |
 | **Zod / JSON Schema** | 외부 입력과 언어 간 contract를 runtime에서 검증합니다. |
-| **Drizzle** | TypeScript application data와 SQLite baseline을 연결합니다. |
 | **Docker / Compose** | 각 실행환경을 고정하고 service를 하나의 시스템으로 기동합니다. |
 | **AWS EC2** | 개발자 PC 밖에서 전체 시스템을 계속 실행합니다. |
 
@@ -129,10 +126,8 @@ Device -> MQTT -> Go -> Kafka -> worker -> PostgreSQL
 발생했으니 안정적으로 처리하라"는 의미입니다. Kafka를 범용 RPC처럼 사용하면
 단순 query까지 느리고 복잡해지며 두 책임이 섞입니다.
 
-현재 Next.js dashboard는 기존 Next.js API route를 통해 SQLite runtime을
-조회합니다. 계획된 분산 query 경계는
-`Browser -> Next.js thin BFF -> Go -> PostgreSQL/Neo4j`이며, 아직 모든 기존
-SQLite route를 대체한 상태는 아닙니다.
+현재 query 경계는 `Browser -> Next.js thin BFF -> Go -> PostgreSQL/Neo4j`이며,
+Next.js에는 standalone database fallback이 남아 있지 않습니다.
 
 ### Telemetry 한 건 따라가기
 
@@ -210,10 +205,10 @@ Semantic Layer API (/api/ontology)
    ↓
 Entity REST APIs
    ↓
-SQLite (Drizzle ORM)
+Go Gateway → PostgreSQL / Neo4j
 ```
 
-Gemini는 SQLite에 직접 접근하지 않습니다. 모든 질문은 `getOntology()`로 시작합니다. 사용 가능한 class, property, relationship을 이해한 뒤에야 Gemini는 필요한 REST resource만 요청합니다.
+Gemini는 database에 직접 접근하지 않습니다. 모든 질문은 `getOntology()`로 시작합니다. 사용 가능한 class, property, relationship을 이해한 뒤에야 Gemini는 필요한 REST resource만 요청합니다.
 
 Physical AI 확장은 같은 경계를 유지하면서 API 아래에 deterministic runtime을 추가합니다.
 
@@ -229,7 +224,7 @@ Workspace Dashboard에는 설명 가능한 action event를 위한 최소 **Expla
 
 LLM 연동은 provider boundary 뒤에 준비하고 있습니다. `lib/ai/llm/provider.ts`는 model-agnostic interface를 정의하고, `lib/ai/llm/gemini-provider.ts`는 기존 Vertex Gemini client를 그 interface에 맞게 감쌉니다. 이 구조 덕분에 현재 Gemini 3.5 Flash Lite 설정을 유지하면서도 이후 다른 provider로 교체할 때 Mastra workflow code 변경을 줄일 수 있습니다.
 
-데모는 하나의 SQLite 파일을 사용해 배포를 단순하게 유지하지만, schema는 semantic metadata store와 operational state를 분리합니다. Ontology record는 `semantic_classes`, `semantic_properties`, `semantic_individuals`, `semantic_relations`에 저장되고, runtime state는 `sensors`, `devices`, `sensor_readings`, `events`, `rules`에 저장됩니다.
+PostgreSQL schema는 semantic metadata와 operational state를 분리합니다. Ontology record는 `semantic_*` table에, runtime state는 sensor, device, telemetry, command, event, rule table에 저장됩니다.
 
 ```text
 "Which project is the operations engineer assigned to?"
@@ -280,7 +275,6 @@ LLM 연동은 provider boundary 뒤에 준비하고 있습니다. `lib/ai/llm/pr
 - Zod validation이 적용된 read/create REST endpoint
 - Ontology-first flow가 강제된 Gemini tool-calling agent
 - 방문자별 UTC day 기준 10회 Ask AI 임시 보호
-- 자동 Drizzle migration, WAL mode, persistent volume을 지원하는 file-backed SQLite
 - Local/AWS 운영을 위한 health 및 readiness endpoint
 - Temperature, light, distance, button reading을 생성하는 seeded sensor simulator
 - Hardware-neutral adapter 뒤의 virtual LED, Servo, Buzzer, Relay device
@@ -337,20 +331,13 @@ Gemini는 `lawvot`와 같은 environment convention을 따릅니다.
 GOOGLE_CLOUD_LOCATION=global
 GEMINI_MODEL=gemini-3.5-flash-lite
 GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
-DATABASE_PATH=./data/ai-workspace.sqlite
-DB_PROVIDER=sqlite
 EXPLAIN_LLM_REVIEW=disabled
-READING_RETENTION_DAYS=1
-AUDIT_EVENT_RETENTION_DAYS=30
-RETENTION_CLEANUP_INTERVAL_MS=3600000
-RETENTION_BATCH_SIZE=5000
+GO_GATEWAY_URL=http://localhost:8080
 ```
 
 Google Cloud project는 service account JSON의 `project_id`에서 읽습니다. `GOOGLE_CLOUD_PROJECT`는 optional override로 남아 있습니다. Gemini model의 configuration source는 `GEMINI_MODEL` 하나이며, 기본값은 `gemini-3.5-flash-lite`입니다.
 
-`DB_PROVIDER`는 현재 `sqlite`로 문서화만 해두었습니다. 아직 두 번째 DB 구현을 추가하지 않고, 나중에 PostgreSQL 또는 MariaDB store provider를 붙일 때 사용할 설정 이름을 미리 고정해 둔 것입니다. `EXPLAIN_LLM_REVIEW=enabled`를 설정하면 Mastra evidence review step들이 앱 전체 LLM adapter를 통해 live LLM review를 수행합니다.
-
-Runtime은 high-volume sensor reading과 matching `sensor.reading` event를 7일 동안 보존하고, low-volume audit event는 30일 동안 보존합니다. Cleanup은 startup 및 hourly schedule로 bounded batch 단위 실행되어 SQLite를 독점하지 않습니다. 삭제된 page는 SQLite가 재사용하며, scheduler는 live traffic을 block할 수 있는 `VACUUM`을 의도적으로 실행하지 않습니다. Rule evaluation은 serialized되고 sensor별 최신 pending reading만 유지하여 device execution이 느릴 때 unbounded async backlog를 방지합니다.
+PostgreSQL이 ontology, rule, sensor, device state, command, event, Explain evidence의 authoritative store입니다. `EXPLAIN_LLM_REVIEW=enabled`를 설정하면 Mastra evidence review step들이 앱 전체 LLM adapter를 통해 live LLM review를 수행합니다.
 
 ## AWS 배포 형태
 
@@ -373,10 +360,8 @@ local machine
   -> private EC2 replaces the ai-physical-workspace container
 ```
 
-이전 방식의 source archive는 `.git`, `node_modules`, `.next`, `data`를 제외해
-persistent SQLite volume을 교체하지 않았습니다. `npm run build`를 포함한 Docker
-build는 private EC2에서 실행됐습니다. 비활성 legacy block은 reference로
-스크립트에 남아 있지만 active path는 로컬 build image archive를 사용합니다.
+비활성 legacy deployment block은 reference로 남아 있지만 active path는 로컬
+build image archive를 사용합니다.
 
 ## 프로젝트 철학
 
@@ -395,4 +380,4 @@ future direction으로 남겨둡니다.
 
 ## 스택
 
-Next.js 16 standalone · TypeScript · Tailwind CSS · shadcn-style UI primitives · SQLite · Drizzle ORM · React Flow · Zod · Mastra · Google Gemini · Go · Apache Kafka · NestJS · PostgreSQL · MQTT · Rust · Neo4j · Docker Compose
+Next.js 16 standalone · TypeScript · Tailwind CSS · shadcn-style UI primitives · React Flow · Zod · Mastra · Google Gemini · Go · Apache Kafka · NestJS · PostgreSQL · MQTT · Rust · Neo4j · Docker Compose

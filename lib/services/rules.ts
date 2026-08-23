@@ -1,82 +1,25 @@
 import "server-only";
 
-import { ruleInputSchema, type RuleInput, type RuleRecord } from "@/domain/rule";
-import { getRuleStore } from "@/lib/stores";
+import type { RuleInput } from "@/domain/rule";
+import { getInternalApiUrl } from "@/lib/server/internal-api";
 import { InputValidationError } from "@/lib/server/validation";
 
-let enabledRuleCache: RuleRecord[] | null = null;
-
-function invalidateEnabledRuleCache() {
-  enabledRuleCache = null;
-}
-
-export async function listRules() {
-  return getRuleStore().listRules();
-}
-
-export async function getRule(id: string) {
-  return getRuleStore().getRule(id);
-}
-
-export async function listEnabledRules() {
-  enabledRuleCache ??= await getRuleStore().listEnabledRules();
-  return enabledRuleCache;
-}
-
 export async function validateRuleTargets(input: RuleInput) {
-  const [sensor, device] = await Promise.all([
-    getRuleStore().getSensor(input.condition.sensorId),
-    getRuleStore().getDevice(input.action.deviceId),
+  const [sensorsResponse, devicesResponse] = await Promise.all([
+    fetch(getInternalApiUrl("/api/sensors"), { cache: "no-store" }),
+    fetch(getInternalApiUrl("/api/devices"), { cache: "no-store" }),
   ]);
-  if (!sensor || !sensor.enabled) throw new InputValidationError(`Unknown or disabled sensor: ${input.condition.sensorId}`);
-  if (!device || !device.enabled) throw new InputValidationError(`Unknown or disabled device: ${input.action.deviceId}`);
+  if (!sensorsResponse.ok || !devicesResponse.ok) throw new Error("Operational target lookup failed");
+  const sensors = await sensorsResponse.json() as Array<{ id: string; unit: string }>;
+  const devices = await devicesResponse.json() as Array<{ id: string; type: string }>;
+  const sensor = sensors.find((item) => item.id === input.condition.sensorId);
+  const device = devices.find((item) => item.id === input.action.deviceId);
+  if (!sensor) throw new InputValidationError(`Unknown or disabled sensor: ${input.condition.sensorId}`);
+  if (!device) throw new InputValidationError(`Unknown or disabled device: ${input.action.deviceId}`);
   if (sensor.unit !== input.condition.unit) throw new InputValidationError(`Sensor ${sensor.id} uses ${sensor.unit}, not ${input.condition.unit}.`);
-
-  const allowedCommands: Record<string, string[]> = {
-    led: ["on", "off"], relay: ["on", "off"], servo: ["set-angle", "off"], buzzer: ["beep", "off"],
-  };
+  const allowedCommands: Record<string, string[]> = { led: ["on", "off"], relay: ["on", "off"], servo: ["set-angle", "off"], buzzer: ["beep", "off"] };
   if (!allowedCommands[device.type]?.includes(input.action.command)) throw new InputValidationError(`${input.action.command} is not allowed for ${device.type}.`);
   if (input.action.command === "set-angle" && (input.action.value === undefined || input.action.value < 0 || input.action.value > 180)) {
     throw new InputValidationError("Servo angle must be between 0 and 180.");
   }
-}
-
-export async function createRule(value: unknown) {
-  const input = ruleInputSchema.parse(value);
-  await validateRuleTargets(input);
-  const now = new Date().toISOString();
-  const rule = await getRuleStore().createRule({ id: crypto.randomUUID(), ...input, createdAt: now, updatedAt: now });
-  invalidateEnabledRuleCache();
-  return rule;
-}
-
-export async function updateRule(id: string, patch: Partial<RuleInput>) {
-  const current = await getRule(id);
-  if (!current) return null;
-  const input = ruleInputSchema.parse({ ...current, ...patch });
-  await validateRuleTargets(input);
-  const rule = await getRuleStore().updateRule(id, input, new Date().toISOString());
-  invalidateEnabledRuleCache();
-  return rule;
-}
-
-export async function setRuleEnabled(id: string, enabled: boolean) {
-  const rule = await getRuleStore().setRuleEnabled(id, enabled, new Date().toISOString());
-  invalidateEnabledRuleCache();
-  return rule;
-}
-
-export async function markRuleTriggered(id: string, triggeredAt: string) {
-  await getRuleStore().markRuleTriggered(id, triggeredAt);
-  const cachedRule = enabledRuleCache?.find((rule) => rule.id === id);
-  if (cachedRule) {
-    cachedRule.lastTriggeredAt = triggeredAt;
-    cachedRule.updatedAt = triggeredAt;
-  }
-}
-
-export async function deleteRule(id: string) {
-  const deleted = await getRuleStore().deleteRule(id);
-  if (deleted) invalidateEnabledRuleCache();
-  return deleted;
 }
