@@ -26,7 +26,7 @@ HTTP telemetry
   -> PostgreSQL authoritative operational store
 ```
 
-목표 device 및 graph 경로는 이를
+구현된 device 및 graph 경로는 이를
 `MQTT -> Go -> Kafka -> worker x N -> PostgreSQL`과
 `Kafka -> Rust graph worker -> Neo4j`로 확장합니다.
 
@@ -59,15 +59,19 @@ Graph profile과 worker 2개를 사용하면 고유 image 8개로 container 11�
 | NestJS consumer group 및 PostgreSQL 저장 | 구현 및 검증 완료 |
 | Worker 2개 partition 분산 | 구현 및 검증 완료 |
 | Mosquitto broker | 내부 배포 완료 |
-| Go MQTT subscriber | Skeleton only |
+| Go MQTT subscriber | 구현 및 Mosquitto 로컬 검증 완료 |
+| MQTT device command 및 ACK | Go outbound, Python virtual-device ACK, Kafka result, worker finalization 로컬 검증 완료 |
 | Neo4j service | 배포 및 정상 기동 확인 |
-| Rust Kafka consumer 및 Neo4j projection | Skeleton only |
-| Go graph query 및 Next.js graph drill-down | Skeleton/계획 단계 |
+| Rust Kafka consumer 및 Neo4j projection | Rebuild flow 구현 및 로컬 검증 완료 |
+| Go graph query 및 Next.js Explorer projection view | 원본/projection 조회 구현 및 로컬 검증 완료 |
 
-검증된 slice가 MQTT ingestion이나 Neo4j projection까지 완료됐다는 뜻은 아닙니다.
-상세 경계는 [2차 분산 확장 계획](./docs/implementation-2nd-plan.md)과
-[scaffolding handoff](./docs/implementation-2nd-001-scaffolding-handoff.md)를
-참고하세요.
+Authoritative-store migration, deterministic worker rule path, event/Explain
+조회 경로, Neo4j Explorer view까지 로컬에서 검증했습니다. 상세 경계는
+[2차 분산 확장 계획](./docs/implementation-2nd-plan.md),
+[PostgreSQL-only handoff](./docs/implementation-2nd-014-sqlite-retirement-handoff.md),
+[MQTT outbound failure UX handoff](./docs/implementation-2nd-015-mqtt-outbound-failure-ux-handoff.md)를
+참고하세요. 공장 현장화 범위는
+[3차 산업 현장화 계획](./docs/implementation-3rd-plan.md)에 분리했습니다.
 
 ## 하나의 이야기로 시스템 이해하기
 
@@ -133,11 +137,10 @@ Next.js에는 standalone database fallback이 남아 있지 않습니다.
 
 공장 온도 sensor가 `37.8 C`를 보고한다고 가정해 보겠습니다.
 
-1. **Device ingress.** 목표 경로에서 device는
+1. **Device ingress.** 실제 device 또는 Python telemetry simulator는
    `devices/TEMP-001/telemetry` 같은 topic으로 versioned telemetry envelope를
-   publish합니다. Mosquitto가 MQTT broker를 제공합니다. Broker는 배포됐지만 Go
-   MQTT subscriber는 아직 skeleton이므로 AWS 검증은 현재 Go HTTP endpoint에서
-   시작합니다.
+   publish합니다. Mosquitto가 MQTT broker를 제공하고 Go MQTT subscriber가
+   envelope를 검증해 Kafka로 전달합니다.
 2. **Gateway validation.** Go는 telemetry envelope를 검사하고 수락한 event를
    `telemetry.raw`에 publish합니다. Worker 처리가 끝날 때까지 기다리거나 raw
    event를 PostgreSQL에 직접 저장하지 않습니다.
@@ -150,12 +153,13 @@ Next.js에는 standalone database fallback이 남아 있지 않습니다.
    이상인지 알 필요가 없습니다.
 5. **Operational persistence.** Worker는 event를 검증한 뒤 Kafka topic,
    partition, offset과 함께 PostgreSQL에 저장합니다. Unique `eventId`가
-   redelivery를 안전하게 만듭니다. Deterministic rule 이식과 conditional Mastra
-   실행은 후속 worker 단계이며 현재 slice의 완료 항목이 아닙니다.
-6. **Read-side use.** 향후 동기 API는 authoritative operational state를 직접
-   조회할 수 있습니다. Semantic relation event는 별도로 Rust projector와
-   Neo4j에 전달할 수 있으므로 Neo4j가 대량 telemetry write path에 들어가지
-   않습니다.
+   redelivery를 안전하게 만듭니다. Worker는 활성 PostgreSQL rule을 결정론적으로
+   적용하고 cooldown, pending device command, causal event, audit evidence를
+   transaction으로 commit합니다. Go가 pending command를 MQTT로 발행하고 device
+   ACK가 Kafka를 거쳐 돌아온 뒤 worker가 PostgreSQL device state를 확정합니다.
+6. **Read-side use.** Go는 authoritative operational state, SSE event, causal
+   trace, 제한된 Neo4j 조회를 Next.js BFF에 제공합니다. Rust는 telemetry write
+   path와 독립적으로 Neo4j projection을 rebuild합니다.
 
 Kafka와 PostgreSQL은 서로 다른 질문에 답합니다.
 
@@ -373,9 +377,13 @@ telemetry 흐름을 visible하고 inspectable하게 만드는 것입니다.
 
 ## 향후 작업
 
-OWL import, RDF export, reasoner, 완성된 Neo4j projection/query workflow,
-Palantir-style ontology modeling, MCP server, enterprise semantic layer,
-natural-language workflow, role-based action은 숨겨진 scope가 아니라 명시적인
+다음 큰 범위는 Python simulator를 운영 경로에서 산업용 edge adapter로 교체하고,
+MQTT mTLS/ACL, 장치 heartbeat, disk-backed store-and-forward, 물리적 완료 ACK,
+safety interlock, 현장 observability를 추가하는 것입니다. 단계와 검증 gate는
+[3차 산업 현장화 계획](./docs/implementation-3rd-plan.md)에 기록했습니다.
+
+OWL import, RDF export, reasoner, Palantir-style ontology modeling, MCP server,
+enterprise semantic layer, natural-language workflow, role-based action도 명시적인
 future direction으로 남겨둡니다.
 
 ## 스택
