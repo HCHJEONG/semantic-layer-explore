@@ -33,6 +33,7 @@ test.before(async () => {
       DATABASE_PATH: path.join(tempDirectory, "ontology.sqlite"),
       ONTOLOGY_BACKEND: "sqlite",
       OPERATIONAL_BACKEND: "sqlite",
+      EVENTS_BACKEND: "sqlite",
       PHYSICAL_ADAPTER: "simulator",
       PORT: String(port),
       HOSTNAME: "127.0.0.1",
@@ -143,6 +144,15 @@ test("Ask AI and Rule Proposal keep ontology-first tool calling", async () => {
   ]);
   assert.match(chatRoute, /allowedToolNames:\s*\["getOntology"\]/);
   assert.match(proposalRoute, /\["getOntology",\s*"getSensors",\s*"getDevices"\]/);
+});
+
+test("Semantic Map offers an in-place Neo4j projection view", async () => {
+  const root = fileURLToPath(new URL("../", import.meta.url));
+  const graph = await readFile(path.join(root, "components/ontology/ontology-graph.tsx"), "utf8");
+  assert.match(graph, /aria-label="Graph data source"/);
+  assert.match(graph, /\/api\/graph\/ontology/);
+  assert.match(graph, /\/api\/graph\/projection\/rebuild/);
+  assert.match(graph, /Select a projected node to inspect it/);
 });
 
 test("simulator exposes four sensors and four virtual devices", async () => {

@@ -309,7 +309,18 @@ func (r *Router) deviceCommand(w http.ResponseWriter, req *http.Request) {
 		state["status"] = input.Command
 	}
 	state["lastCommandAt"] = now
-	updated, err := r.store.UpdateDeviceState(req.Context(), device.ID, state)
+	eventID, idErr := randomID("device-command:user:")
+	if idErr != nil {
+		writeJSON(w, 500, map[string]string{"error": "could not create command id"})
+		return
+	}
+	command := map[string]any{"commandId": eventID, "deviceId": device.ID, "deviceType": device.Type, "command": input.Command, "issuedBy": "user", "issuedAt": now}
+	if input.Value != nil {
+		command["value"] = *input.Value
+	}
+	payload := map[string]any{"command": command, "result": map[string]any{"success": true, "deviceId": device.ID, "state": state}}
+	occurredAt, _ := time.Parse(time.RFC3339Nano, now)
+	updated, err := r.store.UpdateDeviceStateWithEvent(req.Context(), device.ID, state, eventID, payload, occurredAt)
 	if err != nil {
 		writeJSON(w, 503, map[string]string{"error": "device command unavailable"})
 		return

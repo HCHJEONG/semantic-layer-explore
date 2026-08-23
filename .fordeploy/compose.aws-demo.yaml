@@ -9,6 +9,7 @@ services:
       GO_GATEWAY_URL: http://api:8080
       ONTOLOGY_BACKEND: postgres
       OPERATIONAL_BACKEND: postgres
+      EVENTS_BACKEND: postgres
       GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-key.json
       GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}

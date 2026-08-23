@@ -39,7 +39,8 @@ func main() {
 		Addr:         cfg.HTTPAddr,
 		Handler:      httpapi.NewRouter(cfg, producer, store, logger),
 		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		WriteTimeout: 0,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	go func() {

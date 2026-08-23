@@ -1,10 +1,20 @@
 import { getWorkspaceRuntime } from "@/runtime/workspace-runtime";
 import { getEventStore } from "@/lib/stores";
 import { errorResponse } from "@/lib/server/validation";
+import { usesLegacyEvents } from "@/lib/server/go-gateway";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  if (!usesLegacyEvents()) {
+    const gateway = process.env.GO_GATEWAY_URL?.trim() || "http://localhost:8080";
+    const source = new URL("/operations/events/stream", gateway);
+    source.search = new URL(request.url).search;
+    try {
+      const response = await fetch(source, { headers: request.headers.get("last-event-id") ? { "last-event-id": request.headers.get("last-event-id")! } : undefined, cache: "no-store" });
+      return new Response(response.body, { status: response.status, headers: { "cache-control": "no-cache, no-transform", connection: "keep-alive", "content-type": response.headers.get("content-type") ?? "text/event-stream; charset=utf-8" } });
+    } catch (error) { return errorResponse(error); }
+  }
   try {
     const runtime = getWorkspaceRuntime();
     runtime.getState();

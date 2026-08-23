@@ -34,6 +34,13 @@ export class PostgresService implements OnModuleDestroy {
           position.offset,
         ],
       );
+      if (result.rowCount === 1) {
+        await client.query(
+          `insert into workspace_event(event_id,type,source_type,source_id,payload,occurred_at)
+           values($1,'sensor.reading','sensor',$2,$3::jsonb,$4) on conflict(event_id) do nothing`,
+          [event.eventId, event.sensorId, JSON.stringify({ eventId: event.eventId, sensorId: event.sensorId, sensorType: event.payload.kind, value: event.payload.value, unit: event.payload.unit, measuredAt: event.measuredAt, source: event.source ?? "mqtt" }), event.measuredAt],
+        );
+      }
       await client.query("commit");
       return { duplicate: result.rowCount === 0 };
     } catch (error) {
@@ -136,12 +143,26 @@ export class PostgresService implements OnModuleDestroy {
         if (deviceResult.rowCount !== 1) throw new Error(`Rule ${row.id} targets an unavailable device: ${action.deviceId}`);
         const device = deviceResult.rows[0] as { type: string; state: Record<string, unknown> };
         const state = applyAction(device.type, device.state, action, triggeredAt);
+        const correlationId = event.correlationId ?? event.eventId;
+        const ruleEventId = `rule-event:${event.eventId}:${row.id}`;
+        const commandEventId = `device-command:${event.eventId}:${row.id}`;
+        const command = { commandId: commandEventId, deviceId: action.deviceId, deviceType: device.type, command: action.command, ...(action.value === undefined ? {} : { value: action.value }), issuedBy: "rule-engine", issuedAt: triggeredAt, causation: { correlationId, ruleId: row.id, ruleEventId, triggerEventId: event.eventId } };
         await client.query("update devices set state=$2::jsonb, updated_at=$3 where id=$1", [action.deviceId, JSON.stringify(state), triggeredAt]);
         await client.query("update rules set last_triggered_at=$2, updated_at=$2 where id=$1", [row.id, triggeredAt]);
         await client.query(
+          `insert into workspace_event(event_id,type,source_type,source_id,payload,occurred_at)
+           values($1,'rule.matched','rule',$2,$3::jsonb,$4) on conflict(event_id) do nothing`,
+          [ruleEventId, row.id, JSON.stringify({ ruleId: row.id, condition, action, reading: { eventId: event.eventId, sensorId: event.sensorId, sensorType: event.payload.kind, value: event.payload.value, unit: event.payload.unit, measuredAt: event.measuredAt, source: event.source ?? "mqtt" }, causation: { correlationId, triggerEventId: event.eventId } }), triggeredAt],
+        );
+        await client.query(
+          `insert into workspace_event(event_id,type,source_type,source_id,payload,occurred_at)
+           values($1,'device.command.succeeded','device',$2,$3::jsonb,$4) on conflict(event_id) do nothing`,
+          [commandEventId, action.deviceId, JSON.stringify({ command, result: { success: true, deviceId: action.deviceId, state } }), triggeredAt],
+        );
+        await client.query(
           `insert into audit_event(audit_id,type,occurred_at,payload,correlation_id)
            values($1,'rule.matched',$2,$3::jsonb,$4) on conflict(audit_id) do nothing`,
-          [auditId, triggeredAt, JSON.stringify({ ruleId: row.id, ruleName: row.name, condition, action, event }), event.correlationId ?? event.eventId],
+          [auditId, triggeredAt, JSON.stringify({ ruleId: row.id, ruleName: row.name, condition, action, event, ruleEventId, commandEventId }), correlationId],
         );
         matched.push({ ruleId: row.id, deviceId: action.deviceId, command: action.command });
       }

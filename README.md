@@ -62,15 +62,16 @@ long-running services.
 | NestJS consumer group and PostgreSQL persistence | Implemented and verified |
 | Two-worker partition distribution | Implemented and verified |
 | Mosquitto broker | Deployed internally |
-| Go MQTT subscriber | Skeleton only |
+| Go MQTT subscriber | Implemented and locally verified with Mosquitto |
 | Neo4j service | Deployed and startup verified |
 | Rust Kafka consumer and Neo4j projection | Rebuild flow implemented and locally verified |
-| Go graph queries and Next.js graph status | Minimal read/status flow implemented and locally verified |
+| Go graph queries and Next.js Explorer projection view | Source/projection inspection implemented and locally verified |
 
-The verified slice does not imply that MQTT ingestion or Neo4j projection is
-complete. See the [distributed expansion plan](./docs/implementation-2nd-plan.md)
-and [scaffolding handoff](./docs/implementation-2nd-001-scaffolding-handoff.md)
-for the detailed boundaries.
+The authoritative-store migrations, deterministic worker rule path, event and
+Explain read path, and Neo4j Explorer view are locally verified. See the
+[distributed expansion plan](./docs/implementation-2nd-plan.md) and the latest
+[Explorer handoff](./docs/implementation-2nd-012-neo4j-explorer-view-handoff.md)
+for the remaining broader-stage boundaries.
 
 ## Reading The System As One Story
 
@@ -132,19 +133,19 @@ The first path means, "return the current answer." The second means, "something
 happened; process it reliably." Treating Kafka as a general RPC mechanism would
 mix those concerns and make simple queries unnecessarily slow and complex.
 
-The current Next.js dashboard still reads its established SQLite runtime through
-Next.js API routes. The planned distributed query boundary is
-`Browser -> Next.js thin BFF -> Go -> PostgreSQL/Neo4j`; it is not yet a completed
-replacement for every existing SQLite route.
+The distributed Compose runtime uses
+`Browser -> Next.js thin BFF -> Go -> PostgreSQL/Neo4j` for ontology,
+rules, sensors, devices, events, causal traces, and graph reads. SQLite remains
+available only through explicit legacy standalone backend settings.
 
 ### Following One Telemetry Event
 
 Imagine a factory temperature sensor reporting `37.8 C`.
 
-1. **Device ingress.** In the target path, the device publishes a versioned
-   telemetry envelope to a topic such as `devices/TEMP-001/telemetry`. Mosquitto
-   provides the MQTT broker. The broker is deployed, but the Go MQTT subscriber
-   is still a skeleton; AWS verification currently begins at Go's HTTP endpoint.
+1. **Device ingress.** A device or the Python telemetry simulator publishes a
+   versioned telemetry envelope to a topic such as
+   `devices/TEMP-001/telemetry`. Mosquitto provides the broker and the Go MQTT
+   subscriber validates and forwards the envelope to Kafka.
 2. **Gateway validation.** Go checks the telemetry envelope and publishes the
    accepted event to `telemetry.raw`. It does not wait for a worker to finish or
    write the raw event directly to PostgreSQL.
@@ -156,13 +157,12 @@ Imagine a factory temperature sensor reporting `37.8 C`.
    the active workers. Go neither knows nor needs to know whether there are two,
    three, or more consumers.
 5. **Operational persistence.** The worker validates the event and stores it in
-   PostgreSQL with its Kafka topic, partition, and offset. A unique `eventId`
-   makes redelivery safe. Deterministic rule migration and conditional Mastra
-   execution are later worker stages, not completed claims of this slice.
-6. **Read-side use.** Synchronous APIs can later query authoritative operational
-   state directly. Semantic relationship events can independently feed the Rust
-   projector and Neo4j without putting Neo4j on the high-volume telemetry write
-   path.
+   PostgreSQL with its Kafka position. It applies enabled PostgreSQL rules
+   deterministically and commits cooldown, virtual device state, causal events,
+   and audit evidence transactionally.
+6. **Read-side use.** Go exposes authoritative operational state, SSE events,
+   causal traces, and bounded Neo4j reads to the Next.js BFF. Rust independently
+   rebuilds Neo4j without putting it on the telemetry write path.
 
 Kafka and PostgreSQL answer different questions:
 
@@ -344,6 +344,7 @@ DATABASE_PATH=./data/ai-workspace.sqlite
 DB_PROVIDER=sqlite
 ONTOLOGY_BACKEND=sqlite
 OPERATIONAL_BACKEND=sqlite
+EVENTS_BACKEND=sqlite
 EXPLAIN_LLM_REVIEW=disabled
 READING_RETENTION_DAYS=1
 AUDIT_EVENT_RETENTION_DAYS=30
@@ -353,7 +354,7 @@ RETENTION_BATCH_SIZE=5000
 
 The Google Cloud project is read from the service account JSON's `project_id`; `GOOGLE_CLOUD_PROJECT` remains an optional override. The Gemini model has one configuration source: `GEMINI_MODEL`, with `gemini-3.5-flash-lite` as the default.
 
-In the distributed Compose runtime, PostgreSQL is authoritative for ontology, rules, sensors, and virtual device state, while the corresponding Next.js routes proxy the Go Gateway. `ONTOLOGY_BACKEND=sqlite` and `OPERATIONAL_BACKEND=sqlite` select the legacy standalone Next.js stores used by regression tests. `DB_PROVIDER` still controls the remaining Next.js event and explainability store. `EXPLAIN_LLM_REVIEW=enabled` opts the Mastra evidence review steps into live LLM review through the app-level LLM adapter.
+In the distributed Compose runtime, PostgreSQL is authoritative for ontology, rules, sensors, virtual device state, events, and deterministic Explain evidence, while the corresponding Next.js routes proxy the Go Gateway. `ONTOLOGY_BACKEND=sqlite`, `OPERATIONAL_BACKEND=sqlite`, and `EVENTS_BACKEND=sqlite` select the legacy standalone Next.js stores used by regression tests. `DB_PROVIDER` controls that legacy database provider. `EXPLAIN_LLM_REVIEW=enabled` opts the Mastra evidence review steps into live LLM review through the app-level LLM adapter.
 
 The runtime retains high-volume sensor readings and matching `sensor.reading` events for 7 days, while lower-volume audit events are retained for 30 days. Cleanup runs at startup and hourly in bounded batches so it does not monopolize SQLite. Deleted pages are reused by SQLite; the scheduler intentionally does not run `VACUUM`, which could block live traffic. Rule evaluation is serialized and keeps at most the newest pending reading per sensor, preventing an unbounded async backlog when device execution is slow.
 
@@ -396,7 +397,7 @@ source of truth. The educational purpose remains to make **Semantic Layer → AP
 
 ## Future work
 
-OWL import, RDF export, reasoners, richer Neo4j projection queries,
+OWL import, RDF export, reasoners, richer bounded Neo4j traversal queries,
 Palantir-style ontology modeling, an MCP server, enterprise semantic layers,
 natural-language workflows, and role-based actions remain explicit future
 directions rather than hidden scope.

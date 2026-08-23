@@ -4,6 +4,7 @@ import { deviceCommandSchema, sensorReadingSchema } from "@/domain/physical";
 import { ruleActionSchema, ruleConditionSchema } from "@/domain/rule";
 import { getEventStore, type WorkspaceEvent } from "@/lib/stores";
 import { InputValidationError } from "@/lib/server/validation";
+import { usesLegacyEvents } from "@/lib/server/go-gateway";
 
 export type EvidenceSupport = "proven" | "derived" | "insufficient";
 export type TraceCompleteness = "complete" | "partial" | "insufficient";
@@ -80,6 +81,13 @@ function buildInsufficientTrace(eventId: string, selectedEvent?: WorkspaceEvent,
 }
 
 export async function buildCausalTrace(eventId: string): Promise<CausalTrace> {
+  if (!usesLegacyEvents()) {
+    const gateway = process.env.GO_GATEWAY_URL?.trim() || "http://localhost:8080";
+    const response = await fetch(new URL(`/operations/causal-trace/${encodeURIComponent(eventId)}`, gateway), { cache: "no-store" });
+    const body = await response.json();
+    if (!response.ok) throw new InputValidationError(typeof body?.error === "string" ? body.error : `Unknown event: ${eventId}`);
+    return body as CausalTrace;
+  }
   const eventStore = getEventStore();
   const selectedEvent = await eventStore.getEventByEventId(eventId);
   if (!selectedEvent) throw new InputValidationError(`Unknown event: ${eventId}`);

@@ -160,3 +160,26 @@ func (store *Store) UpdateDeviceState(ctx context.Context, id string, state map[
 	}
 	return item, err
 }
+
+func (store *Store) UpdateDeviceStateWithEvent(ctx context.Context, id string, state map[string]any, eventID string, payload map[string]any, occurredAt time.Time) (Device, error) {
+	tx, err := store.pool.Begin(ctx)
+	if err != nil {
+		return Device{}, err
+	}
+	defer tx.Rollback(ctx)
+	body, _ := json.Marshal(state)
+	eventBody, _ := json.Marshal(payload)
+	var item Device
+	var raw []byte
+	err = tx.QueryRow(ctx, `update devices set state=$2,updated_at=$3 where id=$1 and enabled returning id,name,type,state`, id, body, occurredAt).Scan(&item.ID, &item.Name, &item.Type, &raw)
+	if err != nil {
+		return item, err
+	}
+	if err = json.Unmarshal(raw, &item.State); err != nil {
+		return item, err
+	}
+	if _, err = tx.Exec(ctx, `insert into workspace_event(event_id,type,source_type,source_id,payload,occurred_at) values($1,'device.command.succeeded','device',$2,$3,$4)`, eventID, id, eventBody, occurredAt); err != nil {
+		return item, err
+	}
+	return item, tx.Commit(ctx)
+}

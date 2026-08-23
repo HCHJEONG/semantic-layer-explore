@@ -12,6 +12,7 @@ services:
       GO_GATEWAY_URL: http://api:8080
       ONTOLOGY_BACKEND: postgres
       OPERATIONAL_BACKEND: postgres
+      EVENTS_BACKEND: postgres
     volumes:
       - frontend-data:/app/data
     ports:
