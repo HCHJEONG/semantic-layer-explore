@@ -43,6 +43,17 @@ func NewRouter(cfg config.Config, producer *kafka.Producer, store *persistence.S
 	mux.HandleFunc("GET /semantic/relations", router.semanticRelations)
 	mux.HandleFunc("POST /semantic/relations", router.semanticRelations)
 	mux.HandleFunc("GET /semantic/ontology", router.semanticOntology)
+	mux.HandleFunc("GET /operations/sensors", router.sensors)
+	mux.HandleFunc("GET /operations/state", router.operationsState)
+	mux.HandleFunc("GET /operations/devices", router.devices)
+	mux.HandleFunc("POST /operations/devices/{deviceId}/commands", router.deviceCommand)
+	mux.HandleFunc("GET /operations/rules", router.rules)
+	mux.HandleFunc("POST /operations/rules", router.rules)
+	mux.HandleFunc("GET /operations/rules/{ruleId}", router.rule)
+	mux.HandleFunc("PATCH /operations/rules/{ruleId}", router.rule)
+	mux.HandleFunc("DELETE /operations/rules/{ruleId}", router.rule)
+	mux.HandleFunc("POST /operations/rules/{ruleId}/enable", router.enableRule)
+	mux.HandleFunc("POST /operations/rules/{ruleId}/disable", router.disableRule)
 	return mux
 }
 

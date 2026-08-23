@@ -343,6 +343,7 @@ GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
 DATABASE_PATH=./data/ai-workspace.sqlite
 DB_PROVIDER=sqlite
 ONTOLOGY_BACKEND=sqlite
+OPERATIONAL_BACKEND=sqlite
 EXPLAIN_LLM_REVIEW=disabled
 READING_RETENTION_DAYS=1
 AUDIT_EVENT_RETENTION_DAYS=30
@@ -352,7 +353,7 @@ RETENTION_BATCH_SIZE=5000
 
 The Google Cloud project is read from the service account JSON's `project_id`; `GOOGLE_CLOUD_PROJECT` remains an optional override. The Gemini model has one configuration source: `GEMINI_MODEL`, with `gemini-3.5-flash-lite` as the default.
 
-In the distributed Compose runtime, PostgreSQL is the authoritative ontology store and the Next.js ontology routes proxy the Go Gateway. `ONTOLOGY_BACKEND=sqlite` is reserved for the legacy standalone Next.js mode and its regression tests. `DB_PROVIDER` still controls the remaining Next.js operational store. `EXPLAIN_LLM_REVIEW=enabled` opts the Mastra evidence review steps into live LLM review through the app-level LLM adapter.
+In the distributed Compose runtime, PostgreSQL is authoritative for ontology, rules, sensors, and virtual device state, while the corresponding Next.js routes proxy the Go Gateway. `ONTOLOGY_BACKEND=sqlite` and `OPERATIONAL_BACKEND=sqlite` select the legacy standalone Next.js stores used by regression tests. `DB_PROVIDER` still controls the remaining Next.js event and explainability store. `EXPLAIN_LLM_REVIEW=enabled` opts the Mastra evidence review steps into live LLM review through the app-level LLM adapter.
 
 The runtime retains high-volume sensor readings and matching `sensor.reading` events for 7 days, while lower-volume audit events are retained for 30 days. Cleanup runs at startup and hourly in bounded batches so it does not monopolize SQLite. Deleted pages are reused by SQLite; the scheduler intentionally does not run `VACUUM`, which could block live traffic. Rule evaluation is serialized and keeps at most the newest pending reading per sensor, preventing an unbounded async backlog when device execution is slow.
 

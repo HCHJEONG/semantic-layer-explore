@@ -20,9 +20,14 @@ export class TelemetryService {
     const result = await this.postgres.insertTelemetry(event, position);
     if (result.duplicate) {
       this.logger.warn(`duplicate telemetry skipped: ${event.eventId}`);
+      await this.postgres.applyDeterministicRules(event);
       return;
     }
 
+    const matches = await this.postgres.applyDeterministicRules(event);
+    for (const match of matches) {
+      this.logger.log(`deterministic rule matched eventId=${event.eventId} ruleId=${match.ruleId} deviceId=${match.deviceId} command=${match.command}`);
+    }
     await this.audit.recordTelemetryAccepted(event);
     if (this.mastra.shouldRunForTelemetry(event)) {
       try {

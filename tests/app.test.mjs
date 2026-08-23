@@ -32,6 +32,7 @@ test.before(async () => {
       ...process.env,
       DATABASE_PATH: path.join(tempDirectory, "ontology.sqlite"),
       ONTOLOGY_BACKEND: "sqlite",
+      OPERATIONAL_BACKEND: "sqlite",
       PHYSICAL_ADAPTER: "simulator",
       PORT: String(port),
       HOSTNAME: "127.0.0.1",
