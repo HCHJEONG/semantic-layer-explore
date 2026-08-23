@@ -97,7 +97,7 @@ git diff --check
 
 ## AWS maintainer configuration
 
-Use `.fordeploy/.env.example` as the copy-and-replace template for the private instance's `/home/ubuntu/semantic-layer-explore/.env.local`. It lists every runtime value that AWS Compose allows the maintainer to set in that file, marks required values, and documents each optional fallback. Placeholders must be replaced or their entire optional line deleted before deployment.
+Use `.fordeploy/.env.example` as the template for the private instance's `/home/ubuntu/semantic-layer-explore/.env.local`. It lists every runtime value that AWS Compose allows the maintainer to set in that file and marks required values. Optional entries are populated with the same values as their Compose fallbacks, so they may be kept as-is, changed explicitly, or deleted. Only the two required password placeholders must be replaced before deployment.
 
 The AWS Compose file supplies defaults, so no new MQTT variable is mandatory in `.env.local` for a single Gateway deployment. The available MQTT overrides are:
 
@@ -109,3 +109,12 @@ MQTT_COMMAND_LEASE_SECONDS=30
 ```
 
 Do not put one fixed `MQTT_CLIENT_ID` or `INSTANCE_ID` into a shared AWS Compose environment when scaling Gateway replicas. Let each Compose container use its hostname. A deployment must include migration 009 and the updated Compose/application image; adding environment variables alone is not sufficient.
+
+### AWS `.env.local` legacy cleanup
+
+The private instance environment was reviewed against current code and `compose.aws-demo.yaml`.
+
+- Remove `SITE_URL`, `NEXT_PUBLIC_SITE_URL`, `PHYSICAL_ADAPTER`, `SIMULATOR_INTERVAL_MS`, `DATABASE_PATH`, `READING_RETENTION_DAYS`, `AUDIT_EVENT_RETENTION_DAYS`, `RETENTION_CLEANUP_INTERVAL_MS`, and `RETENTION_BATCH_SIZE`. They belong to retired or absent code paths.
+- Remove `NODE_ENV`, `PORT`, `INTERNAL_API_ORIGIN`, and `GOOGLE_APPLICATION_CREDENTIALS` from the private `.env.local`. AWS Compose sets them explicitly inside the frontend container; instance-file values do not take effect.
+- Keep `SIMULATOR_SEED`, `SIMULATOR_EVENTS_PER_HOUR`, `SIMULATOR_SCENARIO`, `SIMULATOR_DEVICE_ID`, and `SIM_COMMAND_FAILURE_RATE` when manually controlling the active Python MQTT simulator.
+- `LLM_PROVIDER`, `ASK_AI_DAILY_LIMIT`, and `EXPLAIN_AI_DAILY_LIMIT` are active application settings. AWS Compose now passes them into the frontend container; earlier instance-file values were ignored.

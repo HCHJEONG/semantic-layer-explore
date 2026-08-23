@@ -7,8 +7,9 @@ import { MastraDecisionService } from "./mastra/mastra-decision-service.js";
 import { DeadLetterService } from "./dead-letter/dead-letter-service.js";
 import { AgentResultPublisher } from "./agent-result/agent-result-publisher.js";
 import { CommandResultService } from "./commands/command-result-service.js";
+import { RetentionService } from "./retention/retention-service.js";
 
 @Module({
-  providers: [TelemetryConsumer, TelemetryService, CommandResultService, PostgresService, AuditService, MastraDecisionService, DeadLetterService, AgentResultPublisher],
+  providers: [TelemetryConsumer, TelemetryService, CommandResultService, PostgresService, AuditService, MastraDecisionService, DeadLetterService, AgentResultPublisher, RetentionService],
 })
 export class AppModule {}

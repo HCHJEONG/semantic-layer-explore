@@ -4,6 +4,7 @@ import { config } from "../config.js";
 import type { TelemetryEvent } from "../contracts/telemetry.js";
 import { applyAction, matchesCondition, type RuleAction, type RuleCondition } from "../rules/deterministic-rule.js";
 import type { CommandResult } from "../contracts/command-result.js";
+import type { RetentionConfig } from "../retention/retention-config.js";
 
 const { Pool } = pg;
 
@@ -17,6 +18,15 @@ export class PostgresService implements OnModuleDestroy {
     const client = await this.pool.connect();
     try {
       await client.query("begin");
+      const dedup = await client.query(
+        `insert into telemetry_event_dedup(event_id,first_processed_at)
+         values($1,now()) on conflict(event_id) do nothing`,
+        [event.eventId],
+      );
+      if (dedup.rowCount === 0) {
+        await client.query("commit");
+        return { duplicate: true };
+      }
       const result = await client.query(
         `insert into telemetry_event
           (event_id, device_id, sensor_id, sequence, measured_at, source, payload, kafka_topic, kafka_partition, kafka_offset)
@@ -44,6 +54,66 @@ export class PostgresService implements OnModuleDestroy {
       }
       await client.query("commit");
       return { duplicate: result.rowCount === 0 };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async cleanupRetention(retention: RetentionConfig) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const lock = await client.query<{ acquired: boolean }>("select pg_try_advisory_xact_lock($1) as acquired", [0x53454d52]);
+      if (!lock.rows[0]?.acquired) {
+        await client.query("rollback");
+        return { acquired: false, telemetryDeleted: 0, sensorReadingsDeleted: 0, auditDeleted: 0 };
+      }
+      const schedule = await client.query(
+        `update retention_cleanup_state set last_started_at=now()
+         where name='postgres-retention'
+           and (last_started_at is null or last_started_at <= now()-make_interval(secs => $1 / 1000.0))
+         returning name`,
+        [retention.cleanupIntervalMs],
+      );
+      if (schedule.rowCount !== 1) {
+        await client.query("rollback");
+        return { acquired: false, telemetryDeleted: 0, sensorReadingsDeleted: 0, auditDeleted: 0 };
+      }
+
+      const telemetry = await client.query(
+        `delete from telemetry_event where id in (
+           select id from telemetry_event
+           where processed_at < now()-make_interval(days => $1)
+           order by processed_at,id limit $2 for update skip locked
+         )`,
+        [retention.readingRetentionDays, retention.batchSize],
+      );
+      const sensorReadings = await client.query(
+        `delete from workspace_event where id in (
+           select id from workspace_event
+           where type='sensor.reading' and occurred_at < now()-make_interval(days => $1)
+           order by occurred_at,id limit $2 for update skip locked
+         )`,
+        [retention.readingRetentionDays, retention.batchSize],
+      );
+      const audit = await client.query(
+        `delete from audit_event where id in (
+           select id from audit_event
+           where type<>'rule.matched' and occurred_at < now()-make_interval(days => $1)
+           order by occurred_at,id limit $2 for update skip locked
+         )`,
+        [retention.auditEventRetentionDays, retention.batchSize],
+      );
+      await client.query("commit");
+      return {
+        acquired: true,
+        telemetryDeleted: telemetry.rowCount ?? 0,
+        sensorReadingsDeleted: sensorReadings.rowCount ?? 0,
+        auditDeleted: audit.rowCount ?? 0,
+      };
     } catch (error) {
       await client.query("rollback");
       throw error;
