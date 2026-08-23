@@ -1058,6 +1058,71 @@ nav button.active {
   overflow-wrap: anywhere;
 }
 
+.worker-agent-panel {
+  padding: 20px;
+  margin-bottom: 14px;
+  border-color: #dbe8e1;
+  background: #fbfdfc;
+}
+
+.agent-result-list {
+  display: grid;
+  gap: 9px;
+}
+
+.agent-result-list article {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: center;
+  border-top: 1px solid #e4eee8;
+  padding-top: 9px;
+}
+
+.agent-result-list article:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.agent-result-list svg {
+  width: 16px;
+  color: #438466;
+}
+
+.agent-result-list span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  color: #6f7f75;
+  font: 10px var(--font-mono);
+}
+
+.agent-result-list b {
+  color: #2f6f52;
+  font-weight: 650;
+}
+
+.agent-result-list strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.agent-result-list small,
+.agent-result-list time {
+  color: #7f9085;
+  font: 9px var(--font-mono);
+}
+
+.agent-result-list .empty {
+  color: #7f9085;
+  font-size: 12px;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 370px;
@@ -1767,6 +1832,12 @@ nav button.active {
   .semantic-access-panel,
   .semantic-role-grid {
     grid-template-columns: 1fr;
+  }
+  .agent-result-list article {
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+  .agent-result-list time {
+    grid-column: 2;
   }
   .sensor-grid,
   .device-grid {

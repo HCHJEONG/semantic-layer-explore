@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"semantic-layer-explore/api/internal/config"
 	"semantic-layer-explore/api/internal/kafka"
@@ -24,6 +25,7 @@ func NewRouter(cfg config.Config, producer *kafka.Producer, store *persistence.S
 	mux.HandleFunc("GET /ready", router.ready)
 	mux.HandleFunc("POST /telemetry", router.telemetry)
 	mux.HandleFunc("GET /operations/summary", router.operationsSummary)
+	mux.HandleFunc("GET /operations/agent-results", router.agentResults)
 	mux.HandleFunc("GET /graph/projection/status", router.graphProjectionStatus)
 	return mux
 }
@@ -40,6 +42,26 @@ func (r *Router) operationsSummary(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, summary)
+}
+
+func (r *Router) agentResults(w http.ResponseWriter, req *http.Request) {
+	limit := 10
+	if value := req.URL.Query().Get("limit"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > 50 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "limit must be between 1 and 50"})
+			return
+		}
+		limit = parsed
+	}
+
+	results, err := r.store.ListAgentResults(req.Context(), limit)
+	if err != nil {
+		r.logger.Error("agent results failed", "error", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "agent results unavailable"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"results": results})
 }
 
 func (r *Router) ready(w http.ResponseWriter, _ *http.Request) {

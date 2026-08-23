@@ -99,7 +99,7 @@ export function AskAi({ explainContext, onBackToWorkspace }: { explainContext: E
     <div className="ai-intro"><div className="ai-orb"><Bot size={28} /></div><div className="eyebrow">BESTAICOM OPS ANALYST</div><h1>Ask what changed, why it happened, and what is active.</h1><p>BestAiCom AI reads the semantic map first, then explains current state, approved rules, and recent events using auditable application data.</p></div>
     {explainMode && <Card className="answer-card explain-card">
       <CardContent className="p-6">
-        <div className="answer-label"><Sparkles size={15} /> ASK AI · EXPLAIN MODE <b>Source event {explainContext?.eventId}</b></div>
+        <div className="answer-label"><Sparkles size={15} /> LOCAL EXPLAIN WORKFLOW <b>Source event {explainContext?.eventId}</b></div>
         <Button variant="outline" size="sm" onClick={onBackToWorkspace}>Back to Workspace</Button>
         {explainLoading && <div className="thinking explain-thinking"><Skeleton className="h-4 w-32" /><i /><i /><i /> Building causal trace</div>}
         {explainResult && <ExplainResultView result={explainResult} />}
@@ -213,7 +213,7 @@ function WorkflowGraph({ result }: { result: ExplainResult }) {
   }, [completed]);
 
   return <div className="workflow-graph" aria-label="Mastra workflow graph">
-    <strong><GitBranch size={14} /> Mastra Graph</strong>
+    <strong><GitBranch size={14} /> Local Explain Graph</strong>
     <div className="workflow-flow" style={{ height: 260 }}>
       <ReactFlow nodes={graph.nodes} edges={graph.edges} nodeTypes={workflowNodeTypes} fitView nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} panOnDrag={false} zoomOnScroll={false} zoomOnPinch={false} zoomOnDoubleClick={false} proOptions={{ hideAttribution: true }}>
         <Background color="#ddd6e8" gap={24} />

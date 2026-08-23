@@ -21,6 +21,25 @@ type OperationsSummary struct {
 	CheckedAt            string          `json:"checkedAt"`
 }
 
+type AgentResult struct {
+	AuditID       string `json:"auditId"`
+	ResultID      string `json:"resultId,omitempty"`
+	Type          string `json:"type"`
+	Kind          string `json:"kind,omitempty"`
+	Status        string `json:"status,omitempty"`
+	Mode          string `json:"mode,omitempty"`
+	Trigger       string `json:"trigger,omitempty"`
+	Summary       string `json:"summary,omitempty"`
+	EventID       string `json:"eventId,omitempty"`
+	DeviceID      string `json:"deviceId,omitempty"`
+	SensorID      string `json:"sensorId,omitempty"`
+	SensorKind    string `json:"sensorKind,omitempty"`
+	Value         string `json:"value,omitempty"`
+	Unit          string `json:"unit,omitempty"`
+	CorrelationID string `json:"correlationId,omitempty"`
+	OccurredAt    string `json:"occurredAt"`
+}
+
 type Telemetry struct {
 	EventID     string `json:"eventId"`
 	DeviceID    string `json:"deviceId"`
@@ -119,6 +138,71 @@ func (store *Store) OperationsSummary(ctx context.Context) (OperationsSummary, e
 
 	summary.CheckedAt = time.Now().UTC().Format(time.RFC3339)
 	return summary, nil
+}
+
+func (store *Store) ListAgentResults(ctx context.Context, limit int) ([]AgentResult, error) {
+	if limit < 1 || limit > 50 {
+		limit = 10
+	}
+	rows, err := store.pool.Query(ctx, `
+		select
+			audit_id,
+			coalesce(payload->>'resultId', ''),
+			type,
+			coalesce(payload->>'kind', ''),
+			coalesce(payload->>'status', ''),
+			coalesce(payload->'payload'->>'mode', ''),
+			coalesce(payload->'payload'->>'trigger', ''),
+			coalesce(payload->>'summary', payload->>'error', ''),
+			coalesce(payload->'payload'->'event'->>'eventId', payload->>'eventId', ''),
+			coalesce(payload->'payload'->'event'->>'deviceId', payload->>'deviceId', ''),
+			coalesce(payload->'payload'->'event'->>'sensorId', payload->>'sensorId', ''),
+			coalesce(payload->'payload'->'event'->>'kind', ''),
+			coalesce(payload->'payload'->'event'->>'value', ''),
+			coalesce(payload->'payload'->'event'->>'unit', ''),
+			coalesce(correlation_id, ''),
+			occurred_at
+		from audit_event
+		where type in ('mastra.telemetry.decision', 'mastra.telemetry.failed')
+		order by occurred_at desc
+		limit $1
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]AgentResult, 0, limit)
+	for rows.Next() {
+		var result AgentResult
+		var occurredAt time.Time
+		if err := rows.Scan(
+			&result.AuditID,
+			&result.ResultID,
+			&result.Type,
+			&result.Kind,
+			&result.Status,
+			&result.Mode,
+			&result.Trigger,
+			&result.Summary,
+			&result.EventID,
+			&result.DeviceID,
+			&result.SensorID,
+			&result.SensorKind,
+			&result.Value,
+			&result.Unit,
+			&result.CorrelationID,
+			&occurredAt,
+		); err != nil {
+			return nil, err
+		}
+		result.OccurredAt = occurredAt.UTC().Format(time.RFC3339)
+		results = append(results, result)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 func (store *Store) Close() {

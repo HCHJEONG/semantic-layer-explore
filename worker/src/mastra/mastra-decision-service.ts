@@ -1,30 +1,9 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { randomUUID } from "node:crypto";
 import { config } from "../config.js";
 import type { TelemetryEvent } from "../contracts/telemetry.js";
-import { AgentResultPublisher, type AgentResult } from "../agent-result/agent-result-publisher.js";
+import { AgentResultPublisher } from "../agent-result/agent-result-publisher.js";
+import { buildTelemetryDecisionResult } from "../agent-result/telemetry-decision.js";
 import { PostgresService } from "../persistence/postgres-service.js";
-
-type MastraDecision = AgentResult & {
-  payload: {
-    mode: string;
-    trigger: string;
-    event: {
-      eventId: string;
-      deviceId: string;
-      sensorId: string;
-      kind: string;
-      value: number | boolean;
-      unit: string;
-      measuredAt: string;
-    };
-    workflow: {
-      engine: "mastra-boundary";
-      stages: Array<{ id: string; label: string; status: "completed" }>;
-    };
-    llmInvoked: false;
-  };
-};
 
 @Injectable()
 export class MastraDecisionService {
@@ -43,7 +22,7 @@ export class MastraDecisionService {
     const trigger = this.findTrigger(event);
     if (!trigger) return;
 
-    const decision = this.buildDecision(event, trigger);
+    const decision = buildTelemetryDecisionResult(event, trigger);
     await this.postgres.insertAuditEvent({
       auditId: decision.resultId,
       type: "mastra.telemetry.decision",
@@ -69,39 +48,4 @@ export class MastraDecisionService {
     return undefined;
   }
 
-  private buildDecision(event: TelemetryEvent, trigger: string): MastraDecision {
-    const createdAt = new Date().toISOString();
-    const status = config.mastraTelemetryMode === "dry-run" ? "skipped" : "succeeded";
-    return {
-      schemaVersion: "agent-result.v1",
-      resultId: randomUUID(),
-      kind: "impact-analysis",
-      status,
-      summary: `Telemetry event ${event.eventId} matched ${trigger}; live LLM invocation is ${config.mastraTelemetryMode}.`,
-      payload: {
-        mode: config.mastraTelemetryMode,
-        trigger,
-        event: {
-          eventId: event.eventId,
-          deviceId: event.deviceId,
-          sensorId: event.sensorId,
-          kind: event.payload.kind,
-          value: event.payload.value,
-          unit: event.payload.unit,
-          measuredAt: event.measuredAt,
-        },
-        workflow: {
-          engine: "mastra-boundary",
-          stages: [
-            { id: "trigger-classification", label: "Classify telemetry trigger", status: "completed" },
-            { id: "policy-gate", label: "Apply conditional AI invocation gate", status: "completed" },
-            { id: "audit-result", label: "Record agent result audit", status: "completed" },
-          ],
-        },
-        llmInvoked: false,
-      },
-      createdAt,
-      correlationId: event.correlationId ?? randomUUID(),
-    };
-  }
 }

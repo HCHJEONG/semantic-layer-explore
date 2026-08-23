@@ -27,6 +27,25 @@ type OperationsSummary = {
   checkedAt: string;
 };
 
+type AgentResult = {
+  auditId: string;
+  resultId?: string;
+  type: string;
+  kind?: string;
+  status?: string;
+  mode?: string;
+  trigger?: string;
+  summary?: string;
+  eventId?: string;
+  deviceId?: string;
+  sensorId?: string;
+  sensorKind?: string;
+  value?: string;
+  unit?: string;
+  correlationId?: string;
+  occurredAt: string;
+};
+
 const scenarios: Array<{ id: SimulatorScenario; label: string }> = [
   { id: "normal", label: "Normal" },
   { id: "high-temperature", label: "High temp" },
@@ -82,6 +101,7 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
   const [events, setEvents] = useState<WorkspaceEvent[]>([]);
   const [rules, setRules] = useState<RuleRecord[]>([]);
   const [operations, setOperations] = useState<OperationsSummary | null>(null);
+  const [agentResults, setAgentResults] = useState<AgentResult[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<BusyState>(null);
   const bufferedEventsRef = useRef<WorkspaceEvent[]>([]);
@@ -100,6 +120,26 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Workspace runtime is unavailable."); }
   }, []);
 
+  const refreshAgentResults = useCallback(async () => {
+    try {
+      const response = await fetch("/api/operations/agent-results?limit=6", { cache: "no-store" });
+      if (!response.ok) return;
+      const body = await response.json() as { results?: AgentResult[] };
+      setAgentResults(body.results ?? []);
+    } catch {
+      setAgentResults([]);
+    }
+  }, []);
+
+  const refreshOperations = useCallback(async () => {
+    try {
+      const response = await fetch("/api/operations/summary", { cache: "no-store" });
+      if (response.ok) setOperations(await response.json());
+    } catch {
+      // The local workspace can still operate when the distributed stack is offline.
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     try {
       const [stateResponse, eventsResponse, rulesResponse, operationsResponse] = await Promise.all([
@@ -112,8 +152,9 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
       const [nextState, nextEvents, nextRules] = await Promise.all([stateResponse.json(), eventsResponse.json(), rulesResponse.json()]);
       setState(nextState); setEvents(nextEvents); setRules(nextRules); setError("");
       if (operationsResponse.ok) setOperations(await operationsResponse.json());
+      void refreshAgentResults();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Workspace runtime is unavailable."); }
-  }, []);
+  }, [refreshAgentResults]);
 
   const scheduleStateAndRulesRefresh = useCallback(() => {
     if (refreshTimerRef.current !== null) return;
@@ -127,6 +168,14 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
     const initial = window.setTimeout(() => void refresh(), 0);
     return () => window.clearTimeout(initial);
   }, [refresh]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void refreshOperations();
+      void refreshAgentResults();
+    }, 2_500);
+    return () => window.clearInterval(timer);
+  }, [refreshAgentResults, refreshOperations]);
 
   /*
    * Previous polling version kept for React study notes.
@@ -152,6 +201,7 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
       if (visibleRef.current) {
         setEvents((currentEvents) => mergeEvents(currentEvents, [event]));
         scheduleStateAndRulesRefresh();
+        void refreshAgentResults();
         return;
       }
       bufferedEventsRef.current = mergeEvents(bufferedEventsRef.current, [event]);
@@ -166,7 +216,7 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
         refreshTimerRef.current = null;
       }
     };
-  }, [scheduleStateAndRulesRefresh]);
+  }, [refreshAgentResults, scheduleStateAndRulesRefresh]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -277,6 +327,33 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
             <small>Policy basis: OpsEngineer assignedTo BestAiCom Smart Workspace</small>
           </article>
         </div>
+      </Card>
+
+      <Card className="worker-agent-panel">
+        <CardHeader className="dashboard-title">
+          <div>
+            <span className="eyebrow">NESTJS WORKER</span>
+            <CardTitle>Mastra Activity</CardTitle>
+          </div>
+          <small>{operations?.latestMastraDecision?.mode ?? "waiting"}</small>
+        </CardHeader>
+        <CardContent className="p-4">
+          <div className="agent-result-list">
+            {agentResults.length ? agentResults.map((result) => (
+              <article key={result.auditId}>
+                <Bot />
+                <div>
+                  <span>{result.kind || result.type}<b>{result.status || "recorded"}</b></span>
+                  <strong>{result.trigger || result.summary || "Worker decision recorded"}</strong>
+                  <small>
+                    {result.sensorId ? `${result.sensorId}${result.value ? ` · ${result.value}${result.unit ? ` ${result.unit}` : ""}` : ""}` : result.eventId || result.auditId}
+                  </small>
+                </div>
+                <time>{new Date(result.occurredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time>
+              </article>
+            )) : <div className="empty">Worker decisions will appear after MQTT telemetry crosses a Mastra boundary.</div>}
+          </div>
+        </CardContent>
       </Card>
 
       <div className="dashboard-grid">
