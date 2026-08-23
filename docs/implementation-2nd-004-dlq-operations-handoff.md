@@ -63,11 +63,19 @@ Next.js dashboard
 - AWS Compose config with `graph` and `simulator` profiles
 - Deployment script syntax: `bash -n .fordeploy/deploy.sh`
 - Docker image builds: `docker compose build api worker`
+- Local E2E smoke:
+  - `docker compose --profile simulator up -d --scale worker=2 --build`
+  - normal MQTT simulator events persisted to `telemetry_event`
+  - invalid telemetry produced to Kafka `telemetry.raw`
+  - worker wrote one `dead_letter_event`
+  - worker published one `dead-letter` Kafka message
+  - Go `/operations/summary` and Next.js `/api/operations/summary` returned
+    matching `telemetryCount` and `deadLetterCount`
+  - Kafka consumer lag returned to 0
+  - test stack cleaned up with `docker compose down -v`
 
 ## Not Yet Verified
 
-- End-to-end invalid telemetry smoke from Kafka `telemetry.raw` into
-  `dead_letter_event`.
 - AWS deployment of this DLQ/operations change.
 - UI screenshot verification after deployment.
 - DLQ replay tooling.
