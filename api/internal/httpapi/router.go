@@ -1,12 +1,16 @@
 package httpapi
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"semantic-layer-explore/api/internal/config"
+	"semantic-layer-explore/api/internal/graph"
 	"semantic-layer-explore/api/internal/kafka"
 	"semantic-layer-explore/api/internal/persistence"
 )
@@ -16,10 +20,11 @@ type Router struct {
 	producer *kafka.Producer
 	store    *persistence.Store
 	logger   *slog.Logger
+	graph    *graph.Client
 }
 
 func NewRouter(cfg config.Config, producer *kafka.Producer, store *persistence.Store, logger *slog.Logger) http.Handler {
-	router := &Router{cfg: cfg, producer: producer, store: store, logger: logger}
+	router := &Router{cfg: cfg, producer: producer, store: store, logger: logger, graph: graph.NewClient(cfg.Neo4jHTTPURL, cfg.Neo4jUser, cfg.Neo4jPassword)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", router.health)
 	mux.HandleFunc("GET /ready", router.ready)
@@ -27,6 +32,8 @@ func NewRouter(cfg config.Config, producer *kafka.Producer, store *persistence.S
 	mux.HandleFunc("GET /operations/summary", router.operationsSummary)
 	mux.HandleFunc("GET /operations/agent-results", router.agentResults)
 	mux.HandleFunc("GET /graph/projection/status", router.graphProjectionStatus)
+	mux.HandleFunc("POST /graph/projection/rebuild", router.graphProjectionRebuild)
+	mux.HandleFunc("GET /graph/ontology", router.graphOntology)
 	return mux
 }
 
@@ -91,11 +98,42 @@ func (r *Router) telemetry(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued", "eventId": event.EventID})
 }
 
-func (r *Router) graphProjectionStatus(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{
-		"status": "not_configured",
-		"detail": "Neo4j projection endpoint skeleton is present; graph profile wiring comes later.",
-	})
+func (r *Router) graphProjectionStatus(w http.ResponseWriter, req *http.Request) {
+	status, err := r.store.GraphProjectionStatus(req.Context())
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "graph projection status unavailable"})
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (r *Router) graphProjectionRebuild(w http.ResponseWriter, req *http.Request) {
+	random := make([]byte, 12)
+	if _, err := rand.Read(random); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create rebuild id"})
+		return
+	}
+	event := kafka.GraphRebuild{SchemaVersion: "graph-rebuild.v1", RebuildID: "rebuild-" + hex.EncodeToString(random), RequestedAt: time.Now().UTC().Format(time.RFC3339), Scope: "ontology"}
+	if err := r.producer.PublishGraphRebuild(req.Context(), event); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "graph rebuild publish failed"})
+		return
+	}
+	writeJSON(w, http.StatusAccepted, event)
+}
+
+func (r *Router) graphOntology(w http.ResponseWriter, req *http.Request) {
+	status, err := r.store.GraphProjectionStatus(req.Context())
+	if err != nil || status.Status != "ready" {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "graph projection is not ready"})
+		return
+	}
+	ontology, err := r.graph.Ontology(req.Context())
+	if err != nil {
+		r.logger.Error("graph ontology query failed", "error", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "graph ontology unavailable"})
+		return
+	}
+	writeJSON(w, http.StatusOK, ontology)
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

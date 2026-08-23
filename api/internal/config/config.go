@@ -6,24 +6,32 @@ import (
 )
 
 type Config struct {
-	HTTPAddr       string
-	SSHAddr        string
-	KafkaBrokers   []string
-	TelemetryTopic string
-	DatabaseURL    string
-	MQTTURL        string
-	MQTTTopic      string
+	HTTPAddr          string
+	SSHAddr           string
+	KafkaBrokers      []string
+	TelemetryTopic    string
+	GraphRebuildTopic string
+	DatabaseURL       string
+	Neo4jHTTPURL      string
+	Neo4jUser         string
+	Neo4jPassword     string
+	MQTTURL           string
+	MQTTTopic         string
 }
 
 func FromEnv() Config {
 	return Config{
-		HTTPAddr:       env("API_HTTP_ADDR", ":8080"),
-		SSHAddr:        env("API_SSH_ADDR", ":2222"),
-		KafkaBrokers:   csv(env("KAFKA_BROKERS", "kafka:9092")),
-		TelemetryTopic: env("KAFKA_TELEMETRY_TOPIC", "telemetry.raw"),
-		DatabaseURL:    env("DATABASE_URL", "postgres://physicalai:physicalai@postgres:5432/physicalai"),
-		MQTTURL:        env("MQTT_URL", "tcp://mosquitto:1883"),
-		MQTTTopic:      env("MQTT_TELEMETRY_TOPIC", "devices/+/telemetry"),
+		HTTPAddr:          env("API_HTTP_ADDR", ":8080"),
+		SSHAddr:           env("API_SSH_ADDR", ":2222"),
+		KafkaBrokers:      csv(env("KAFKA_BROKERS", "kafka:9092")),
+		TelemetryTopic:    env("KAFKA_TELEMETRY_TOPIC", "telemetry.raw"),
+		GraphRebuildTopic: env("KAFKA_GRAPH_REBUILD_TOPIC", "semantic.graph.rebuild"),
+		DatabaseURL:       env("DATABASE_URL", "postgres://physicalai:physicalai@postgres:5432/physicalai"),
+		Neo4jHTTPURL:      env("NEO4J_HTTP_URL", "http://neo4j:7474/db/neo4j/tx/commit"),
+		Neo4jUser:         env("NEO4J_USER", "neo4j"),
+		Neo4jPassword:     env("NEO4J_PASSWORD", "physicalai"),
+		MQTTURL:           env("MQTT_URL", "tcp://mosquitto:1883"),
+		MQTTTopic:         env("MQTT_TELEMETRY_TOPIC", "devices/+/telemetry"),
 	}
 }
 

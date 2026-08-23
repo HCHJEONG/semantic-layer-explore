@@ -10,11 +10,12 @@ import (
 )
 
 type Producer struct {
-	writer *kafka.Writer
-	logger *slog.Logger
+	writer        *kafka.Writer
+	rebuildWriter *kafka.Writer
+	logger        *slog.Logger
 }
 
-func NewProducer(brokers []string, topic string, logger *slog.Logger) *Producer {
+func NewProducer(brokers []string, topic string, rebuildTopic string, logger *slog.Logger) *Producer {
 	return &Producer{
 		writer: &kafka.Writer{
 			Addr:         kafka.TCP(brokers...),
@@ -23,8 +24,26 @@ func NewProducer(brokers []string, topic string, logger *slog.Logger) *Producer 
 			RequiredAcks: kafka.RequireOne,
 			Async:        false,
 		},
-		logger: logger,
+		rebuildWriter: &kafka.Writer{Addr: kafka.TCP(brokers...), Topic: rebuildTopic, RequiredAcks: kafka.RequireOne, Async: false},
+		logger:        logger,
 	}
+}
+
+type GraphRebuild struct {
+	SchemaVersion string `json:"schemaVersion"`
+	RebuildID     string `json:"rebuildId"`
+	RequestedAt   string `json:"requestedAt"`
+	Scope         string `json:"scope"`
+}
+
+func (p *Producer) PublishGraphRebuild(ctx context.Context, event GraphRebuild) error {
+	value, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	publishCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return p.rebuildWriter.WriteMessages(publishCtx, kafka.Message{Key: []byte(event.RebuildID), Value: value})
 }
 
 func (p *Producer) PublishTelemetry(ctx context.Context, event TelemetryEvent) error {
@@ -47,5 +66,8 @@ func (p *Producer) PublishTelemetry(ctx context.Context, event TelemetryEvent) e
 func (p *Producer) Close() {
 	if err := p.writer.Close(); err != nil {
 		p.logger.Warn("kafka writer close failed", "error", err)
+	}
+	if err := p.rebuildWriter.Close(); err != nil {
+		p.logger.Warn("Kafka rebuild writer close failed", "error", err)
 	}
 }

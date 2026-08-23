@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, AlertTriangle, BellRing, Bot, Database, Fan, Gauge, HelpCircle, Lightbulb, Play, Radio, RefreshCw, Ruler, ShieldCheck, Thermometer, ToggleLeft, UserCheck, Zap } from "lucide-react";
+import { Activity, AlertTriangle, BellRing, Bot, Database, Fan, Gauge, HelpCircle, Lightbulb, Network, Play, Radio, RefreshCw, Ruler, ShieldCheck, Thermometer, ToggleLeft, UserCheck, Zap } from "lucide-react";
 import type { SensorReading, SimulatorScenario, WorkspaceState } from "@/domain/physical";
 import type { RuleRecord } from "@/domain/rule";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,9 @@ type AgentResult = {
   correlationId?: string;
   occurredAt: string;
 };
+
+type GraphProjection = { status: string; rebuildId?: string; completedAt?: string; nodeCount: number; relationCount: number; errorMessage?: string };
+type GraphOntology = { nodes: Array<{ id: string; kind: string; name: string }>; relations: Array<{ id: number; subjectId: string; predicate: string; objectId: string }> };
 
 const scenarios: Array<{ id: SimulatorScenario; label: string }> = [
   { id: "normal", label: "Normal" },
@@ -102,6 +105,9 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
   const [rules, setRules] = useState<RuleRecord[]>([]);
   const [operations, setOperations] = useState<OperationsSummary | null>(null);
   const [agentResults, setAgentResults] = useState<AgentResult[]>([]);
+  const [graphProjection, setGraphProjection] = useState<GraphProjection | null>(null);
+  const [graphOntology, setGraphOntology] = useState<GraphOntology | null>(null);
+  const [graphBusy, setGraphBusy] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<BusyState>(null);
   const bufferedEventsRef = useRef<WorkspaceEvent[]>([]);
@@ -140,6 +146,21 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
     }
   }, []);
 
+  const refreshGraph = useCallback(async () => {
+    try {
+      const statusResponse = await fetch("/api/graph/projection/status", { cache: "no-store" });
+      if (!statusResponse.ok) return;
+      const status = await statusResponse.json() as GraphProjection;
+      setGraphProjection(status);
+      if (status.status === "ready") {
+        const graphResponse = await fetch("/api/graph/ontology", { cache: "no-store" });
+        if (graphResponse.ok) setGraphOntology(await graphResponse.json());
+      }
+    } catch {
+      // The graph profile is optional for the baseline workspace.
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     try {
       const [stateResponse, eventsResponse, rulesResponse, operationsResponse] = await Promise.all([
@@ -173,9 +194,23 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
     const timer = window.setInterval(() => {
       void refreshOperations();
       void refreshAgentResults();
+      void refreshGraph();
     }, 2_500);
     return () => window.clearInterval(timer);
-  }, [refreshAgentResults, refreshOperations]);
+  }, [refreshAgentResults, refreshGraph, refreshOperations]);
+
+  async function rebuildGraph() {
+    setGraphBusy(true);
+    try {
+      const response = await fetch("/api/graph/projection/rebuild", { method: "POST" });
+      if (!response.ok) throw new Error("Could not queue the graph rebuild.");
+      await refreshGraph();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Graph rebuild failed.");
+    } finally {
+      setGraphBusy(false);
+    }
+  }
 
   /*
    * Previous polling version kept for React study notes.
@@ -352,6 +387,26 @@ export function WorkspaceDashboard({ onExplainEvent }: { onExplainEvent: (eventI
                 <time>{new Date(result.occurredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time>
               </article>
             )) : <div className="empty">Worker decisions will appear after MQTT telemetry crosses a Mastra boundary.</div>}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="graph-projection-panel">
+        <CardHeader className="dashboard-title">
+          <div>
+            <span className="eyebrow">RUST GRAPH WORKER</span>
+            <CardTitle>Neo4j Projection</CardTitle>
+          </div>
+          <Button variant="outline" size="sm" disabled={graphBusy || graphProjection?.status === "running"} onClick={() => void rebuildGraph()} title="Rebuild Neo4j projection">
+            <RefreshCw /> Rebuild
+          </Button>
+        </CardHeader>
+        <CardContent className="graph-projection-content">
+          <Network />
+          <div>
+            <span>{graphProjection?.status ?? "graph profile offline"}</span>
+            <strong>{graphProjection ? `${graphProjection.nodeCount} nodes · ${graphProjection.relationCount} relations` : "PostgreSQL remains authoritative"}</strong>
+            <small>{graphProjection?.errorMessage || graphOntology?.nodes.filter((node) => node.kind === "Individual").slice(0, 5).map((node) => node.name).join(" · ") || "Start the graph profile, then request a rebuild."}</small>
           </div>
         </CardContent>
       </Card>

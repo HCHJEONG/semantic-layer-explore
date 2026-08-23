@@ -24,7 +24,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	producer := kafka.NewProducer(cfg.KafkaBrokers, cfg.TelemetryTopic, logger)
+	producer := kafka.NewProducer(cfg.KafkaBrokers, cfg.TelemetryTopic, cfg.GraphRebuildTopic, logger)
 	defer producer.Close()
 
 	store, err := persistence.NewStore(ctx, cfg.DatabaseURL)

@@ -40,6 +40,18 @@ type AgentResult struct {
 	OccurredAt    string `json:"occurredAt"`
 }
 
+type GraphProjectionStatus struct {
+	Status        string `json:"status"`
+	RebuildID     string `json:"rebuildId,omitempty"`
+	RequestedAt   string `json:"requestedAt,omitempty"`
+	StartedAt     string `json:"startedAt,omitempty"`
+	CompletedAt   string `json:"completedAt,omitempty"`
+	NodeCount     int    `json:"nodeCount"`
+	RelationCount int    `json:"relationCount"`
+	ErrorMessage  string `json:"errorMessage,omitempty"`
+	UpdatedAt     string `json:"updatedAt"`
+}
+
 type Telemetry struct {
 	EventID     string `json:"eventId"`
 	DeviceID    string `json:"deviceId"`
@@ -203,6 +215,31 @@ func (store *Store) ListAgentResults(ctx context.Context, limit int) ([]AgentRes
 		return nil, err
 	}
 	return results, nil
+}
+
+func (store *Store) GraphProjectionStatus(ctx context.Context) (GraphProjectionStatus, error) {
+	var status GraphProjectionStatus
+	var requestedAt, startedAt, completedAt *time.Time
+	var updatedAt time.Time
+	err := store.pool.QueryRow(ctx, `
+		select status, coalesce(rebuild_id, ''), requested_at, started_at, completed_at,
+		       node_count, relation_count, coalesce(error_message, ''), updated_at
+		from graph_projection_status where projection_name = 'ontology'
+	`).Scan(&status.Status, &status.RebuildID, &requestedAt, &startedAt, &completedAt, &status.NodeCount, &status.RelationCount, &status.ErrorMessage, &updatedAt)
+	if err != nil {
+		return status, err
+	}
+	if requestedAt != nil {
+		status.RequestedAt = requestedAt.UTC().Format(time.RFC3339)
+	}
+	if startedAt != nil {
+		status.StartedAt = startedAt.UTC().Format(time.RFC3339)
+	}
+	if completedAt != nil {
+		status.CompletedAt = completedAt.UTC().Format(time.RFC3339)
+	}
+	status.UpdatedAt = updatedAt.UTC().Format(time.RFC3339)
+	return status, nil
 }
 
 func (store *Store) Close() {

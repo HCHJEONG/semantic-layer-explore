@@ -64,8 +64,8 @@ long-running services.
 | Mosquitto broker | Deployed internally |
 | Go MQTT subscriber | Skeleton only |
 | Neo4j service | Deployed and startup verified |
-| Rust Kafka consumer and Neo4j projection | Skeleton only |
-| Go graph queries and Next.js graph drill-down | Skeleton/planned |
+| Rust Kafka consumer and Neo4j projection | Rebuild flow implemented and locally verified |
+| Go graph queries and Next.js graph status | Minimal read/status flow implemented and locally verified |
 
 The verified slice does not imply that MQTT ingestion or Neo4j projection is
 complete. See the [distributed expansion plan](./docs/implementation-2nd-plan.md)
