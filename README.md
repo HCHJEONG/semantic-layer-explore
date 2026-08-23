@@ -42,7 +42,7 @@ The rule engine—not Gemini—evaluates approved rules and executes device comm
 
 The Workspace Dashboard also includes a minimal **Explain Why** flow for explainable action events. When a device command appears in the Event Timeline, the user can jump to Ask AI Explain Mode. The backend reconstructs the application-level causal trace from recorded events first, then runs a small Mastra workflow that reviews sensor, rule, and execution evidence before producing the structured explanation. This is read-only: it does not issue commands, change rules, or infer why the physical world produced a sensor reading.
 
-The LLM integration is being prepared behind a provider boundary. `lib/llm/provider.ts` defines the model-agnostic interface, while `lib/llm/gemini-provider.ts` adapts the existing Vertex Gemini client. This keeps the current Gemini 3.5 Flash Lite setup replaceable by a later provider without changing Mastra workflow code.
+The LLM integration is being prepared behind a provider boundary. `lib/ai/llm/provider.ts` defines the model-agnostic interface, while `lib/ai/llm/gemini-provider.ts` adapts the existing Vertex Gemini client. This keeps the current Gemini 3.5 Flash Lite setup replaceable by a later provider without changing Mastra workflow code.
 
 The demo keeps deployment simple by using one SQLite file, but the schema separates the semantic metadata store from operational state. Ontology records live in `semantic_classes`, `semantic_properties`, `semantic_individuals`, and `semantic_relations`; runtime state lives in `sensors`, `devices`, `sensor_readings`, `events`, and `rules`.
 
@@ -85,7 +85,7 @@ The same plan also preserves a few reusable architecture patterns:
 
 For the ontology terminology decisions that guide the `domain/` model, see [`docs/ontology-modeling-notes.md`](./docs/ontology-modeling-notes.md).
 
-For the retrospective implementation handoff plan that builds on the completed domain model, see [`docs/implementation-plan.md`](./docs/implementation-plan.md).
+For the retrospective implementation handoff plan that builds on the completed domain model, see [`docs/implementation-1st-plan.md`](./docs/implementation-1st-plan.md). A separate follow-on distributed Physical AI expansion plan lives in [`docs/implementation-2nd-plan.md`](./docs/implementation-2nd-plan.md).
 
 ## Features
 
@@ -120,7 +120,6 @@ For the retrospective implementation handoff plan that builds on the completed d
 | `GET`, `POST` | `/api/individuals` | List or create individuals |
 | `GET` | `/api/relations` | List resolved relationships |
 | `GET` | `/api/ontology` | Return the complete semantic layer |
-| `POST` | `/api/ask` | Ask Gemini an ontology-aware question |
 | `GET` | `/api/health` | Lightweight process health check |
 | `GET` | `/api/ready` | Database and runtime readiness check |
 | `GET` | `/api/state` | Current simulated workspace snapshot |
@@ -128,6 +127,7 @@ For the retrospective implementation handoff plan that builds on the completed d
 | `GET` | `/api/devices` | Virtual device states |
 | `POST` | `/api/devices/:id/commands` | Execute a validated virtual-device command |
 | `GET` | `/api/events` | Read the physical workspace event timeline |
+| `GET` | `/api/events/stream` | Stream the physical workspace event timeline |
 | `GET`, `POST` | `/api/rules` | List or create validated automation rules |
 | `GET`, `PATCH`, `DELETE` | `/api/rules/:id` | Read, update, or delete a rule |
 | `POST` | `/api/rules/:id/enable` | Enable a rule |

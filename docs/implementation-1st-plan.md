@@ -1,4 +1,16 @@
-# Implementation Plan
+# Implementation 1st Plan: Semantic Workspace Baseline
+
+## 0. Document Status
+
+This document is the current implementation handoff for the compact Semantic
+Workspace baseline. It describes the codebase as it exists now: Next.js,
+SQLite, the simulator-backed physical workspace runtime, ontology-first AI
+routes, and the Mastra Explain Why workflow.
+
+This is not the distributed Physical AI expansion plan. The larger Go, MQTT,
+Kafka, PostgreSQL, NestJS worker, Rust graph worker, and Neo4j architecture is
+tracked separately in `docs/implementation-2nd-plan.md` and should be treated
+as a follow-on expansion after this baseline is understood and preserved.
 
 ## 1. Source Of Truth
 
@@ -126,8 +138,8 @@ Implemented rule automation:
 
 Implemented LLM adapter:
 
-- `lib/llm/provider.ts` defines provider-neutral LLM capabilities
-- `lib/llm/gemini-provider.ts` adapts Gemini behind that interface
+- `lib/ai/llm/provider.ts` defines provider-neutral LLM capabilities
+- `lib/ai/llm/gemini-provider.ts` adapts Gemini behind that interface
 - app routes use `getLlmProvider()` instead of direct Gemini model/client calls
 - provider-neutral tool declarations are used outside Gemini-specific code
 
@@ -168,7 +180,7 @@ flowchart TD
 ```
 
 - `@mastra/core` is installed
-- `lib/explain-workflow.ts` runs a real Mastra workflow
+- `lib/explain/workflow.ts` runs a real Mastra workflow
 - reviewer steps run in parallel
 - reviewer and critic LLM calls are opt-in through `EXPLAIN_LLM_REVIEW=enabled`
 - deterministic fallback remains the default path
@@ -230,8 +242,8 @@ Required provider capabilities:
 Rules:
 
 - application code should call `getLlmProvider()`
-- Gemini request/response details stay inside `lib/llm/gemini-provider.ts` or
-  lower-level `lib/gemini.ts`
+- Gemini request/response details stay inside `lib/ai/llm/gemini-provider.ts` or
+  lower-level `lib/ai/gemini.ts`
 - structured outputs must be validated with Zod
 - tool calling must use provider-neutral declarations above the provider layer
 - live Explain Why LLM review is disabled unless

@@ -1,10 +1,10 @@
-# Distributed Physical AI 확장 작업지시서
+# Implementation 2nd Plan: Distributed Physical AI Expansion
 
 ## 0. 문서 성격
 
-이 문서는 현재 `physicalai.penvot.com`에 배포된 Semantic Layer Explore 저장소를 **분산 Physical AI 처리 시스템**으로 확장하기 위한 Codex 작업지시서다.
+이 문서는 1차 Semantic Workspace baseline 이후에 착수하는 **분산 Physical AI 처리 시스템 확장 계획**이다. 현재 구현 상태를 설명하는 handoff 문서는 `docs/implementation-1st-plan.md`이며, 이 문서는 그 기준선을 보존한 뒤 Go, MQTT, Kafka, PostgreSQL, NestJS worker, Rust graph worker, Neo4j를 추가하는 2차 확장 범위를 정의한다.
 
-이 파일은 저장소 루트에 그대로 배치한다.
+따라서 이 문서의 "확정 아키텍처"와 완료 기준은 2차 확장 범위 안에서의 목표 상태를 뜻한다. 현재 코드가 이미 이 구조로 구현되어 있다는 의미가 아니며, 착수 전에는 반드시 1차 문서와 실제 저장소 상태를 먼저 확인한다.
 
 작업의 최종 목표는 다음 구조를 실제로 구현하고 검증하는 것이다.
 
@@ -403,7 +403,8 @@ physicalai/
 ├── compose.yaml
 ├── .env.example
 ├── .dockerignore
-├── DISTRIBUTED_PHYSICAL_AI_IMPLEMENTATION.md
+├── docs/
+│   └── implementation-2nd-plan.md
 └── README.md
 ```
 
