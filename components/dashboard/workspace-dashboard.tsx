@@ -23,7 +23,7 @@ type OperationsSummary = {
   mastraDecisionCount: number;
   latestTelemetry?: { eventId: string; deviceId: string; sensorId: string; processedAt: string };
   latestDeadLetter?: { deadLetterId: string; reason: string; errorMessage: string; failedAt: string };
-  latestMastraDecision?: { auditId: string; type: string; occurredAt: string };
+  latestMastraDecision?: { auditId: string; type: string; status?: string; mode?: string; trigger?: string; summary?: string; occurredAt: string };
   checkedAt: string;
 };
 

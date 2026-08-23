@@ -38,6 +38,10 @@ type DeadLetter struct {
 type MastraDecision struct {
 	AuditID    string `json:"auditId"`
 	Type       string `json:"type"`
+	Status     string `json:"status,omitempty"`
+	Mode       string `json:"mode,omitempty"`
+	Trigger    string `json:"trigger,omitempty"`
+	Summary    string `json:"summary,omitempty"`
 	OccurredAt string `json:"occurredAt"`
 }
 
@@ -88,12 +92,27 @@ func (store *Store) OperationsSummary(ctx context.Context) (OperationsSummary, e
 	var mastraDecision MastraDecision
 	var occurredAt time.Time
 	if err := store.pool.QueryRow(ctx, `
-		select audit_id, type, occurred_at
+		select
+			audit_id,
+			type,
+			coalesce(payload->>'status', ''),
+			coalesce(payload->'payload'->>'mode', ''),
+			coalesce(payload->'payload'->>'trigger', ''),
+			coalesce(payload->>'summary', payload->>'error', ''),
+			occurred_at
 		from audit_event
 		where type in ('mastra.telemetry.decision', 'mastra.telemetry.failed')
 		order by occurred_at desc
 		limit 1
-	`).Scan(&mastraDecision.AuditID, &mastraDecision.Type, &occurredAt); err == nil {
+	`).Scan(
+		&mastraDecision.AuditID,
+		&mastraDecision.Type,
+		&mastraDecision.Status,
+		&mastraDecision.Mode,
+		&mastraDecision.Trigger,
+		&mastraDecision.Summary,
+		&occurredAt,
+	); err == nil {
 		mastraDecision.OccurredAt = occurredAt.UTC().Format(time.RFC3339)
 		summary.LatestMastraDecision = &mastraDecision
 	}

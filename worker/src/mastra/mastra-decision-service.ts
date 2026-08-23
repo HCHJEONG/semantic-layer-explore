@@ -2,14 +2,10 @@ import { Injectable, Logger } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { config } from "../config.js";
 import type { TelemetryEvent } from "../contracts/telemetry.js";
+import { AgentResultPublisher, type AgentResult } from "../agent-result/agent-result-publisher.js";
 import { PostgresService } from "../persistence/postgres-service.js";
 
-type MastraDecision = {
-  schemaVersion: "agent-result.v1";
-  resultId: string;
-  kind: "impact-analysis";
-  status: "succeeded" | "skipped";
-  summary: string;
+type MastraDecision = AgentResult & {
   payload: {
     mode: string;
     trigger: string;
@@ -28,15 +24,16 @@ type MastraDecision = {
     };
     llmInvoked: false;
   };
-  createdAt: string;
-  correlationId: string;
 };
 
 @Injectable()
 export class MastraDecisionService {
   private readonly logger = new Logger(MastraDecisionService.name);
 
-  constructor(private readonly postgres: PostgresService) {}
+  constructor(
+    private readonly postgres: PostgresService,
+    private readonly agentResults: AgentResultPublisher,
+  ) {}
 
   shouldRunForTelemetry(event: TelemetryEvent) {
     return this.findTrigger(event) !== undefined;
@@ -54,7 +51,8 @@ export class MastraDecisionService {
       payload: decision,
       correlationId: decision.correlationId,
     });
-    this.logger.log(`Mastra telemetry decision recorded eventId=${event.eventId} trigger=${trigger}`);
+    await this.agentResults.publish(decision);
+    this.logger.log(`Mastra telemetry decision recorded and published eventId=${event.eventId} trigger=${trigger}`);
   }
 
   private findTrigger(event: TelemetryEvent) {

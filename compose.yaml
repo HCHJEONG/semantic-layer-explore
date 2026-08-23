@@ -52,6 +52,7 @@ services:
       KAFKA_BROKERS: kafka:9092
       KAFKA_TELEMETRY_TOPIC: telemetry.raw
       KAFKA_DEAD_LETTER_TOPIC: dead-letter
+      KAFKA_AGENT_RESULT_TOPIC: agent.result
       KAFKA_TELEMETRY_GROUP: physicalai-telemetry-workers
       MASTRA_TELEMETRY_MODE: ${MASTRA_TELEMETRY_MODE:-dry-run}
       MASTRA_TEMPERATURE_THRESHOLD: ${MASTRA_TEMPERATURE_THRESHOLD:-31.5}
