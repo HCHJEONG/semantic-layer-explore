@@ -12,6 +12,7 @@ export class TelemetryConsumer {
   private readonly logger = new Logger(TelemetryConsumer.name);
   private readonly kafka = new Kafka({ clientId: `physicalai-worker-${config.workerId}`, brokers: config.kafkaBrokers, logLevel: logLevel.INFO });
   private readonly consumer: Consumer = this.kafka.consumer({ groupId: config.consumerGroup });
+  private connected = false;
 
   constructor(
     private readonly telemetry: TelemetryService,
@@ -19,9 +20,10 @@ export class TelemetryConsumer {
     private readonly commandResults: CommandResultService,
   ) {}
 
-  async startWithRetry() {
+  async startWithRetry(signal?: AbortSignal) {
     let attempt = 0;
     while (true) {
+      if (signal?.aborted) throw new Error("consumer startup aborted");
       try {
         await this.start();
         return;
@@ -29,13 +31,17 @@ export class TelemetryConsumer {
         attempt += 1;
         const delayMs = Math.min(30_000, 1_000 * attempt);
         this.logger.warn(`consumer start failed; retrying in ${delayMs}ms: ${error instanceof Error ? error.message : String(error)}`);
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        await new Promise<void>((resolve) => {
+          const timeout = setTimeout(resolve, delayMs);
+          signal?.addEventListener("abort", () => { clearTimeout(timeout); resolve(); }, { once: true });
+        });
       }
     }
   }
 
   async start() {
     await this.consumer.connect();
+    this.connected = true;
     await this.consumer.subscribe({ topic: config.telemetryTopic, fromBeginning: false });
     await this.consumer.subscribe({ topic: config.commandResultTopic, fromBeginning: false });
     this.logger.log(`worker ${config.workerId} consuming ${config.telemetryTopic} and ${config.commandResultTopic} as ${config.consumerGroup}`);
@@ -63,7 +69,9 @@ export class TelemetryConsumer {
   }
 
   async stop() {
+    if (!this.connected) return;
     await this.consumer.disconnect();
+    this.connected = false;
   }
 }
 

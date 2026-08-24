@@ -289,7 +289,7 @@ For the retrospective implementation handoff plan that builds on the completed d
 - Seeded Sensor simulator for temperature, light, distance, and button readings
 - Virtual LED, Servo, Buzzer, and Relay devices behind a hardware-neutral adapter
 - Persistent Sensor/Event audit trail and deterministic demo scenarios
-- Bounded latest-state rule evaluation, cached active rules, and batched data retention cleanup
+- Bounded latest-state rule evaluation, cached active rules, and cluster-coordinated batched PostgreSQL retention cleanup
 - Validated Rule CRUD, deterministic operator evaluation, and per-rule cooldown
 - Sensor Event → Rule match → Virtual Device execution with auditable outcomes
 - Polling-based workspace dashboard with live sensor cards, device controls, deterministic demo scenarios, and an event timeline

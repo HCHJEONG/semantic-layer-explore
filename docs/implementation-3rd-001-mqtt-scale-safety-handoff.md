@@ -114,7 +114,8 @@ Do not put one fixed `MQTT_CLIENT_ID` or `INSTANCE_ID` into a shared AWS Compose
 
 The private instance environment was reviewed against current code and `compose.aws-demo.yaml`.
 
-- Remove `SITE_URL`, `NEXT_PUBLIC_SITE_URL`, `PHYSICAL_ADAPTER`, `SIMULATOR_INTERVAL_MS`, `DATABASE_PATH`, `READING_RETENTION_DAYS`, `AUDIT_EVENT_RETENTION_DAYS`, `RETENTION_CLEANUP_INTERVAL_MS`, and `RETENTION_BATCH_SIZE`. They belong to retired or absent code paths.
+- Remove `SITE_URL`, `NEXT_PUBLIC_SITE_URL`, `PHYSICAL_ADAPTER`, `SIMULATOR_INTERVAL_MS`, and `DATABASE_PATH`. They belong to retired or absent code paths.
 - Remove `NODE_ENV`, `PORT`, `INTERNAL_API_ORIGIN`, and `GOOGLE_APPLICATION_CREDENTIALS` from the private `.env.local`. AWS Compose sets them explicitly inside the frontend container; instance-file values do not take effect.
 - Keep `SIMULATOR_SEED`, `SIMULATOR_EVENTS_PER_HOUR`, `SIMULATOR_SCENARIO`, `SIMULATOR_DEVICE_ID`, and `SIM_COMMAND_FAILURE_RATE` when manually controlling the active Python MQTT simulator.
 - `LLM_PROVIDER`, `ASK_AI_DAILY_LIMIT`, and `EXPLAIN_AI_DAILY_LIMIT` are active application settings. AWS Compose now passes them into the frontend container; earlier instance-file values were ignored.
+- `READING_RETENTION_DAYS`, `AUDIT_EVENT_RETENTION_DAYS`, `RETENTION_CLEANUP_INTERVAL_MS`, and `RETENTION_BATCH_SIZE` became active PostgreSQL worker settings in `implementation-3rd-002-postgres-retention-handoff.md`.
