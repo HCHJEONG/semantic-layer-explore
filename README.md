@@ -97,13 +97,13 @@ role in a single system rather than as a separate subject to memorize.
 | **Zod / JSON Schema** | Validate external data at runtime and across language boundaries. |
 | **Docker / Compose** | Fixes each runtime environment and starts the services as one system. |
 | **AWS EC2** | Runs the composed system continuously outside a developer machine. |
-| **Kubernetes** | Orchestrates application workloads for staged scaling and failure experiments; Compose remains the legacy baseline. |
+| **Kubernetes / kind** | Optionally runs the NestJS worker for scaling and failure exercises; Compose remains the default operating model. |
 
-The active third-stage Kubernetes preparation and plain application manifests
-are under [`k8s/`](./k8s/README.md). They use a hybrid first step in which
-PostgreSQL, Kafka, Mosquitto, and Neo4j remain external. The manifests contain
-placeholder infrastructure addresses and image tags and have not yet been
-deployed; replica-1 functional parity is the next stage gate.
+The optional third-stage kind exercise is documented under
+[`k8s/`](./k8s/README.md). Local and AWS operation continue to use Docker
+Compose by default. When explicitly requested, only the Compose NestJS worker
+is stopped and replaced temporarily by a kind worker; all other application
+and infrastructure services remain in Compose.
 
 A compact mental model is:
 

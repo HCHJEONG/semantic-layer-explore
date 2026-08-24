@@ -6,6 +6,8 @@ Date: 2026-08-24
 
 Phase 2 runtime preparation and Phase 3 plain manifests are implemented locally. No Kubernetes cluster or AWS deployment was changed. Existing Compose assets remain the verified legacy baseline.
 
+Subsequent scope decision: Docker Compose remains the default operating model on both local WSL and AWS. The active kind path is an optional NestJS worker-only exercise. It does not move frontend, Go Gateway, Rust graph worker, or stateful infrastructure into Kubernetes. Broader manifests produced in this handoff are inactive reference drafts unless the scope is explicitly expanded later.
+
 ## Runtime preparation
 
 - Go Gateway readiness now requires MQTT connection plus successful shared-topic subscription, PostgreSQL ping, Kafka broker connectivity, and a non-draining process. SIGTERM marks it not ready before the HTTP server drains; MQTT, outbox, SSH, Kafka writers, and PostgreSQL close through the existing cancellation path.
@@ -26,11 +28,13 @@ The Kubernetes path preserves at-least-once delivery. It does not claim broker t
 
 ## Manifest design
 
-`k8s/` contains one namespace, shared non-secret ConfigMap, intentionally non-runnable Secret example, four Deployments, frontend/Go Services, frontend Ingress, and CPU HPAs for Go and Nest. All Deployments start at replica 1, use rolling updates with zero unavailable Pods, define probes, termination grace periods, and initial resource requests/limits.
+`k8s/` contains the active Nest worker material and broader application reference drafts. The default apply path must contain only the namespace, worker-required configuration, and Nest worker Deployment. Frontend, Go Gateway, Rust worker, Ingress, and Go HPA resources are not active exercise resources.
+
+At the time of this record, the root `kustomization.yaml` still renders the broader API-validation draft. It must not be applied and must be narrowed to the worker-only set before the first exercise.
 
 The first experiment is hybrid: PostgreSQL, Kafka, Mosquitto, and Neo4j stay outside Kubernetes. Placeholder DNS names, immutable application image tags, and the actual Secret must be supplied before server-side dry-run or application. Kafka advertised listeners are a specific connectivity prerequisite.
 
-HPAs are design artifacts for the later scale gate and are deliberately excluded from the root `kustomization.yaml`. They must not be enabled during replica-1 parity verification, and require Metrics Server. Resource values are conservative starting points, not measured production sizing.
+The Nest HPA is a later optional exercise artifact. It must not be enabled during replica-1 parity verification and requires Metrics Server. Resource values are conservative starting points, not measured production sizing.
 
 ## Verification
 
@@ -48,4 +52,6 @@ git diff --check
 
 The existing local Compose services remained running; no container was replaced or restarted. The earlier Phase 1 two-Gateway test and second-stage two-worker partition-assignment evidence remain the scale baseline, but were not rerun in this manifest-only pass.
 
-Rust compilation could not complete directly in the WSL checkout because existing Cargo build artifacts are root-owned and the alternate temporary filesystem prevents CMake execution. `cargo metadata --no-deps` passed, but that is not a compilation result. Kubernetes client tools (`kubectl`, `kind`) are not installed in this environment, so `kubectl kustomize`, schema validation, and server-side dry-run remain pending. No cluster execution or functional parity claim is made in this handoff.
+Rust compilation could not complete directly in the WSL checkout because existing Cargo build artifacts are root-owned and the alternate temporary filesystem prevents CMake execution. `cargo metadata --no-deps` passed, but that is not a compilation result.
+
+After this handoff, the maintainer installed `kubectl v1.36.4` and `kind v0.32.0` in local WSL and created the `kind-semantic-layer` cluster with Kubernetes v1.36.1. Kustomize rendered 425 lines and all drafted resources passed Kubernetes server-side dry-run after creating the otherwise empty `semantic-layer` namespace. This validates manifest API shape only; no workload was applied and no functional parity claim is made. AWS has the client tools and Docker permission prepared, but no AWS kind cluster has been created.

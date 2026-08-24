@@ -4,6 +4,16 @@
 
 이 문서는 2차 분산 Physical AI 구현과 `aws-demo` 수동 배포 완료 이후에 바로 착수할 3차 계획이다. 기존 Docker Compose 기반 구조를 유지한 채 Kubernetes에서 application workload의 scale-out, self-healing, rolling update, failure timing을 검증한다.
 
+### Active scope decision
+
+로컬과 AWS의 기본 운영 방식은 계속 기존 Docker Compose다. Kubernetes는 Compose 전체를 대체하는 배포 목표가 아니며, 사용자가 원할 때만 **NestJS worker를 kind에서 실행해 보는 선택적 실습 경로**다.
+
+- frontend, Go Gateway, Kafka, PostgreSQL, Mosquitto, Neo4j, Rust graph worker는 Compose에서 계속 실행한다.
+- 실습할 때만 Compose의 NestJS worker를 중지하고 동일 consumer group의 NestJS worker replica를 kind에서 실행한다.
+- 실습 종료 후 kind worker를 제거하고 Compose worker를 다시 시작하는 것이 표준 rollback이다.
+- AWS의 `kubectl`/`kind` 설치는 실습 가능성을 준비한 것일 뿐, AWS kind cluster 생성이나 운영 전환을 뜻하지 않는다.
+- 이 문서 뒤쪽의 전체 application workload, Go Gateway HPA, frontend/Go/Rust Deployment 설명은 향후 확장 가능성을 검토한 **비활성 참고 초안**이다. 이 active scope decision이 충돌하는 모든 이전 설명보다 우선한다.
+
 2차 완료 사실은 numbered handoff 문서와 `aws-demo` 배포 완료 기록을 기준으로 판단한다. 이 계획은 4차 industrial edge/production readiness 이전에 Kubernetes orchestration 특성을 먼저 검증하는 단계다.
 
 ### 바로 착수 가능 여부
@@ -58,7 +68,7 @@ Compose baseline 테스트, health/readiness, graceful shutdown, configuration �
 
 ### Phase 3. Kubernetes 설정 계획 및 작성
 
-Status: plain application manifests written under `k8s/`. They are intentionally not deployment-ready until the maintainer supplies reachable hybrid infrastructure addresses, a real image tag, and the real `semantic-layer-secrets` Secret.
+Status: plain manifests were drafted under `k8s/`, but the active exercise is being narrowed to the NestJS worker only. Frontend, Go Gateway, and Rust worker manifests are reference drafts and are not part of the default apply path.
 
 `k8s/` plain manifest의 workload, Service, ConfigMap, Secret example, probe, resource request/limit, rollout 전략을 먼저 설계한 뒤 작성한다. 처음에는 Helm을 도입하지 않는다.
 
@@ -66,7 +76,7 @@ Kafka, PostgreSQL, Mosquitto, Neo4j는 초기 실험에서 기존 Compose infras
 
 ### Phase 4. Kubernetes 전환
 
-먼저 replica 1로 Next.js, Go Gateway, NestJS Worker, Rust Graph Worker를 실행하고 Compose baseline과 기능 동등성을 확인한다. 이후 Go Gateway와 worker를 순서대로 scale-out한다. 전환은 Compose 자산 제거를 의미하지 않는다.
+전체 전환을 수행하지 않는다. Compose에서 NestJS worker만 중지한 뒤 kind의 NestJS worker replica 1로 기능 동등성을 확인한다. 실습 중에도 나머지 서비스와 authoritative infrastructure는 Compose에 남는다. 검증 또는 실습 종료 후 kind worker를 제거하고 Compose worker를 복구한다.
 
 ### Phase 5. Kubernetes 테스트와 실험
 
@@ -114,12 +124,12 @@ PostgreSQL     Neo4j
 
 ### Docker Compose 유지
 
-Kubernetes는 Compose를 제거하지 않는다.
+Docker Compose가 로컬과 AWS의 기본 운영 경로다. Kubernetes는 Compose를 제거하거나 기본 경로를 대체하지 않는다.
 
 -   Compose: local development, integration test, debugging,
     single-host/AWS EC2 demo
--   Kubernetes: scaling, self-healing, rolling deployment,
-    orchestration/failure experiments
+-   Kubernetes/kind: 선택적인 NestJS worker scaling, self-healing,
+    rolling deployment 및 failure 실습
 
 ### Compose legacy archive 원칙
 
@@ -133,12 +143,12 @@ Kubernetes 전환 과정에서 기존 Compose 관련 파일과 문서를 삭제�
 
 ### 과도한 재설계 금지
 
-초기 Kubernetes 대상은 Next.js, Go Gateway, NestJS Worker, Python
-Worker/Service, Rust Graph Worker다.
+활성 Kubernetes 대상은 NestJS Worker 하나다. Next.js, Go Gateway,
+Python simulator, Rust Graph Worker 및 stateful infrastructure는 Compose에 남는다.
 
 Kafka, PostgreSQL, Neo4j, Mosquitto 같은 stateful infrastructure는
-처음부터 Kubernetes 내부로 옮기지 않아도 된다. Application
-orchestration부터 검증한다.
+전체 application orchestration은 현재 범위가 아니다. 뒤에 남아 있는 다른
+workload manifest와 scale-out 설명은 향후 범위 확장 시 재검토할 참고 자료다.
 
 ## 3. 권장 구조
 

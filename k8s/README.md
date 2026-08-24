@@ -1,19 +1,30 @@
 # Kubernetes Application Experiment
 
-This directory is the active third-stage Kubernetes path. The root Compose files remain the legacy integration and AWS rollback baseline and are not replaced by these manifests.
+This directory supports an optional kind exercise. Docker Compose remains the default local and AWS operating model, not merely a legacy fallback.
 
 ## Scope
 
-The manifests run only the four application workloads: frontend, Go Gateway, Nest worker, and Rust graph worker. PostgreSQL, Kafka, Mosquitto, and Neo4j remain external for the first hybrid experiment. Their DNS names must be reachable from Pods, and broker-advertised Kafka addresses must also be resolvable from Pods.
+The active exercise moves only the NestJS worker from Compose to kind. Frontend, Go Gateway, PostgreSQL, Kafka, Mosquitto, Neo4j, simulator, and Rust graph worker remain in Compose. The frontend, Go Gateway, Rust worker, Ingress, and Go HPA manifests in this directory are inactive reference drafts and must not be included in the default apply path.
 
-Before applying:
+> Scope guard: the current root `kustomization.yaml` still renders the broader reference draft used for API validation. Do not run `kubectl apply -k k8s` until it is revised to the worker-only resource set. The earlier server-side dry-run created no workloads.
 
-1. publish the four application images with one immutable tag and replace every `REPLACE_ME` image tag;
-2. replace every `*.semantic-infra.example` endpoint in `config/configmap.yaml`;
+The exercise transition is:
+
+```text
+normal:   Compose worker running, no kind worker
+exercise: Compose worker stopped, kind Nest worker replica 1 or more
+rollback: kind Nest worker removed, Compose worker started again
+```
+
+Do not leave Compose and kind workers running unintentionally. They use the same Kafka consumer group and would share partitions as one mixed worker pool.
+
+Before the worker-only exercise:
+
+1. prepare only the NestJS worker image with an immutable tag and load it into kind;
+2. configure kind-to-Compose Kafka and PostgreSQL connectivity, including Kafka advertised listeners;
 3. apply PostgreSQL migrations through `010_postgres_retention.sql` and create all Kafka topics using the existing Compose-era procedures;
 4. create `semantic-layer-secrets` through the cluster secret-management path, using `config/secrets.example.yaml` only as a key-name reference;
 5. ensure the cluster can pull the images;
-6. replace or omit the example Ingress host and configure the cluster's Ingress controller/TLS separately.
 
 Do not apply `secrets.example.yaml`: its name deliberately does not match the Secret referenced by workloads.
 
@@ -24,7 +35,7 @@ kubectl kustomize k8s
 kubectl apply --dry-run=server -k k8s
 ```
 
-Phase 4 starts with all Deployments at replica 1. The two HPA manifests are deliberately excluded from `kustomization.yaml`; apply them only after replica-1 functional parity is recorded and Metrics Server is available.
+The active exercise starts with the Nest worker at replica 1. Apply its HPA only after functional parity is recorded and Metrics Server is available. AWS kind cluster creation remains optional and must not be inferred from the local exercise.
 
 ## Probe and shutdown contract
 
