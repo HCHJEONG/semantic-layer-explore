@@ -68,7 +68,7 @@ Compose baseline 테스트, health/readiness, graceful shutdown, configuration �
 
 ### Phase 3. Kubernetes 설정 계획 및 작성
 
-Status: plain manifests were drafted under `k8s/`, but the active exercise is being narrowed to the NestJS worker only. Frontend, Go Gateway, and Rust worker manifests are reference drafts and are not part of the default apply path.
+Status: the root Kustomize path is narrowed to the NestJS worker only. Frontend, Go Gateway, and Rust worker manifests are reference drafts and are not part of the default apply path.
 
 `k8s/` plain manifest의 workload, Service, ConfigMap, Secret example, probe, resource request/limit, rollout 전략을 먼저 설계한 뒤 작성한다. 처음에는 Helm을 도입하지 않는다.
 
@@ -77,6 +77,8 @@ Kafka, PostgreSQL, Mosquitto, Neo4j는 초기 실험에서 기존 Compose infras
 ### Phase 4. Kubernetes 전환
 
 전체 전환을 수행하지 않는다. Compose에서 NestJS worker만 중지한 뒤 kind의 NestJS worker replica 1로 기능 동등성을 확인한다. 실습 중에도 나머지 서비스와 authoritative infrastructure는 Compose에 남는다. 검증 또는 실습 종료 후 kind worker를 제거하고 Compose worker를 복구한다.
+
+Status: local WSL worker-only replica-1 exercise completed and rolled back to the default Compose worker. Evidence is recorded in `implementation-3rd-004-kind-worker-replica1-handoff.md`. AWS kind remains uncreated and optional.
 
 ### Phase 5. Kubernetes 테스트와 실험
 

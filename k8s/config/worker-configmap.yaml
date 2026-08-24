@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nest-worker-config
+  namespace: semantic-layer
+data:
+  KAFKA_BROKERS: kafka:9092
+  KAFKA_TELEMETRY_TOPIC: telemetry.raw
+  KAFKA_COMMAND_RESULT_TOPIC: command.result
+  KAFKA_DEAD_LETTER_TOPIC: dead-letter
+  KAFKA_AGENT_RESULT_TOPIC: agent.result
+  KAFKA_TELEMETRY_GROUP: physicalai-telemetry-workers
+  MASTRA_TELEMETRY_MODE: dry-run
+  MASTRA_TEMPERATURE_THRESHOLD: "31.5"
+  MASTRA_DISTANCE_THRESHOLD: "10"
+  READING_RETENTION_DAYS: "1"
+  AUDIT_EVENT_RETENTION_DAYS: "7"
+  RETENTION_CLEANUP_INTERVAL_MS: "3600000"
+  RETENTION_BATCH_SIZE: "5000"

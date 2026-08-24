@@ -28,9 +28,9 @@ The Kubernetes path preserves at-least-once delivery. It does not claim broker t
 
 ## Manifest design
 
-`k8s/` contains the active Nest worker material and broader application reference drafts. The default apply path must contain only the namespace, worker-required configuration, and Nest worker Deployment. Frontend, Go Gateway, Rust worker, Ingress, and Go HPA resources are not active exercise resources.
+`k8s/` contains the active Nest worker material and broader application reference drafts. The root `kustomization.yaml` now contains only the namespace, worker ConfigMap, and Nest worker Deployment. Frontend, Go Gateway, Rust worker, Ingress, and Go HPA resources are excluded.
 
-At the time of this record, the root `kustomization.yaml` still renders the broader API-validation draft. It must not be applied and must be narrowed to the worker-only set before the first exercise.
+The local bridge does not publish Compose infrastructure ports. `connect-compose-infra.sh` attaches the kind control-plane container to the existing Compose network and creates selectorless `kafka` and `postgres` Services backed by EndpointSlices for the current Compose container IPs. `prepare-worker-secret.sh` copies `DATABASE_URL` from the running Compose worker into the cluster without printing it. The bridge script must be rerun after Compose containers or their network addresses are recreated.
 
 The first experiment is hybrid: PostgreSQL, Kafka, Mosquitto, and Neo4j stay outside Kubernetes. Placeholder DNS names, immutable application image tags, and the actual Secret must be supplied before server-side dry-run or application. Kafka advertised listeners are a specific connectivity prerequisite.
 

@@ -16,12 +16,12 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
         - name: nest-worker
-          image: physicalai-worker:REPLACE_ME
-          imagePullPolicy: IfNotPresent
+          image: physicalai-worker:kind-local
+          imagePullPolicy: Never
           ports:
             - { name: health, containerPort: 8081 }
           envFrom:
-            - configMapRef: { name: semantic-layer-config }
+            - configMapRef: { name: nest-worker-config }
           env:
             - { name: NODE_OPTIONS, value: "--max-old-space-size=256" }
             - { name: HEALTH_PORT, value: "8081" }

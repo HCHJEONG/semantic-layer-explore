@@ -4,9 +4,7 @@ This directory supports an optional kind exercise. Docker Compose remains the de
 
 ## Scope
 
-The active exercise moves only the NestJS worker from Compose to kind. Frontend, Go Gateway, PostgreSQL, Kafka, Mosquitto, Neo4j, simulator, and Rust graph worker remain in Compose. The frontend, Go Gateway, Rust worker, Ingress, and Go HPA manifests in this directory are inactive reference drafts and must not be included in the default apply path.
-
-> Scope guard: the current root `kustomization.yaml` still renders the broader reference draft used for API validation. Do not run `kubectl apply -k k8s` until it is revised to the worker-only resource set. The earlier server-side dry-run created no workloads.
+The active exercise moves only the NestJS worker from Compose to kind. Frontend, Go Gateway, PostgreSQL, Kafka, Mosquitto, Neo4j, simulator, and Rust graph worker remain in Compose. The frontend, Go Gateway, Rust worker, Ingress, and Go HPA manifests in this directory are inactive reference drafts and are excluded from the root `kustomization.yaml`.
 
 The exercise transition is:
 
@@ -28,6 +26,32 @@ Before the worker-only exercise:
 
 Do not apply `secrets.example.yaml`: its name deliberately does not match the Secret referenced by workloads.
 
+## Local exercise
+
+Run from the repository root. The scripts do not expose PostgreSQL or Kafka on host ports. They attach the existing kind node to the Compose network, map the current Compose container IPs behind Kubernetes Services, and copy the running Compose worker's `DATABASE_URL` into a Kubernetes Secret without printing it.
+
+```bash
+chmod +x k8s/scripts/*.sh
+k8s/scripts/connect-compose-infra.sh
+k8s/scripts/prepare-worker-secret.sh
+
+docker build -t physicalai-worker:kind-local worker
+kind load docker-image physicalai-worker:kind-local --name semantic-layer
+
+docker compose stop worker
+kubectl --context kind-semantic-layer apply -k k8s
+kubectl --context kind-semantic-layer rollout status deployment/nest-worker -n semantic-layer --timeout=120s
+```
+
+If deployment or verification fails, restore Compose immediately:
+
+```bash
+kubectl --context kind-semantic-layer delete deployment nest-worker -n semantic-layer --ignore-not-found
+docker compose start worker
+```
+
+Normal exercise cleanup uses the same rollback. Deleting the whole kind cluster is optional.
+
 Render and inspect the active set with:
 
 ```bash
@@ -35,7 +59,7 @@ kubectl kustomize k8s
 kubectl apply --dry-run=server -k k8s
 ```
 
-The active exercise starts with the Nest worker at replica 1. Apply its HPA only after functional parity is recorded and Metrics Server is available. AWS kind cluster creation remains optional and must not be inferred from the local exercise.
+The active exercise starts with the Nest worker at replica 1. Apply `nest-worker/hpa.yaml` only after functional parity is recorded and Metrics Server is available. AWS kind cluster creation remains optional and must not be inferred from the local exercise.
 
 ## Probe and shutdown contract
 
