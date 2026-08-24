@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: semantic-layer-config
+  namespace: semantic-layer
+data:
+  KAFKA_BROKERS: kafka.semantic-infra.example:9092
+  KAFKA_TELEMETRY_TOPIC: telemetry.raw
+  KAFKA_COMMAND_RESULT_TOPIC: command.result
+  KAFKA_DEAD_LETTER_TOPIC: dead-letter
+  KAFKA_AGENT_RESULT_TOPIC: agent.result
+  KAFKA_GRAPH_REBUILD_TOPIC: semantic.graph.rebuild
+  KAFKA_TELEMETRY_GROUP: physicalai-telemetry-workers
+  GRAPH_CONSUMER_GROUP: physicalai-graph-projectors
+  MQTT_URL: tcp://mosquitto.semantic-infra.example:1883
+  MQTT_CLIENT_ID_PREFIX: pago
+  MQTT_TELEMETRY_SHARED_GROUP: physicalai-telemetry
+  MQTT_COMMAND_RESULT_SHARED_GROUP: physicalai-command-results
+  MQTT_TELEMETRY_TOPIC: devices/+/telemetry
+  MQTT_COMMAND_TOPIC_TEMPLATE: devices/%s/commands
+  MQTT_COMMAND_RESULT_TOPIC: devices/+/command-results
+  MQTT_COMMAND_LEASE_SECONDS: "30"
+  MQTT_COMMAND_MAX_PUBLISH_ATTEMPTS: "3"
+  MQTT_COMMAND_RETRY_INITIAL_MS: "500"
+  MQTT_COMMAND_RETRY_MAX_MS: "5000"
+  COMMAND_ACK_TIMEOUT_SECONDS: "10"
+  NEO4J_HTTP_URL: http://neo4j.semantic-infra.example:7474/db/neo4j/tx/commit
+  NEO4J_URI: bolt://neo4j.semantic-infra.example:7687
+  NEO4J_USER: neo4j
+  MASTRA_TELEMETRY_MODE: dry-run
+  MASTRA_TEMPERATURE_THRESHOLD: "31.5"
+  MASTRA_DISTANCE_THRESHOLD: "10"
+  READING_RETENTION_DAYS: "1"
+  AUDIT_EVENT_RETENTION_DAYS: "7"
+  RETENTION_CLEANUP_INTERVAL_MS: "3600000"
+  RETENTION_BATCH_SIZE: "5000"
+  LLM_PROVIDER: gemini
+  GOOGLE_CLOUD_LOCATION: global
+  GEMINI_MODEL: gemini-3.5-flash-lite
+  EXPLAIN_LLM_REVIEW: disabled
+  ASK_AI_DAILY_LIMIT: "10"
+  EXPLAIN_AI_DAILY_LIMIT: "5"

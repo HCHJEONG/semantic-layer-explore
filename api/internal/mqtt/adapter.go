@@ -23,6 +23,7 @@ type Adapter struct {
 	logger   *slog.Logger
 	mu       sync.RWMutex
 	client   mqtt.Client
+	ready    bool
 }
 
 func NewAdapter(cfg config.Config, producer *kafka.Producer, store *persistence.Store, logger *slog.Logger) *Adapter {
@@ -53,10 +54,16 @@ func (a *Adapter) Run(ctx context.Context) {
 			a.handleDelivery(ctx, message)
 		})
 		if !token.WaitTimeout(10*time.Second) || token.Error() != nil {
+			a.setReady(false)
 			a.logger.Error("mqtt subscribe failed", "error", token.Error())
 			return
 		}
+		a.setReady(true)
 		a.logger.Info("mqtt adapter subscribed", "instanceId", instanceID, "clientId", clientID, "telemetryTopic", telemetrySubscription, "resultTopic", resultSubscription)
+	}
+	opts.OnConnectionLost = func(_ mqtt.Client, err error) {
+		a.setReady(false)
+		a.logger.Warn("mqtt connection lost", "error", err)
 	}
 	client := mqtt.NewClient(opts)
 	a.mu.Lock()
@@ -67,8 +74,12 @@ func (a *Adapter) Run(ctx context.Context) {
 	}
 	go a.dispatchLoop(ctx, clientID)
 	<-ctx.Done()
+	a.setReady(false)
 	client.Disconnect(250)
 }
+
+func (a *Adapter) setReady(ready bool) { a.mu.Lock(); defer a.mu.Unlock(); a.ready = ready }
+func (a *Adapter) Ready() bool         { a.mu.RLock(); defer a.mu.RUnlock(); return a.ready }
 
 func (a *Adapter) handleDelivery(ctx context.Context, message mqtt.Message) {
 	ack := false

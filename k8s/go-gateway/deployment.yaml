@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-gateway
+  namespace: semantic-layer
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: { app: go-gateway }
+  template:
+    metadata:
+      labels: { app: go-gateway }
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: go-gateway
+          image: physicalai-api:REPLACE_ME
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: ssh, containerPort: 2222 }
+          envFrom:
+            - configMapRef: { name: semantic-layer-config }
+          env:
+            - { name: API_HTTP_ADDR, value: ":8080" }
+            - { name: API_SSH_ADDR, value: ":2222" }
+            - { name: INSTANCE_ID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
+            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: semantic-layer-secrets, key: DATABASE_URL } } }
+            - { name: NEO4J_PASSWORD, valueFrom: { secretKeyRef: { name: semantic-layer-secrets, key: NEO4J_PASSWORD } } }
+          startupProbe: { httpGet: { path: /health, port: http }, periodSeconds: 2, failureThreshold: 30 }
+          readinessProbe: { httpGet: { path: /ready, port: http }, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 3 }
+          livenessProbe: { httpGet: { path: /health, port: http }, periodSeconds: 10, timeoutSeconds: 2, failureThreshold: 3 }
+          resources:
+            requests: { cpu: 100m, memory: 96Mi }
+            limits: { cpu: "1", memory: 256Mi }

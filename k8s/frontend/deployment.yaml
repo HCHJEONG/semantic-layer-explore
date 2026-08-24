@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: semantic-layer
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: { app: frontend }
+  template:
+    metadata:
+      labels: { app: frontend }
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: frontend
+          image: physicalai-web:REPLACE_ME
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 3000 }
+          env:
+            - { name: NODE_ENV, value: production }
+            - { name: PORT, value: "3000" }
+            - { name: INTERNAL_API_ORIGIN, value: "http://127.0.0.1:3000" }
+            - { name: GO_GATEWAY_URL, value: "http://go-gateway:8080" }
+            - { name: LLM_PROVIDER, valueFrom: { configMapKeyRef: { name: semantic-layer-config, key: LLM_PROVIDER } } }
+            - { name: GOOGLE_CLOUD_LOCATION, valueFrom: { configMapKeyRef: { name: semantic-layer-config, key: GOOGLE_CLOUD_LOCATION } } }
+            - { name: GOOGLE_CLOUD_PROJECT, valueFrom: { secretKeyRef: { name: semantic-layer-secrets, key: GOOGLE_CLOUD_PROJECT } } }
+            - { name: GOOGLE_APPLICATION_CREDENTIALS, value: /app/gcp-key.json }
+            - { name: GEMINI_MODEL, valueFrom: { configMapKeyRef: { name: semantic-layer-config, key: GEMINI_MODEL } } }
+            - { name: EXPLAIN_LLM_REVIEW, valueFrom: { configMapKeyRef: { name: semantic-layer-config, key: EXPLAIN_LLM_REVIEW } } }
+            - { name: ASK_AI_DAILY_LIMIT, valueFrom: { configMapKeyRef: { name: semantic-layer-config, key: ASK_AI_DAILY_LIMIT } } }
+            - { name: EXPLAIN_AI_DAILY_LIMIT, valueFrom: { configMapKeyRef: { name: semantic-layer-config, key: EXPLAIN_AI_DAILY_LIMIT } } }
+          volumeMounts:
+            - { name: gcp-key, mountPath: /app/gcp-key.json, subPath: gcp-key.json, readOnly: true }
+          startupProbe: { httpGet: { path: /api/health, port: http }, periodSeconds: 2, failureThreshold: 30 }
+          readinessProbe: { httpGet: { path: /api/ready, port: http }, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 3 }
+          livenessProbe: { httpGet: { path: /api/health, port: http }, periodSeconds: 10, timeoutSeconds: 2, failureThreshold: 3 }
+          resources:
+            requests: { cpu: 100m, memory: 192Mi }
+            limits: { cpu: "1", memory: 512Mi }
+      volumes:
+        - name: gcp-key
+          secret: { secretName: semantic-layer-secrets, items: [{ key: gcp-key.json, path: gcp-key.json }] }

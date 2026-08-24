@@ -97,6 +97,13 @@ role in a single system rather than as a separate subject to memorize.
 | **Zod / JSON Schema** | Validate external data at runtime and across language boundaries. |
 | **Docker / Compose** | Fixes each runtime environment and starts the services as one system. |
 | **AWS EC2** | Runs the composed system continuously outside a developer machine. |
+| **Kubernetes** | Orchestrates application workloads for staged scaling and failure experiments; Compose remains the legacy baseline. |
+
+The active third-stage Kubernetes preparation and plain application manifests
+are under [`k8s/`](./k8s/README.md). They use a hybrid first step in which
+PostgreSQL, Kafka, Mosquitto, and Neo4j remain external. The manifests contain
+placeholder infrastructure addresses and image tags and have not yet been
+deployed; replica-1 functional parity is the next stage gate.
 
 A compact mental model is:
 

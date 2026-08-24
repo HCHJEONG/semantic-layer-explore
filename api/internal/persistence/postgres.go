@@ -84,6 +84,8 @@ func NewStore(ctx context.Context, databaseURL string) (*Store, error) {
 	return &Store{pool: pool}, nil
 }
 
+func (store *Store) Ping(ctx context.Context) error { return store.pool.Ping(ctx) }
+
 func (store *Store) OperationsSummary(ctx context.Context) (OperationsSummary, error) {
 	var summary OperationsSummary
 	if err := store.pool.QueryRow(ctx, "select count(*) from telemetry_event").Scan(&summary.TelemetryCount); err != nil {

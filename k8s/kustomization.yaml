@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - config/configmap.yaml
+  - frontend/deployment.yaml
+  - frontend/service.yaml
+  - go-gateway/deployment.yaml
+  - go-gateway/service.yaml
+  - nest-worker/deployment.yaml
+  - rust-graph-worker/deployment.yaml
+  - ingress/ingress.yaml

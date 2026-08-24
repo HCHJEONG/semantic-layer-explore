@@ -25,6 +25,8 @@
 
 ### Phase 1. Go Gateway MQTT scale-out 선행 작업
 
+Status: completed. Evidence is recorded in `implementation-3rd-001-mqtt-scale-safety-handoff.md`.
+
 Kubernetes 파일을 만들기 전에 다음을 계획하고 구현한다.
 
 1. 현재 MQTT client ID 생성, subscription, reconnect, shutdown 경로를 조사한다.
@@ -43,6 +45,8 @@ Kubernetes 파일을 만들기 전에 다음을 계획하고 구현한다.
 
 ### Phase 2. Kubernetes 전 준비 마무리
 
+Status: implemented locally. Runtime and verification evidence is recorded in `implementation-3rd-003-kubernetes-readiness-manifests-handoff.md`; cluster execution remains Phase 4.
+
 Compose baseline 테스트, health/readiness, graceful shutdown, configuration 및 secret 주입 방식, image architecture, 관찰 가능한 instance identity를 정리한다. Kafka partition assignment와 worker idempotency evidence도 이 단계에서 다시 확인한다.
 
 완료 게이트:
@@ -53,6 +57,8 @@ Compose baseline 테스트, health/readiness, graceful shutdown, configuration �
 - Compose baseline 결과가 3차 handoff에 남는다.
 
 ### Phase 3. Kubernetes 설정 계획 및 작성
+
+Status: plain application manifests written under `k8s/`. They are intentionally not deployment-ready until the maintainer supplies reachable hybrid infrastructure addresses, a real image tag, and the real `semantic-layer-secrets` Secret.
 
 `k8s/` plain manifest의 workload, Service, ConfigMap, Secret example, probe, resource request/limit, rollout 전략을 먼저 설계한 뒤 작성한다. 처음에는 Helm을 도입하지 않는다.
 

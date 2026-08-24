@@ -1,12 +1,14 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"semantic-layer-explore/api/internal/config"
@@ -17,16 +19,22 @@ import (
 )
 
 type Router struct {
-	cfg      config.Config
-	producer *kafka.Producer
-	store    *persistence.Store
-	logger   *slog.Logger
-	graph    *graph.Client
-	mqtt     *mqtt.Adapter
+	handler   http.Handler
+	cfg       config.Config
+	producer  *kafka.Producer
+	store     *persistence.Store
+	logger    *slog.Logger
+	graph     *graph.Client
+	mqtt      *mqtt.Adapter
+	accepting atomic.Bool
 }
 
-func NewRouter(cfg config.Config, producer *kafka.Producer, store *persistence.Store, mqttAdapter *mqtt.Adapter, logger *slog.Logger) http.Handler {
+func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) { r.handler.ServeHTTP(w, req) }
+func (r *Router) SetAccepting(accepting bool)                        { r.accepting.Store(accepting) }
+
+func NewRouter(cfg config.Config, producer *kafka.Producer, store *persistence.Store, mqttAdapter *mqtt.Adapter, logger *slog.Logger) *Router {
 	router := &Router{cfg: cfg, producer: producer, store: store, mqtt: mqttAdapter, logger: logger, graph: graph.NewClient(cfg.Neo4jHTTPURL, cfg.Neo4jUser, cfg.Neo4jPassword)}
+	router.accepting.Store(true)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", router.health)
 	mux.HandleFunc("GET /ready", router.ready)
@@ -59,7 +67,8 @@ func NewRouter(cfg config.Config, producer *kafka.Producer, store *persistence.S
 	mux.HandleFunc("GET /operations/events", router.workspaceEvents)
 	mux.HandleFunc("GET /operations/events/stream", router.workspaceEventStream)
 	mux.HandleFunc("GET /operations/causal-trace/{eventId}", router.causalTrace)
-	return mux
+	router.handler = mux
+	return router
 }
 
 func (r *Router) health(w http.ResponseWriter, _ *http.Request) {
@@ -96,7 +105,21 @@ func (r *Router) agentResults(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"results": results})
 }
 
-func (r *Router) ready(w http.ResponseWriter, _ *http.Request) {
+func (r *Router) ready(w http.ResponseWriter, req *http.Request) {
+	if !r.accepting.Load() || !r.mqtt.Ready() {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "not-ready"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(req.Context(), 2*time.Second)
+	defer cancel()
+	if err := r.store.Ping(ctx); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "not-ready", "dependency": "postgres"})
+		return
+	}
+	if err := r.producer.Ping(ctx); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "not-ready", "dependency": "kafka"})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status": "ready",
 		"kafka":  r.cfg.KafkaBrokers,

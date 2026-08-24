@@ -36,9 +36,10 @@ func main() {
 	defer store.Close()
 
 	mqttAdapter := mqtt.NewAdapter(cfg, producer, store, logger)
+	router := httpapi.NewRouter(cfg, producer, store, mqttAdapter, logger)
 	server := &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      httpapi.NewRouter(cfg, producer, store, mqttAdapter, logger),
+		Handler:      router,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 0,
 		IdleTimeout:  60 * time.Second,
@@ -57,6 +58,7 @@ func main() {
 	go outbox.New(store, producer, cfg.GraphRebuildTopic, logger).Run(ctx)
 
 	<-ctx.Done()
+	router.SetAccepting(false)
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = server.Shutdown(shutdownCtx)
