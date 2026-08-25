@@ -209,6 +209,34 @@ The whole system can therefore be summarized in one sentence:
 > means; and AI uses that meaning and controlled tools to connect the system back
 > to people.
 
+## Contexture Contract Alignment
+
+This repository keeps ownership of the factory streaming runtime and its compact
+Kafka/MQTT contracts. The longer-lived semantic contracts are owned by
+`contexture-bridge`.
+
+The intended long-term structure is contract-governed federation. This
+manufacturing runtime can remain separate indefinitely, because not every
+company has a factory and factory sites often need their own operational system.
+The shared executive view comes from accepted semantic facts, not from merging
+all runtime code into one repository.
+
+The intended boundary is:
+
+```text
+telemetry.v1 / workspace events / causal traces
+  -> contexture.observation.v1
+  -> contexture.evidence.v1
+  -> contexture.semantic-candidate.v1
+  -> contexture.review-decision.v1
+  -> contexture.projection-request.v1
+```
+
+See [Contexture Contract Alignment](./docs/contexture-contract-alignment.md) for
+the mapping. The important rule is that high-volume operational envelopes stay
+factory-specific, while accepted facts crossing into the semantic core use
+Contexture contracts.
+
 ## Architecture
 
 ```text

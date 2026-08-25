@@ -10,7 +10,8 @@ implementation stage:
 3. `docs/implementation-2nd-plan.md`
 4. `docs/ontology-modeling-notes.md`
 5. `docs/current-state-before-2nd-plan.md`
-6. The latest numbered `docs/implementation-2nd-*-handoff.md`
+6. `docs/contexture-contract-alignment.md`
+7. The latest numbered `docs/implementation-2nd-*-handoff.md`
 
 Treat the implementation plans as architecture constraints, and handoff files
 as records of what was actually implemented and verified. Do not describe a
@@ -30,6 +31,14 @@ root-level Next.js application.
 - `infra/` contains PostgreSQL, Kafka, Mosquitto, and Neo4j configuration.
 - PostgreSQL is the authoritative operational store.
 - Neo4j is a rebuildable semantic read model, never the source of truth.
+- `contexture-bridge` owns the long-lived source-agnostic semantic contracts;
+  this repository owns the factory streaming contracts and maps accepted facts
+  into Contexture observations, evidence, candidates, review decisions, and
+  projection requests.
+- Treat the double-repo structure as the default long-term shape. Do not assume
+  manufacturing runtime code must eventually move into `contexture-bridge`;
+  preserve federation through contracts unless the user explicitly asks for a
+  physical repo merge.
 
 The target high-volume telemetry path is:
 
