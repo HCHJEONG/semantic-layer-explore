@@ -128,14 +128,18 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Existing deployments must migrate /tmp/kafka-logs before recreation.
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
     volumes:
       - kafka-data:/var/lib/kafka/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
+      # The Kafka CLI starts a JVM; allow CPU-constrained hosts to respond.
+      interval: 60s
+      timeout: 30s
+      start_period: 120s
+      retries: 3
 
   kafka-init:
     image: apache/kafka:3.8.0
